@@ -22,6 +22,8 @@
 
 Debug APK：`app/build/outputs/apk/debug/app-debug.apk`
 
+已執行的實機結果見 [`docs/test-reports/m0-2026-09-22-vivo-x60.md`](docs/test-reports/m0-2026-09-22-vivo-x60.md)。
+
 ## vivo X60 USB 安裝
 
 1. 在 X60 開啟「開發人員選項」與「USB 偵錯」，以資料線連接電腦。
@@ -77,4 +79,3 @@ vivo X60 為舊裝置，長期插電前應保持通風並定期檢查外殼變�
 - TTS 診斷只列出已安裝的引擎服務，不初始化 TTS、查詢 voice 或播放聲音。
 - 不包含開機接收器；未來也不得從 `BOOT_COMPLETED` 直接啟動 microphone FGS。
 - OriginOS 私有保活狀態無穩定標準 API，需依手機實際版本人工驗收。
-
