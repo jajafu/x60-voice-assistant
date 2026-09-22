@@ -123,6 +123,16 @@ class VoiceForegroundService : Service() {
         writer.println("asr_final_latency_ms=${snapshot.asrFinalLatencyMs ?: "-"}")
         writer.println("transcript_length=${snapshot.transcriptLength}")
         writer.println("transcript_hash=${snapshot.transcriptHash}")
+        writer.println("answer_length=${snapshot.answerLength}")
+        writer.println("answer_hash=${snapshot.answerHash}")
+        writer.println("llm_http_status=${snapshot.llmHttpStatus ?: "-"}")
+        writer.println("llm_first_token_ms=${snapshot.llmFirstTokenLatencyMs ?: "-"}")
+        writer.println("llm_total_ms=${snapshot.llmTotalLatencyMs ?: "-"}")
+        writer.println("audio_queue=${snapshot.audioQueueDepth}/${snapshot.audioQueueHighWaterMark}")
+        writer.println("tts_queue=${snapshot.ttsQueueDepth}/${snapshot.ttsQueueHighWaterMark}")
+        writer.println("tts_engine=${snapshot.ttsEngine}")
+        writer.println("tts_voice=${snapshot.ttsVoice}")
+        writer.println("service_restart_count=${snapshot.serviceRestartCount}")
     }
 
     private suspend fun initializeResources() {

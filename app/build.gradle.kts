@@ -22,7 +22,7 @@ android {
             abiFilters += "arm64-v8a"
         }
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.jajafu.x60assistant.KeystoreInstrumentation"
         vectorDrawables.useSupportLibrary = true
     }
 
