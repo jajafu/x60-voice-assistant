@@ -9,39 +9,47 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.jajafu.x60assistant.MainActivity
 import com.jajafu.x60assistant.R
+import com.jajafu.x60assistant.asr.AsrModelPacks
+import com.jajafu.x60assistant.asr.SherpaSpeechRecognizerEngine
+import com.jajafu.x60assistant.asr.TraditionalChineseConverter
 import com.jajafu.x60assistant.audio.AudioCaptureEngine
 import com.jajafu.x60assistant.audio.WakeAcknowledgementPlayer
 import com.jajafu.x60assistant.diagnostics.M1DiagnosticsRepository
 import com.jajafu.x60assistant.diagnostics.VoiceErrorCode
 import com.jajafu.x60assistant.kws.KwsModelPack
 import com.jajafu.x60assistant.kws.SherpaWakeWordEngine
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
+import com.jajafu.x60assistant.model.ModelPackManager
+import com.jajafu.x60assistant.orchestration.AndroidMonotonicClock
+import com.jajafu.x60assistant.orchestration.VoiceOrchestrator
+import com.jajafu.x60assistant.vad.SherpaVadEngine
+import com.jajafu.x60assistant.vad.SpeechEndpointConfig
+import com.jajafu.x60assistant.vad.SpeechEndpointDetector
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.io.FileDescriptor
 import java.io.PrintWriter
+import java.util.concurrent.atomic.AtomicBoolean
 
 class VoiceForegroundService : Service() {
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(serviceJob + Dispatchers.Default)
     private val active = AtomicBoolean(false)
     private val cleanupStarted = AtomicBoolean(false)
     private val lifecycleLock = Any()
-    private val resourceExecutor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "x60-service-resources")
-    }
-    private var healthExecutor: ScheduledExecutorService? = null
-    private var audioCaptureEngine: AudioCaptureEngine? = null
-    private var wakeWordEngine: SherpaWakeWordEngine? = null
-    private var acknowledgementPlayer: WakeAcknowledgementPlayer? = null
+    private var orchestrator: VoiceOrchestrator? = null
+    private var healthJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
@@ -54,23 +62,19 @@ class VoiceForegroundService : Service() {
             stopFromUser()
             return START_NOT_STICKY
         }
-
         startAsForeground()
         if (active.compareAndSet(false, true)) {
             cleanupStarted.set(false)
             ServiceStateRepository.setRunning(true)
-            M1DiagnosticsRepository.resetForStart(
-                modelIdValue = KwsModelPack.ID,
-                modelSha256Value = KwsModelPack.ARCHIVE_SHA256,
-            )
-            resourceExecutor.execute(::initializeResources)
+            M1DiagnosticsRepository.resetForStart(KwsModelPack.ID, KwsModelPack.ARCHIVE_SHA256)
+            serviceScope.launch { initializeResources() }
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
         cleanup(removeNotification = true)
-        resourceExecutor.shutdownNow()
+        serviceScope.cancel()
         super.onDestroy()
     }
 
@@ -78,10 +82,9 @@ class VoiceForegroundService : Service() {
 
     override fun dump(fd: FileDescriptor, writer: PrintWriter, args: Array<out String>) {
         val snapshot = M1DiagnosticsRepository.snapshot.value
-        writer.println("phase=${snapshot.phase}")
+        writer.println("state=${snapshot.phase}")
         writer.println("audio_frames=${snapshot.audioFrameCount}")
         writer.println("wake_count=${snapshot.wakeCount}")
-        writer.println("configured_score=${snapshot.lastWakeScore ?: "-"}")
         writer.println("wake_timestamp_epoch_ms=${snapshot.lastWakeTimestampEpochMs ?: "-"}")
         writer.println("service_uptime_ms=${snapshot.serviceUptimeMs}")
         writer.println("audio_errors=${snapshot.audioErrorCount}")
@@ -89,102 +92,86 @@ class VoiceForegroundService : Service() {
         writer.println("audio_source=${snapshot.audioSource}")
         writer.println("wake_lock_held=${snapshot.wakeLockHeld}")
         writer.println("last_error=${snapshot.lastError ?: "-"}")
-        writer.println("model_id=${snapshot.modelId}")
-        writer.println("model_archive_sha256=${snapshot.modelSha256}")
+        writer.println("kws_model_id=${snapshot.modelId}")
+        writer.println("kws_model_archive_sha256=${snapshot.modelSha256}")
+        writer.println("asr_model_id=${snapshot.asrModelId}")
+        writer.println("asr_rtf=${snapshot.asrRtf ?: "-"}")
+        writer.println("asr_final_latency_ms=${snapshot.asrFinalLatencyMs ?: "-"}")
+        writer.println("transcript_length=${snapshot.transcriptLength}")
+        writer.println("transcript_hash=${snapshot.transcriptHash}")
     }
 
-    private fun initializeResources() {
-        var initializationErrorCode = VoiceErrorCode.KWS_RUNTIME_FAILED
-        var pendingPlayer: WakeAcknowledgementPlayer? = null
-        var pendingAudio: AudioCaptureEngine? = null
-        var pendingKws: SherpaWakeWordEngine? = null
+    private suspend fun initializeResources() {
         try {
-            if (!acquireWakeLock()) return
-            val verification = KwsModelPack.verify(assets)
-            if (!verification.valid) {
-                failAndStop(VoiceErrorCode.KWS_MODEL_INVALID, verification.reason.orEmpty())
+            if (!acquireWakeLock() || !active.get()) return
+            val kwsVerification = KwsModelPack.verify(assets)
+            if (!kwsVerification.valid) {
+                failAndStop(VoiceErrorCode.KWS_MODEL_INVALID, kwsVerification.reason.orEmpty())
                 return
             }
-            if (!active.get()) return
+            val modelManager = ModelPackManager(applicationContext)
+            val vadStatus = modelManager.verifyVadAsset()
+            if (!vadStatus.valid) {
+                failAndStop(VoiceErrorCode.VAD_INIT_FAILED, vadStatus.reason.orEmpty())
+                return
+            }
+            val asrPack = AsrModelPacks.small
+            val asrStatus = modelManager.verifyAsrPack(asrPack)
+            if (!asrStatus.valid) {
+                failAndStop(VoiceErrorCode.ASR_MODEL_INVALID, asrStatus.reason.orEmpty())
+                return
+            }
 
-            val player = WakeAcknowledgementPlayer()
-            pendingPlayer = player
+            var orchestratorReference: VoiceOrchestrator? = null
             val audio = AudioCaptureEngine(
                 context = applicationContext,
                 onFrame = M1DiagnosticsRepository::onAudioFrame,
                 onDroppedFrame = M1DiagnosticsRepository::onDroppedFrame,
                 onReadError = M1DiagnosticsRepository::onAudioError,
-                onFatalError = ::failAndStop,
+                onFatalError = { code, detail -> orchestratorReference?.onAudioFailure(code, detail) },
             )
-            pendingAudio = audio
-            val kws = SherpaWakeWordEngine(
-                assetManager = assets,
-                frameQueue = audio.frameQueue,
-                onWake = { configuredScore ->
-                    M1DiagnosticsRepository.onWake(configuredScore)
-                    player.play()
-                },
-                onFatalError = ::failAndStop,
+            val created = VoiceOrchestrator(
+                scope = serviceScope,
+                audio = audio,
+                kws = SherpaWakeWordEngine(assets),
+                vad = SherpaVadEngine(assets),
+                asr = SherpaSpeechRecognizerEngine(
+                    modelId = asrPack.id,
+                    modelDirectory = modelManager.asrDirectory(asrPack),
+                    pack = asrPack,
+                    clock = AndroidMonotonicClock,
+                ),
+                acknowledgementPlayer = WakeAcknowledgementPlayer(),
+                endpointDetector = SpeechEndpointDetector(SpeechEndpointConfig()),
+                converter = TraditionalChineseConverter(),
             )
-            pendingKws = kws
-            kws.start()
-            val kwsAccepted = synchronized(lifecycleLock) {
+            orchestratorReference = created
+            val accepted = synchronized(lifecycleLock) {
                 if (active.get()) {
-                    acknowledgementPlayer = player
-                    wakeWordEngine = kws
-                    pendingPlayer = null
-                    pendingKws = null
+                    orchestrator = created
                     true
                 } else {
                     false
                 }
             }
-            if (!kwsAccepted) {
-                kws.stop()
-                player.release()
+            if (!accepted) {
+                created.close()
                 return
             }
-            initializationErrorCode = VoiceErrorCode.AUDIO_INIT_FAILED
-            val source = audio.start()
-            val audioAccepted = synchronized(lifecycleLock) {
-                if (active.get()) {
-                    audioCaptureEngine = audio
-                    pendingAudio = null
-                    true
-                } else {
-                    false
-                }
-            }
-            if (!audioAccepted) {
-                audio.stop()
-                return
-            }
-            val becameIdle = synchronized(lifecycleLock) {
-                if (active.get()) {
-                    M1DiagnosticsRepository.setIdle(source)
-                    true
-                } else {
-                    false
-                }
-            }
-            if (becameIdle) startHealthPublishing()
-        } catch (securityError: SecurityException) {
-            runCatching { pendingAudio?.stop() }
-            runCatching { pendingKws?.stop() }
-            runCatching { pendingPlayer?.release() }
-            failAndStop(VoiceErrorCode.PERMISSION_MIC_DENIED, securityError.javaClass.simpleName)
+            startHealthPublishing()
+            created.start()
+        } catch (error: OutOfMemoryError) {
+            failAndStop(VoiceErrorCode.ASR_MODEL_OOM, error.javaClass.simpleName)
+        } catch (error: SecurityException) {
+            failAndStop(VoiceErrorCode.PERMISSION_MIC_DENIED, error.javaClass.simpleName)
         } catch (error: Throwable) {
-            runCatching { pendingAudio?.stop() }
-            runCatching { pendingKws?.stop() }
-            runCatching { pendingPlayer?.release() }
-            failAndStop(initializationErrorCode, error.javaClass.simpleName)
+            failAndStop(VoiceErrorCode.ASR_INIT_FAILED, error.javaClass.simpleName)
         }
     }
 
     @SuppressLint("WakelockTimeout")
     private fun acquireWakeLock(): Boolean {
-        val powerManager = getSystemService(PowerManager::class.java)
-        val lock = powerManager.newWakeLock(
+        val lock = getSystemService(PowerManager::class.java).newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "$packageName:VoiceKws",
         ).apply {
@@ -199,46 +186,29 @@ class VoiceForegroundService : Service() {
                 false
             }
         }
-        if (!accepted) {
-            if (lock.isHeld) lock.release()
-            return false
-        }
-        M1DiagnosticsRepository.setWakeLockHeld(lock.isHeld)
-        return true
+        if (!accepted && lock.isHeld) lock.release()
+        M1DiagnosticsRepository.setWakeLockHeld(accepted && lock.isHeld)
+        return accepted
     }
 
     private fun startHealthPublishing() {
-        val executor = Executors.newSingleThreadScheduledExecutor { runnable ->
-            Thread(runnable, "x60-health-publisher")
-        }
-        executor.scheduleWithFixedDelay(
-            M1DiagnosticsRepository::publish,
-            1,
-            1,
-            TimeUnit.SECONDS,
-        )
-        val accepted = synchronized(lifecycleLock) {
-            if (active.get()) {
-                healthExecutor = executor
-                true
-            } else {
-                false
+        healthJob = serviceScope.launch {
+            while (isActive) {
+                delay(1_000)
+                M1DiagnosticsRepository.publish()
             }
         }
-        if (!accepted) executor.shutdownNow()
     }
 
     private fun failAndStop(code: VoiceErrorCode, detail: String) {
         if (!active.compareAndSet(true, false)) return
         M1DiagnosticsRepository.recordError(code, detail)
-        mainHandler.post {
-            cleanup(removeNotification = true)
-            stopSelf()
-        }
+        stopSelf()
     }
 
     private fun stopFromUser() {
         active.set(false)
+        orchestrator?.stop()
         cleanup(removeNotification = true)
         stopSelf()
     }
@@ -247,27 +217,15 @@ class VoiceForegroundService : Service() {
         if (!cleanupStarted.compareAndSet(false, true)) return
         active.set(false)
         val resources = synchronized(lifecycleLock) {
-            val result = Resources(
-                health = healthExecutor,
-                audio = audioCaptureEngine,
-                kws = wakeWordEngine,
-                player = acknowledgementPlayer,
-                lock = wakeLock,
-            )
-            healthExecutor = null
-            audioCaptureEngine = null
-            wakeWordEngine = null
-            acknowledgementPlayer = null
+            val result = orchestrator to wakeLock
+            orchestrator = null
             wakeLock = null
             result
         }
-        resources.health?.shutdownNow()
-        runCatching { resources.audio?.stop() }
-        runCatching { resources.kws?.stop() }
-        runCatching { resources.player?.release() }
-        runCatching {
-            resources.lock?.let { lock -> if (lock.isHeld) lock.release() }
-        }
+        healthJob?.cancel()
+        healthJob = null
+        runCatching { resources.first?.close() }
+        runCatching { resources.second?.let { if (it.isHeld) it.release() } }
         M1DiagnosticsRepository.setWakeLockHeld(false)
         M1DiagnosticsRepository.setStopped()
         ServiceStateRepository.setRunning(false)
@@ -280,12 +238,7 @@ class VoiceForegroundService : Service() {
         } else {
             0
         }
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            buildNotification(),
-            foregroundType,
-        )
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), foregroundType)
     }
 
     private fun createNotificationChannel() {
@@ -335,12 +288,4 @@ class VoiceForegroundService : Service() {
         private const val REQUEST_OPEN = 10
         private const val REQUEST_STOP = 11
     }
-
-    private data class Resources(
-        val health: ScheduledExecutorService?,
-        val audio: AudioCaptureEngine?,
-        val kws: SherpaWakeWordEngine?,
-        val player: WakeAcknowledgementPlayer?,
-        val lock: PowerManager.WakeLock?,
-    )
 }

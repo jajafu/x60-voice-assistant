@@ -281,6 +281,17 @@ private fun ServiceCard(
             InfoRow(stringResource(R.string.last_error), diagnostics.lastError?.name ?: "—")
             InfoRow(stringResource(R.string.kws_model_id), diagnostics.modelId)
             InfoRow(stringResource(R.string.kws_model_sha), diagnostics.modelSha256)
+            InfoRow(stringResource(R.string.partial_transcript), diagnostics.partialTranscript.ifBlank { "—" })
+            InfoRow(stringResource(R.string.final_transcript), diagnostics.finalTranscript.ifBlank { "—" })
+            InfoRow(stringResource(R.string.asr_model_id), diagnostics.asrModelId)
+            InfoRow(
+                stringResource(R.string.asr_rtf),
+                diagnostics.asrRtf?.let { String.format(Locale.ROOT, "%.3f", it) } ?: "—",
+            )
+            InfoRow(
+                stringResource(R.string.asr_final_latency),
+                diagnostics.asrFinalLatencyMs?.let { "$it ms" } ?: "—",
+            )
         }
     }
 }

@@ -4,6 +4,7 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlinx.coroutines.delay
 
 class WakeAcknowledgementPlayer {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
@@ -22,6 +23,11 @@ class WakeAcknowledgementPlayer {
                 if (!released) toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, TONE_DURATION_MS)
             }
         }
+    }
+
+    suspend fun playAndAwait() {
+        play()
+        delay(TONE_DURATION_MS.toLong() + 30L)
     }
 
     fun release() {
