@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">小助手 X60</string>
+    <string name="diagnostics_title">裝置診斷</string>
+    <string name="m0_subtitle">M0 專案骨架與裝置探測</string>
+    <string name="service_status">前景服務狀態</string>
+    <string name="service_running">運作中</string>
+    <string name="service_stopped">已停止</string>
+    <string name="m0_no_recording">M0 服務不會錄音，也不會啟動任何語音引擎。</string>
+    <string name="start_service">啟動 M0 服務</string>
+    <string name="stop_service">停止服務</string>
+    <string name="permissions_title">必要權限</string>
+    <string name="microphone_permission">麥克風</string>
+    <string name="notification_permission">通知</string>
+    <string name="granted">已允許</string>
+    <string name="not_granted">未允許</string>
+    <string name="open_app_settings">開啟 App 權限設定</string>
+    <string name="power_title">背景與電源</string>
+    <string name="battery_optimization">電池最佳化</string>
+    <string name="not_optimized">已忽略</string>
+    <string name="optimized">最佳化中</string>
+    <string name="battery_settings_explanation">此狀態只反映 Android 標準電源白名單；vivo 自啟動、後台高耗電與最近任務加鎖仍需手動確認。</string>
+    <string name="open_battery_settings">開啟系統電池最佳化</string>
+    <string name="device_title">裝置與系統</string>
+    <string name="device_model">製造商與型號</string>
+    <string name="android_version">Android 版本</string>
+    <string name="api_level">API Level</string>
+    <string name="system_build">系統 Build / OriginOS 顯示版本</string>
+    <string name="abis">支援 ABI</string>
+    <string name="total_memory">總記憶體</string>
+    <string name="available_memory">可用記憶體</string>
+    <string name="tts_title">已安裝 TTS 引擎</string>
+    <string name="no_tts_engine">未偵測到 TTS 引擎</string>
+    <string name="tts_m0_note">M0 只列出引擎套件，不初始化或播放 TTS。</string>
+    <string name="refresh_diagnostics">重新整理診斷</string>
+    <string name="notification_channel_name">小助手服務狀態</string>
+    <string name="notification_channel_description">顯示小助手前景服務是否正在運作</string>
+    <string name="notification_title">小助手 M0 服務正在運作</string>
+    <string name="notification_text_m0">診斷模式；未錄音</string>
+    <string name="microphone_permission_denied">麥克風權限未允許。M0 不會錄音，但 Android 會在啟動 microphone 類型前景服務時驗證此權限；可從 App 設定恢復。</string>
+    <string name="notification_permission_denied">通知權限未允許。請從 App 設定允許通知，再啟動可見的常駐服務。</string>
+    <string name="permissions_required">必須先允許麥克風與通知權限。</string>
+    <string name="service_start_security_error">系統拒絕啟動前景服務，請確認權限後在此畫面重試。</string>
+    <string name="service_start_background_error">系統判定 App 不在可見狀態，請回到此畫面後再次按下啟動。</string>
+</resources>
+
