@@ -1,0 +1,13 @@
+package com.jajafu.x60assistant.diagnostics
+
+enum class VoiceErrorCode {
+    PERMISSION_MIC_DENIED,
+    FGS_START_DENIED,
+    AUDIO_INIT_FAILED,
+    AUDIO_START_FAILED,
+    AUDIO_READ_FAILED,
+    AUDIO_READ_DEAD_OBJECT,
+    KWS_MODEL_INVALID,
+    KWS_RUNTIME_FAILED,
+    WAKE_LOCK_FAILED,
+}

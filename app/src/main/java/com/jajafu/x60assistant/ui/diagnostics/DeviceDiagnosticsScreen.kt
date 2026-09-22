@@ -30,10 +30,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jajafu.x60assistant.R
 import com.jajafu.x60assistant.diagnostics.DeviceDiagnostics
+import com.jajafu.x60assistant.diagnostics.M1DiagnosticsSnapshot
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun DeviceDiagnosticsScreen(
     diagnostics: DeviceDiagnostics,
+    m1Diagnostics: M1DiagnosticsSnapshot,
     serviceRunning: Boolean,
     errorMessage: String?,
     onPrimaryAction: () -> Unit,
@@ -64,7 +69,11 @@ fun DeviceDiagnosticsScreen(
             }
 
             item {
-                ServiceCard(serviceRunning = serviceRunning, onPrimaryAction = onPrimaryAction)
+                ServiceCard(
+                    serviceRunning = serviceRunning,
+                    diagnostics = m1Diagnostics,
+                    onPrimaryAction = onPrimaryAction,
+                )
             }
 
             if (errorMessage != null) {
@@ -188,7 +197,11 @@ fun DeviceDiagnosticsScreen(
 }
 
 @Composable
-private fun ServiceCard(serviceRunning: Boolean, onPrimaryAction: () -> Unit) {
+private fun ServiceCard(
+    serviceRunning: Boolean,
+    diagnostics: M1DiagnosticsSnapshot,
+    onPrimaryAction: () -> Unit,
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = if (serviceRunning) {
@@ -215,7 +228,11 @@ private fun ServiceCard(serviceRunning: Boolean, onPrimaryAction: () -> Unit) {
                 modifier = Modifier.padding(top = 4.dp),
             )
             Text(
-                text = stringResource(R.string.m0_no_recording),
+                text = if (serviceRunning) {
+                    stringResource(R.string.m1_listening_note)
+                } else {
+                    stringResource(R.string.m1_stopped_note)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp),
@@ -227,7 +244,7 @@ private fun ServiceCard(serviceRunning: Boolean, onPrimaryAction: () -> Unit) {
                     .padding(top = 16.dp)
                     .height(56.dp)
                     .semantics {
-                        contentDescription = if (serviceRunning) "停止 M0 前景服務" else "啟動 M0 前景服務"
+                        contentDescription = if (serviceRunning) "停止 M1 常駐 KWS" else "啟動 M1 常駐 KWS"
                     },
             ) {
                 Text(
@@ -238,9 +255,46 @@ private fun ServiceCard(serviceRunning: Boolean, onPrimaryAction: () -> Unit) {
                     },
                 )
             }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            InfoRow(stringResource(R.string.kws_phase), diagnostics.phase.name)
+            InfoRow(stringResource(R.string.audio_frame_count), diagnostics.audioFrameCount.toString())
+            InfoRow(stringResource(R.string.wake_count), diagnostics.wakeCount.toString())
+            InfoRow(
+                stringResource(R.string.kws_score),
+                diagnostics.lastWakeScore?.let {
+                    String.format(Locale.ROOT, "%.2f（設定 boost；非 confidence）", it)
+                } ?: "—",
+            )
+            InfoRow(
+                stringResource(R.string.last_wake_timestamp),
+                diagnostics.lastWakeTimestampEpochMs?.let(::formatTimestamp) ?: "—",
+            )
+            InfoRow(stringResource(R.string.service_uptime), formatDuration(diagnostics.serviceUptimeMs))
+            InfoRow(stringResource(R.string.audio_error_count), diagnostics.audioErrorCount.toString())
+            InfoRow(stringResource(R.string.dropped_frame_count), diagnostics.droppedFrameCount.toString())
+            InfoRow(stringResource(R.string.audio_source), diagnostics.audioSource)
+            InfoRow(
+                stringResource(R.string.wake_lock_status),
+                if (diagnostics.wakeLockHeld) stringResource(R.string.held) else stringResource(R.string.not_held),
+            )
+            InfoRow(stringResource(R.string.last_error), diagnostics.lastError?.name ?: "—")
+            InfoRow(stringResource(R.string.kws_model_id), diagnostics.modelId)
+            InfoRow(stringResource(R.string.kws_model_sha), diagnostics.modelSha256)
         }
     }
 }
+
+private fun formatDuration(durationMs: Long): String {
+    val totalSeconds = durationMs / 1_000
+    val hours = totalSeconds / 3_600
+    val minutes = (totalSeconds % 3_600) / 60
+    val seconds = totalSeconds % 60
+    return String.format(Locale.ROOT, "%02d:%02d:%02d", hours, minutes, seconds)
+}
+
+private fun formatTimestamp(epochMs: Long): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date(epochMs))
 
 @Composable
 private fun SectionCard(title: String, content: @Composable () -> Unit) {
@@ -296,4 +350,3 @@ private fun InfoRow(label: String, value: String) {
         )
     }
 }
-
