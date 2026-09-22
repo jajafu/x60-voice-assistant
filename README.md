@@ -1,18 +1,39 @@
 # 小助手 X60 Voice Assistant
 
-本 Repository 目前只完成 **M0：專案骨架與裝置探測**。M0 的前景服務不建立 `AudioRecord`、不錄音，也不包含 KWS、ASR、LLM 或 TTS 播放。
+本 Repository 目前完成 **M1：常駐本機喚醒詞診斷**。使用者必須在可見 Activity 按下「啟動常駐 KWS」，App 才會建立 microphone Foreground Service、唯一的 `AudioRecord` 與 sherpa-onnx KWS。偵測到「小助手」只播放短提示音；尚未包含 VAD、ASR、LLM、TTS、Follow Up 或完整問答流程。
 
-## 專案基準
+## M1 基準
 
 - Package：`com.jajafu.x60assistant`
+- App：`0.2.0-m1`（versionCode 2）
 - Kotlin + Jetpack Compose Material 3
 - `minSdk 26`、`targetSdk 35`、`compileSdk 35`
-- 單一 `app` module
-- 所有依賴與 plugin 版本由 `gradle/libs.versions.toml` 管理
+- ABI：`arm64-v8a`
+- Audio：16000 Hz、mono、PCM 16-bit、20 ms frame
+- Audio source：`VOICE_RECOGNITION` 優先，建立或啟動失敗才使用 `MIC`
+- Runtime：sherpa-onnx `1.13.8`
+- Model：`sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20`
+- Wake word：`小助手`
 
-## 本機建置
+## 模型準備
 
-需求：JDK 17 以上及 Android SDK Platform 35。
+模型 binary 不納入 Git。先執行固定來源與 SHA256 驗證的 provisioning script：
+
+```powershell
+.\scripts\prepare-m1-kws-assets.ps1
+```
+
+官方 archive 是 32,885,699 bytes，SHA256：
+
+```text
+68447f4fbc67e70eee3a93961f36e81e98f47aef73ce7e7ca00885c6cd3616a6
+```
+
+重要：sherpa-onnx runtime 為 Apache-2.0，但上游模型 archive 沒有模型專屬 `LICENSE` 或 `NOTICE`，官方頁面也未明示權重授權。此 script 只供本機個人評估；在授權釐清前不要提交或再散布產生的模型檔。完整查核見 [`docs/model-packs.md`](docs/model-packs.md)。
+
+## 建置
+
+需求：JDK 17、Android SDK Platform 35，以及已準備的 KWS assets。
 
 ```powershell
 .\gradlew.bat test
@@ -22,60 +43,42 @@
 
 Debug APK：`app/build/outputs/apk/debug/app-debug.apk`
 
-已執行的實機結果見 [`docs/test-reports/m0-2026-09-22-vivo-x60.md`](docs/test-reports/m0-2026-09-22-vivo-x60.md)。
+## vivo X60 USB 安裝與啟動
 
-## vivo X60 USB 安裝
+```powershell
+$adb = "$env:ANDROID_HOME\platform-tools\adb.exe"
+$serial = "9654983303001DD"
 
-1. 在 X60 開啟「開發人員選項」與「USB 偵錯」，以資料線連接電腦。
-2. 手機出現 RSA 指紋提示時選擇允許。
-3. 確認 ADB 只列出預期裝置：
+& $adb -s $serial install -r .\app\build\outputs\apk\debug\app-debug.apk
+& $adb -s $serial shell am start -W -n com.jajafu.x60assistant/.MainActivity
+```
 
-   ```powershell
-   adb devices -l
-   ```
+OriginOS 會顯示側載風險確認；由使用者在手機上確認。不可用背景廣播、開機事件或 ADB 指令代替 App 內的啟動按鈕來開始錄音。
 
-4. 安裝或覆蓋安裝 Debug APK：
+## M1 診斷與驗收
 
-   ```powershell
-   adb install -r .\app\build\outputs\apk\debug\app-debug.apk
-   ```
+啟動前先確認沒有 Service 或錄音：
 
-5. 啟動 App：
+```powershell
+& $adb -s $serial shell dumpsys activity services com.jajafu.x60assistant
+& $adb -s $serial shell cmd appops get com.jajafu.x60assistant RECORD_AUDIO
+& $adb -s $serial shell dumpsys audio | Select-String com.jajafu.x60assistant
+```
 
-   ```powershell
-   adb shell am start -n com.jajafu.x60assistant/.MainActivity
-   ```
+在可見 App 畫面按「啟動常駐 KWS」後，診斷頁會顯示 Audio Frame、Wake Count、configured score、Timestamp、Service Uptime、Audio Error、Dropped Frame、實際 Audio Source、WakeLock、最後錯誤碼與模型識別資料。原始音訊只在記憶體中的有界 queue 流動，不落盤、不上傳。
 
-## M0 真機驗收
+```powershell
+& $adb -s $serial shell dumpsys audio | Select-String 'com.jajafu.x60assistant|VOICE_RECOGNITION' -Context 1,2
+& $adb -s $serial shell dumpsys power | Select-String 'com.jajafu.x60assistant:VoiceKws'
+```
 
-1. 首頁應顯示 Android 版本、API Level、Build / OriginOS 顯示版本、型號、ABI、總／可用記憶體、TTS 引擎及電池最佳化狀態。
-2. 按「啟動 M0 服務」，依序允許麥克風與通知權限；通知內容應明確顯示「診斷模式；未錄音」。
-3. 從通知按「停止服務」，確認通知消失且回到 App 後狀態為「已停止」。
-4. 拒絕任一權限，再按「開啟 App 權限設定」手動恢復；回到 App 後重新整理並再次啟動。
-5. 按「開啟系統電池最佳化」，在標準設定頁將 App 設為不最佳化；返回後狀態應顯示「已忽略」。
-6. 依 OriginOS 版本手動確認自啟動、允許後台高耗電、允許通知、允許麥克風及最近任務加鎖。App 不會嘗試寫死或繞過 vivo 私有設定頁。
-7. 執行以下檢查，確認 M0 沒有開啟錄音：
+完整測試矩陣與記錄欄位見 [`docs/testing.md`](docs/testing.md)，目前 X60 實際結果見 [`docs/test-reports/m1-2026-09-22-vivo-x60.md`](docs/test-reports/m1-2026-09-22-vivo-x60.md)。8 小時接電、未接電及安靜環境測試必須真的跑滿 8 小時才能標記通過。
 
-   ```powershell
-   adb shell dumpsys audio | Select-String com.jajafu.x60assistant
-   adb logcat -d | Select-String "AudioRecord|com.jajafu.x60assistant"
-   ```
+## 安全與範圍
 
-8. 執行停止服務與強制停止，確認 App 不會自行復活：
-
-   ```powershell
-   adb shell am force-stop com.jajafu.x60assistant
-   ```
-
-> 真機結果必須記錄裝置型號、Android/API、OriginOS Build、App version、APK SHA256 與測試時間。沒有完成操作就不能標記通過。
-
-## 長期接電提醒
-
-vivo X60 為舊裝置，長期插電前應保持通風並定期檢查外殼變形、電池膨脹及異常溫度。App 的診斷狀態不能取代實體安全檢查。
-
-## M0 已知邊界
-
-- 前景服務宣告為 `microphone`，用來提前驗證 Android 權限與啟動限制，但 M0 不使用麥克風。
-- TTS 診斷只列出已安裝的引擎服務，不初始化 TTS、查詢 voice 或播放聲音。
-- 不包含開機接收器；未來也不得從 `BOOT_COMPLETED` 直接啟動 microphone FGS。
-- OriginOS 私有保活狀態無穩定標準 API，需依手機實際版本人工驗收。
+- 不宣告 `INTERNET`，M1 沒有音訊上傳或網路語音功能。
+- 不保存 PCM、逐字稿或任何原始音訊。
+- 沒有 BootReceiver，不從 `BOOT_COMPLETED` 啟動 microphone FGS。
+- 不使用 Root、Accessibility、Overlay 或 Alarm 保活。
+- 初始策略由 Service 全程持有 non-reference-counted `PARTIAL_WAKE_LOCK`；所有正常停止、初始化失敗、讀取錯誤與 Service 銷毀路徑都釋放 AudioRecord、sherpa handle、queue、提示音與 WakeLock。
+- vivo X60 長期接電前需保持通風，定期檢查電池膨脹、外殼變形與異常溫度。

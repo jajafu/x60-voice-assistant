@@ -17,6 +17,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jajafu.x60assistant.diagnostics.DeviceDiagnostics
 import com.jajafu.x60assistant.diagnostics.DeviceDiagnosticsCollector
+import com.jajafu.x60assistant.diagnostics.M1DiagnosticsRepository
 import com.jajafu.x60assistant.service.ServiceStartPolicy
 import com.jajafu.x60assistant.service.ServiceStateRepository
 import com.jajafu.x60assistant.service.VoiceForegroundService
@@ -35,7 +36,7 @@ class MainActivity : ComponentActivity() {
         refreshDiagnostics()
         if (granted && startAfterPermissionGrant) {
             startAfterPermissionGrant = false
-            startM0Service()
+            startM1Service()
         } else if (!granted) {
             startAfterPermissionGrant = false
             errorMessage = getString(R.string.notification_permission_denied)
@@ -58,7 +59,7 @@ class MainActivity : ComponentActivity() {
             notificationPermissionLauncher.launch(POST_NOTIFICATIONS_PERMISSION)
         } else if (startAfterPermissionGrant) {
             startAfterPermissionGrant = false
-            startM0Service()
+            startM1Service()
         }
     }
 
@@ -69,13 +70,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val serviceRunning by ServiceStateRepository.running.collectAsStateWithLifecycle()
+            val m1Diagnostics by M1DiagnosticsRepository.snapshot.collectAsStateWithLifecycle()
             X60AssistantTheme {
                 DeviceDiagnosticsScreen(
                     diagnostics = diagnostics,
+                    m1Diagnostics = m1Diagnostics,
                     serviceRunning = serviceRunning,
                     errorMessage = errorMessage,
                     onPrimaryAction = {
-                        if (serviceRunning) stopM0Service() else requestPermissionsAndStart()
+                        if (serviceRunning) stopM1Service() else requestPermissionsAndStart()
                     },
                     onOpenAppSettings = ::openAppSettings,
                     onOpenBatterySettings = ::openBatteryOptimizationSettings,
@@ -103,12 +106,12 @@ class MainActivity : ComponentActivity() {
 
             else -> {
                 startAfterPermissionGrant = false
-                startM0Service()
+                startM1Service()
             }
         }
     }
 
-    private fun startM0Service() {
+    private fun startM1Service() {
         refreshDiagnostics()
         if (!ServiceStartPolicy.canStart(
                 diagnostics.microphonePermissionGranted,
@@ -131,7 +134,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun stopM0Service() {
+    private fun stopM1Service() {
         val stopIntent = Intent(this, VoiceForegroundService::class.java)
         stopService(stopIntent)
     }

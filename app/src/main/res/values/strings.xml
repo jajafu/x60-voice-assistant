@@ -2,12 +2,13 @@
 <resources>
     <string name="app_name">小助手 X60</string>
     <string name="diagnostics_title">裝置診斷</string>
-    <string name="m0_subtitle">M0 專案骨架與裝置探測</string>
+    <string name="m0_subtitle">M1 常駐本機喚醒詞診斷</string>
     <string name="service_status">前景服務狀態</string>
     <string name="service_running">運作中</string>
     <string name="service_stopped">已停止</string>
-    <string name="m0_no_recording">M0 服務不會錄音，也不會啟動任何語音引擎。</string>
-    <string name="start_service">啟動 M0 服務</string>
+    <string name="m1_listening_note">本機等待「小助手」；原始音訊不保存、不上傳。</string>
+    <string name="m1_stopped_note">只有在此可見畫面按下按鈕後，才會啟動麥克風。</string>
+    <string name="start_service">啟動常駐 KWS</string>
     <string name="stop_service">停止服務</string>
     <string name="permissions_title">必要權限</string>
     <string name="microphone_permission">麥克風</string>
@@ -35,12 +36,26 @@
     <string name="refresh_diagnostics">重新整理診斷</string>
     <string name="notification_channel_name">小助手服務狀態</string>
     <string name="notification_channel_description">顯示小助手前景服務是否正在運作</string>
-    <string name="notification_title">小助手 M0 服務正在運作</string>
-    <string name="notification_text_m0">診斷模式；未錄音</string>
-    <string name="microphone_permission_denied">麥克風權限未允許。M0 不會錄音，但 Android 會在啟動 microphone 類型前景服務時驗證此權限；可從 App 設定恢復。</string>
+    <string name="notification_title_m1">小助手正在運作</string>
+    <string name="notification_text_m1">等待喚醒詞「小助手」</string>
+    <string name="microphone_permission_denied">麥克風權限未允許。常駐 KWS 無法啟動；可從 App 設定恢復。</string>
     <string name="notification_permission_denied">通知權限未允許。請從 App 設定允許通知，再啟動可見的常駐服務。</string>
     <string name="permissions_required">必須先允許麥克風與通知權限。</string>
     <string name="service_start_security_error">系統拒絕啟動前景服務，請確認權限後在此畫面重試。</string>
     <string name="service_start_background_error">系統判定 App 不在可見狀態，請回到此畫面後再次按下啟動。</string>
+    <string name="kws_phase">KWS 狀態</string>
+    <string name="audio_frame_count">Audio Frame</string>
+    <string name="wake_count">Wake Count</string>
+    <string name="kws_score">Score</string>
+    <string name="last_wake_timestamp">Timestamp</string>
+    <string name="service_uptime">Service Uptime</string>
+    <string name="audio_error_count">Audio Error</string>
+    <string name="dropped_frame_count">Dropped Frame</string>
+    <string name="audio_source">Audio Source</string>
+    <string name="wake_lock_status">PARTIAL_WAKE_LOCK</string>
+    <string name="held">持有中</string>
+    <string name="not_held">未持有</string>
+    <string name="last_error">最後錯誤碼</string>
+    <string name="kws_model_id">KWS Model ID</string>
+    <string name="kws_model_sha">Model Archive SHA256</string>
 </resources>
-
