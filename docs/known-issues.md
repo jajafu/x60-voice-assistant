@@ -16,4 +16,12 @@
 - OriginOS 的側載安裝需要手機上人工確認風險，ADB `install -r` 會等待此 UI。
 - X60 鎖定後通知內容是否可見受使用者的鎖屏隱私設定影響，不可假設鎖屏一定能直接操作通知 action。
 - 接電／未接電各 8 小時、安靜環境 8 小時、三位說話者一公尺 20 次與耗電／溫度結果尚未完成前，不得宣稱 M1 通過。
-- M1 不包含 VAD、ASR、LLM、TTS 或 Follow Up；喚醒後只播放固定短提示音並繼續 KWS。
+
+## M2–M5
+
+- 兩個中文 ASR archive 都沒有模型專屬 `LICENSE`／`NOTICE`；目前只允許本機評估，APK 不含 ASR binary。
+- 目前 X60 只完成 small ASR 的單句合成短測。standard 模型、20 句真人語意、連續 30 次、P95、Peak PSS、熱降頻與 OOM/LMK 仍待正式量測。
+- 沒有使用者在手機 App 內輸入私人 API Key，因此真實 Provider 的 DNS/TLS/認證/Model/Endpoint 與完整問答仍待驗收；MockWebServer 不代表外部服務通過。
+- Android TTS 的 Engine/Voice 可用性取決於手機已安裝資料。沒有中文 voice 時保留畫面文字並記錄 `TTS_ENGINE_MISSING`，不自動下載第三方 voice。
+- Follow Up、通知 action、Boot Reminder 與 TTS 真機結果需以最終 APK 再驗；鎖屏 action 仍受 OriginOS 鎖屏隱私與省電策略影響。
+- release variant 沒有 production keystore，不能當正式商店簽章版本。

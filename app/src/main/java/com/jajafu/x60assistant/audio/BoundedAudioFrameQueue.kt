@@ -11,12 +11,17 @@ class BoundedAudioFrameQueue(capacity: Int) {
 
     private val queue = ArrayBlockingQueue<AudioFrame>(capacity)
     private val dropped = AtomicLong(0)
+    private val highWater = AtomicLong(0)
 
     fun offerDroppingOldest(frame: AudioFrame): Boolean {
-        if (queue.offer(frame)) return false
+        if (queue.offer(frame)) {
+            highWater.accumulateAndGet(queue.size.toLong(), ::maxOf)
+            return false
+        }
         queue.poll()
         dropped.incrementAndGet()
         queue.offer(frame)
+        highWater.accumulateAndGet(queue.size.toLong(), ::maxOf)
         return true
     }
 
@@ -27,4 +32,6 @@ class BoundedAudioFrameQueue(capacity: Int) {
     fun size(): Int = queue.size
 
     fun droppedCount(): Long = dropped.get()
+
+    fun highWaterMark(): Int = highWater.get().toInt()
 }

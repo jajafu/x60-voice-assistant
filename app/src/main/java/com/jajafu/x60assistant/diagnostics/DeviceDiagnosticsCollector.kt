@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.PowerManager
+import android.os.BatteryManager
+import android.content.IntentFilter
 import android.speech.tts.TextToSpeech
 import androidx.core.content.ContextCompat
 
@@ -16,6 +18,9 @@ class DeviceDiagnosticsCollector(private val context: Context) {
             context.getSystemService(ActivityManager::class.java).getMemoryInfo(info)
         }
         val powerManager = context.getSystemService(PowerManager::class.java)
+        val batteryManager = context.getSystemService(BatteryManager::class.java)
+        val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val temperatureTenths = batteryIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
 
         return DeviceDiagnostics(
             androidVersion = Build.VERSION.RELEASE.orEmpty().ifBlank { "—" },
@@ -33,6 +38,9 @@ class DeviceDiagnosticsCollector(private val context: Context) {
             notificationPermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                 hasPermission(POST_NOTIFICATIONS_PERMISSION),
             ignoringBatteryOptimizations = powerManager.isIgnoringBatteryOptimizations(context.packageName),
+            batteryPercent = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY),
+            temperatureCelsius = temperatureTenths?.takeIf { it != Int.MIN_VALUE }?.div(10.0),
+            thermalStatus = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) powerManager.currentThermalStatus else null,
         )
     }
 
