@@ -29,6 +29,19 @@ data class M1DiagnosticsSnapshot(
     val asrModelId: String = "—",
     val asrRtf: Double? = null,
     val asrFinalLatencyMs: Long? = null,
+    val answerPreview: String = "",
+    val answerLength: Int = 0,
+    val answerHash: String = "—",
+    val llmHttpStatus: Int? = null,
+    val llmFirstTokenLatencyMs: Long? = null,
+    val llmTotalLatencyMs: Long? = null,
+    val ttsQueueDepth: Int = 0,
+    val ttsQueueHighWaterMark: Int = 0,
+    val ttsEngine: String = "—",
+    val ttsVoice: String = "—",
+    val audioQueueDepth: Int = 0,
+    val audioQueueHighWaterMark: Int = 0,
+    val serviceRestartCount: Long = 0,
 )
 
 object M1DiagnosticsRepository {
@@ -51,12 +64,25 @@ object M1DiagnosticsRepository {
     private val asrModelId = AtomicReference("—")
     private val asrRtf = AtomicReference<Double?>(null)
     private val asrFinalLatencyMs = AtomicReference<Long?>(null)
+    private val answerPreview = AtomicReference("")
+    private val answerHash = AtomicReference("—")
+    private val llmHttpStatus = AtomicReference<Int?>(null)
+    private val llmFirstTokenLatencyMs = AtomicReference<Long?>(null)
+    private val llmTotalLatencyMs = AtomicReference<Long?>(null)
+    private val ttsQueueDepth = AtomicLong(0)
+    private val ttsQueueHighWaterMark = AtomicLong(0)
+    private val ttsEngine = AtomicReference("—")
+    private val ttsVoice = AtomicReference("—")
+    private val audioQueueDepth = AtomicLong(0)
+    private val audioQueueHighWaterMark = AtomicLong(0)
+    private val serviceRestartCount = AtomicLong(0)
     private val mutableSnapshot = MutableStateFlow(M1DiagnosticsSnapshot())
 
     val snapshot = mutableSnapshot.asStateFlow()
     val ringLog = SafeRingLog()
 
     fun resetForStart(modelIdValue: String, modelSha256Value: String) {
+        serviceRestartCount.incrementAndGet()
         audioFrames.set(0)
         wakeCount.set(0)
         audioErrors.set(0)
@@ -76,6 +102,15 @@ object M1DiagnosticsRepository {
         asrModelId.set("—")
         asrRtf.set(null)
         asrFinalLatencyMs.set(null)
+        answerPreview.set("")
+        answerHash.set("—")
+        llmHttpStatus.set(null)
+        llmFirstTokenLatencyMs.set(null)
+        llmTotalLatencyMs.set(null)
+        ttsQueueDepth.set(0)
+        ttsQueueHighWaterMark.set(0)
+        ttsEngine.set("—")
+        ttsVoice.set("—")
         ringLog.clear()
         log("SERVICE_STARTING")
         publish()
@@ -138,6 +173,44 @@ object M1DiagnosticsRepository {
         publish()
     }
 
+    fun setLlmResult(answer: String, httpStatus: Int?, firstTokenMs: Long?, totalMs: Long) {
+        answerPreview.set(answer.take(MAX_VISIBLE_TRANSCRIPT))
+        answerHash.set(shortHash(answer))
+        llmHttpStatus.set(httpStatus)
+        llmFirstTokenLatencyMs.set(firstTokenMs)
+        llmTotalLatencyMs.set(totalMs)
+        log("LLM_COMPLETE", detail = "status=${httpStatus ?: "-"},length=${answer.length},hash=${answerHash.get()}")
+        publish()
+    }
+
+    fun setTtsStatus(engine: String, voice: String) {
+        ttsEngine.set(engine)
+        ttsVoice.set(voice)
+        publish()
+    }
+
+    fun setTtsQueue(depth: Int, highWaterMark: Int) {
+        ttsQueueDepth.set(depth.toLong())
+        ttsQueueHighWaterMark.set(highWaterMark.toLong())
+        publish()
+    }
+
+    fun setAudioQueue(depth: Int, highWaterMark: Int) {
+        audioQueueDepth.set(depth.toLong())
+        audioQueueHighWaterMark.set(highWaterMark.toLong())
+    }
+
+    fun clearDiagnostics() {
+        ringLog.clear()
+        partialTranscript.set("")
+        finalTranscript.set("")
+        transcriptHash.set("—")
+        answerPreview.set("")
+        answerHash.set("—")
+        lastError.set(null)
+        publish()
+    }
+
     fun setWakeLockHeld(held: Boolean) {
         wakeLockHeld.set(held)
         log(if (held) "WAKE_LOCK_ACQUIRED" else "WAKE_LOCK_RELEASED")
@@ -192,6 +265,19 @@ object M1DiagnosticsRepository {
             asrModelId = asrModelId.get(),
             asrRtf = asrRtf.get(),
             asrFinalLatencyMs = asrFinalLatencyMs.get(),
+            answerPreview = answerPreview.get(),
+            answerLength = answerPreview.get().length,
+            answerHash = answerHash.get(),
+            llmHttpStatus = llmHttpStatus.get(),
+            llmFirstTokenLatencyMs = llmFirstTokenLatencyMs.get(),
+            llmTotalLatencyMs = llmTotalLatencyMs.get(),
+            ttsQueueDepth = ttsQueueDepth.get().toInt(),
+            ttsQueueHighWaterMark = ttsQueueHighWaterMark.get().toInt(),
+            ttsEngine = ttsEngine.get(),
+            ttsVoice = ttsVoice.get(),
+            audioQueueDepth = audioQueueDepth.get().toInt(),
+            audioQueueHighWaterMark = audioQueueHighWaterMark.get().toInt(),
+            serviceRestartCount = serviceRestartCount.get(),
         )
     }
 

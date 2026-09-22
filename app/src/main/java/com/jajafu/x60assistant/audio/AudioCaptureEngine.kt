@@ -11,6 +11,7 @@ import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.jajafu.x60assistant.diagnostics.VoiceErrorCode
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 
 class AudioCaptureEngine(
@@ -23,6 +24,7 @@ class AudioCaptureEngine(
 ) {
     private val running = AtomicBoolean(false)
     private val resourceLock = Any()
+    private val lastFrameElapsedMs = AtomicLong(0)
 
     @Volatile
     private var audioRecord: AudioRecord? = null
@@ -43,6 +45,7 @@ class AudioCaptureEngine(
             audioRecord = record
         }
         running.set(true)
+        lastFrameElapsedMs.set(SystemClock.elapsedRealtime())
         readThread = Thread(::readLoop, "x60-audio-read").apply {
             priority = Thread.MAX_PRIORITY
             start()
@@ -169,6 +172,7 @@ class AudioCaptureEngine(
                         elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
                     )
                     if (frameQueue.offerDroppingOldest(frame)) onDroppedFrame()
+                    lastFrameElapsedMs.set(SystemClock.elapsedRealtime())
                     onFrame()
                 }
 
@@ -191,6 +195,11 @@ class AudioCaptureEngine(
         onReadError(code, detail)
         onFatalError(code, detail)
     }
+
+    fun isRunning(): Boolean = running.get()
+
+    fun isStalled(nowElapsedMs: Long, thresholdMs: Long = 3_000): Boolean =
+        running.get() && nowElapsedMs - lastFrameElapsedMs.get() >= thresholdMs
 
     companion object {
         const val SAMPLE_RATE_HZ = 16_000

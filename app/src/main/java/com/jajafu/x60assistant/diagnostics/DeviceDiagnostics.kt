@@ -14,6 +14,9 @@ data class DeviceDiagnostics(
     val microphonePermissionGranted: Boolean,
     val notificationPermissionGranted: Boolean,
     val ignoringBatteryOptimizations: Boolean,
+    val batteryPercent: Int,
+    val temperatureCelsius: Double?,
+    val thermalStatus: Int?,
 )
 
 object DeviceDiagnosticsFormatter {

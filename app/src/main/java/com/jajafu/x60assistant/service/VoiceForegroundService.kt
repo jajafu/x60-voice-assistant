@@ -11,10 +11,12 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.jajafu.x60assistant.MainActivity
 import com.jajafu.x60assistant.R
+import com.jajafu.x60assistant.BuildConfig
 import com.jajafu.x60assistant.asr.AsrModelPacks
 import com.jajafu.x60assistant.asr.SherpaSpeechRecognizerEngine
 import com.jajafu.x60assistant.asr.TraditionalChineseConverter
@@ -22,11 +24,18 @@ import com.jajafu.x60assistant.audio.AudioCaptureEngine
 import com.jajafu.x60assistant.audio.WakeAcknowledgementPlayer
 import com.jajafu.x60assistant.diagnostics.M1DiagnosticsRepository
 import com.jajafu.x60assistant.diagnostics.VoiceErrorCode
+import com.jajafu.x60assistant.data.SettingsRepository
+import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
 import com.jajafu.x60assistant.kws.KwsModelPack
 import com.jajafu.x60assistant.kws.SherpaWakeWordEngine
 import com.jajafu.x60assistant.model.ModelPackManager
 import com.jajafu.x60assistant.orchestration.AndroidMonotonicClock
 import com.jajafu.x60assistant.orchestration.VoiceOrchestrator
+import com.jajafu.x60assistant.security.AndroidKeystoreSecretStore
+import com.jajafu.x60assistant.tts.AndroidTtsEngine
+import com.jajafu.x60assistant.tts.SpeechOutputEngine
+import com.jajafu.x60assistant.data.AssistantSettings
+import com.jajafu.x60assistant.orchestration.VoiceState
 import com.jajafu.x60assistant.vad.SherpaVadEngine
 import com.jajafu.x60assistant.vad.SpeechEndpointConfig
 import com.jajafu.x60assistant.vad.SpeechEndpointDetector
@@ -49,6 +58,7 @@ class VoiceForegroundService : Service() {
     private val cleanupStarted = AtomicBoolean(false)
     private val lifecycleLock = Any()
     private var orchestrator: VoiceOrchestrator? = null
+    private var audioCapture: AudioCaptureEngine? = null
     private var healthJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -58,9 +68,23 @@ class VoiceForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopFromUser()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopFromUser()
+                return START_NOT_STICKY
+            }
+            ACTION_PAUSE -> {
+                orchestrator?.pause()
+                return START_NOT_STICKY
+            }
+            ACTION_RESUME -> {
+                orchestrator?.resume()
+                return START_NOT_STICKY
+            }
+            ACTION_CANCEL, ACTION_SILENCE -> {
+                orchestrator?.cancelSession()
+                return START_NOT_STICKY
+            }
         }
         startAsForeground()
         if (active.compareAndSet(false, true)) {
@@ -110,6 +134,7 @@ class VoiceForegroundService : Service() {
                 return
             }
             val modelManager = ModelPackManager(applicationContext)
+            val settings = SettingsRepository(applicationContext).current()
             val vadStatus = modelManager.verifyVadAsset()
             if (!vadStatus.valid) {
                 failAndStop(VoiceErrorCode.VAD_INIT_FAILED, vadStatus.reason.orEmpty())
@@ -123,6 +148,25 @@ class VoiceForegroundService : Service() {
             }
 
             var orchestratorReference: VoiceOrchestrator? = null
+            val secretStore = AndroidKeystoreSecretStore(applicationContext)
+            val llmProvider = if (
+                settings.connectionVerified && settings.baseUrl.isNotBlank() &&
+                settings.model.isNotBlank() && secretStore.maskedApiKey() != "未設定"
+            ) {
+                OpenAiCompatibleLlmProvider(
+                    settings = settings,
+                    apiKeyProvider = secretStore::readApiKey,
+                    allowHttp = BuildConfig.DEBUG,
+                )
+            } else {
+                null
+            }
+            val ttsEngine = AndroidTtsEngine(applicationContext, settings)
+            val ttsStatus = ttsEngine.initialize()
+            M1DiagnosticsRepository.setTtsStatus(ttsStatus.engine, ttsStatus.voice)
+            if (!ttsStatus.available) {
+                M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.TTS_ENGINE_MISSING, ttsStatus.message)
+            }
             val audio = AudioCaptureEngine(
                 context = applicationContext,
                 onFrame = M1DiagnosticsRepository::onAudioFrame,
@@ -141,14 +185,28 @@ class VoiceForegroundService : Service() {
                     pack = asrPack,
                     clock = AndroidMonotonicClock,
                 ),
-                acknowledgementPlayer = WakeAcknowledgementPlayer(),
-                endpointDetector = SpeechEndpointDetector(SpeechEndpointConfig()),
+                acknowledgementPlayer = WakeAcknowledgementPlayer(applicationContext),
                 converter = TraditionalChineseConverter(),
+                settings = settings,
+                llm = llmProvider,
+                speechOutput = if (ttsStatus.available) ttsEngine else null,
+                speechOutputFactory = { createTtsEngine(settings) },
+                audioResumeDelayMs = settings.audioResumeDelayMs,
+                endpointDetector = SpeechEndpointDetector(
+                    SpeechEndpointConfig(
+                        waitForSpeechMs = settings.waitForSpeechMs,
+                        minSpeechMs = settings.minSpeechMs,
+                        trailingSilenceMs = settings.trailingSilenceMs,
+                        maxUtteranceMs = settings.maxUtteranceMs,
+                    ),
+                ),
             )
+            if (!ttsStatus.available) ttsEngine.close()
             orchestratorReference = created
             val accepted = synchronized(lifecycleLock) {
                 if (active.get()) {
                     orchestrator = created
+                    audioCapture = audio
                     true
                 } else {
                     false
@@ -193,11 +251,30 @@ class VoiceForegroundService : Service() {
 
     private fun startHealthPublishing() {
         healthJob = serviceScope.launch {
+            var lastState: VoiceState? = null
             while (isActive) {
                 delay(1_000)
                 M1DiagnosticsRepository.publish()
+                audioCapture?.frameQueue?.let {
+                    M1DiagnosticsRepository.setAudioQueue(it.size(), it.highWaterMark())
+                }
+                val state = orchestrator?.state?.value ?: VoiceState.STOPPED
+                if (state != lastState) {
+                    getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(state))
+                    lastState = state
+                }
+                if (audioCapture?.isStalled(SystemClock.elapsedRealtime()) == true) {
+                    orchestrator?.onAudioFailure(VoiceErrorCode.AUDIO_READ_STALLED, "no-frame-over-3000ms")
+                }
             }
         }
+    }
+
+    private suspend fun createTtsEngine(settings: AssistantSettings): SpeechOutputEngine? {
+        val engine = AndroidTtsEngine(applicationContext, settings)
+        val status = engine.initialize()
+        M1DiagnosticsRepository.setTtsStatus(status.engine, status.voice)
+        return if (status.available) engine else null.also { engine.close() }
     }
 
     private fun failAndStop(code: VoiceErrorCode, detail: String) {
@@ -219,6 +296,7 @@ class VoiceForegroundService : Service() {
         val resources = synchronized(lifecycleLock) {
             val result = orchestrator to wakeLock
             orchestrator = null
+            audioCapture = null
             wakeLock = null
             result
         }
@@ -238,7 +316,7 @@ class VoiceForegroundService : Service() {
         } else {
             0
         }
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), foregroundType)
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(VoiceState.STARTING), foregroundType)
     }
 
     private fun createNotificationChannel() {
@@ -254,7 +332,7 @@ class VoiceForegroundService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(state: VoiceState): Notification {
         val openPendingIntent = PendingIntent.getActivity(
             this,
             REQUEST_OPEN,
@@ -267,25 +345,60 @@ class VoiceForegroundService : Service() {
             Intent(this, VoiceForegroundService::class.java).apply { action = ACTION_STOP },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val primaryAction = when (state) {
+            VoiceState.PAUSED -> notificationAction(ACTION_RESUME, REQUEST_RESUME, "恢復")
+            VoiceState.THINKING, VoiceState.LISTENING, VoiceState.TRANSCRIBING, VoiceState.ROUTING ->
+                notificationAction(ACTION_CANCEL, REQUEST_CANCEL, "取消")
+            VoiceState.SPEAKING -> notificationAction(ACTION_SILENCE, REQUEST_SILENCE, "閉嘴")
+            else -> notificationAction(ACTION_PAUSE, REQUEST_PAUSE, "暫停")
+        }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.notification_title_m1))
-            .setContentText(getString(R.string.notification_text_m1))
+            .setContentText(notificationText(state))
             .setContentIntent(openPendingIntent)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
+            .addAction(R.drawable.ic_notification, primaryAction.first, primaryAction.second)
             .addAction(R.drawable.ic_stop, getString(R.string.stop_service), stopPendingIntent)
             .build()
     }
 
+    private fun notificationAction(action: String, requestCode: Int, label: String): Pair<String, PendingIntent> =
+        label to PendingIntent.getService(
+            this,
+            requestCode,
+            Intent(this, VoiceForegroundService::class.java).apply { this.action = action },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+    private fun notificationText(state: VoiceState): String = when (state) {
+        VoiceState.IDLE_KWS -> "等待喚醒詞「小助手」"
+        VoiceState.LISTENING -> "正在聆聽"
+        VoiceState.THINKING, VoiceState.ROUTING, VoiceState.TRANSCRIBING -> "正在取得回答"
+        VoiceState.SPEAKING -> "正在回答"
+        VoiceState.FOLLOW_UP -> "等待追問"
+        VoiceState.PAUSED -> "已暫停"
+        VoiceState.ERROR -> "需要處理；請開啟 App"
+        else -> "正在準備語音助理"
+    }
+
     companion object {
         const val ACTION_STOP = "com.jajafu.x60assistant.action.STOP_SERVICE"
+        const val ACTION_PAUSE = "com.jajafu.x60assistant.action.PAUSE_SERVICE"
+        const val ACTION_RESUME = "com.jajafu.x60assistant.action.RESUME_SERVICE"
+        const val ACTION_CANCEL = "com.jajafu.x60assistant.action.CANCEL_SESSION"
+        const val ACTION_SILENCE = "com.jajafu.x60assistant.action.SILENCE_SESSION"
         private const val CHANNEL_ID = "voice_service_status"
         private const val NOTIFICATION_ID = 1001
         private const val REQUEST_OPEN = 10
         private const val REQUEST_STOP = 11
+        private const val REQUEST_PAUSE = 12
+        private const val REQUEST_RESUME = 13
+        private const val REQUEST_CANCEL = 14
+        private const val REQUEST_SILENCE = 15
     }
 }
