@@ -2,13 +2,13 @@
 <resources>
     <string name="app_name">小助手 X60</string>
     <string name="diagnostics_title">裝置診斷</string>
-    <string name="m0_subtitle">M1 常駐本機喚醒詞診斷</string>
+    <string name="m0_subtitle">M2 本機喚醒、VAD 與語音辨識診斷</string>
     <string name="service_status">前景服務狀態</string>
     <string name="service_running">運作中</string>
     <string name="service_stopped">已停止</string>
     <string name="m1_listening_note">本機等待「小助手」；原始音訊不保存、不上傳。</string>
     <string name="m1_stopped_note">只有在此可見畫面按下按鈕後，才會啟動麥克風。</string>
-    <string name="start_service">啟動常駐 KWS</string>
+    <string name="start_service">啟動語音助理</string>
     <string name="stop_service">停止服務</string>
     <string name="permissions_title">必要權限</string>
     <string name="microphone_permission">麥克風</string>
@@ -58,4 +58,9 @@
     <string name="last_error">最後錯誤碼</string>
     <string name="kws_model_id">KWS Model ID</string>
     <string name="kws_model_sha">Model Archive SHA256</string>
+    <string name="partial_transcript">即時辨識</string>
+    <string name="final_transcript">最後逐字稿</string>
+    <string name="asr_model_id">ASR Model ID</string>
+    <string name="asr_rtf">ASR RTF</string>
+    <string name="asr_final_latency">ASR Final Latency</string>
 </resources>

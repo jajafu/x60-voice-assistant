@@ -5,16 +5,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
-
-enum class VoiceServicePhase {
-    STOPPED,
-    STARTING,
-    IDLE_KWS,
-    ERROR,
-}
+import com.jajafu.x60assistant.asr.AsrResult
+import com.jajafu.x60assistant.orchestration.VoiceState
 
 data class M1DiagnosticsSnapshot(
-    val phase: VoiceServicePhase = VoiceServicePhase.STOPPED,
+    val phase: VoiceState = VoiceState.STOPPED,
     val audioFrameCount: Long = 0,
     val wakeCount: Long = 0,
     val lastWakeScore: Float? = null,
@@ -27,6 +22,13 @@ data class M1DiagnosticsSnapshot(
     val wakeLockHeld: Boolean = false,
     val modelId: String = "—",
     val modelSha256: String = "—",
+    val partialTranscript: String = "",
+    val finalTranscript: String = "",
+    val transcriptLength: Int = 0,
+    val transcriptHash: String = "—",
+    val asrModelId: String = "—",
+    val asrRtf: Double? = null,
+    val asrFinalLatencyMs: Long? = null,
 )
 
 object M1DiagnosticsRepository {
@@ -35,7 +37,7 @@ object M1DiagnosticsRepository {
     private val audioErrors = AtomicLong(0)
     private val droppedFrames = AtomicLong(0)
     private val startedAtElapsedMs = AtomicLong(0)
-    private val phase = AtomicReference(VoiceServicePhase.STOPPED)
+    private val phase = AtomicReference(VoiceState.STOPPED)
     private val lastError = AtomicReference<VoiceErrorCode?>(null)
     private val audioSource = AtomicReference("—")
     private val wakeLockHeld = AtomicReference(false)
@@ -43,6 +45,12 @@ object M1DiagnosticsRepository {
     private val lastWakeEpochMs = AtomicReference<Long?>(null)
     private val modelId = AtomicReference("—")
     private val modelSha256 = AtomicReference("—")
+    private val partialTranscript = AtomicReference("")
+    private val finalTranscript = AtomicReference("")
+    private val transcriptHash = AtomicReference("—")
+    private val asrModelId = AtomicReference("—")
+    private val asrRtf = AtomicReference<Double?>(null)
+    private val asrFinalLatencyMs = AtomicReference<Long?>(null)
     private val mutableSnapshot = MutableStateFlow(M1DiagnosticsSnapshot())
 
     val snapshot = mutableSnapshot.asStateFlow()
@@ -54,7 +62,7 @@ object M1DiagnosticsRepository {
         audioErrors.set(0)
         droppedFrames.set(0)
         startedAtElapsedMs.set(SystemClock.elapsedRealtime())
-        phase.set(VoiceServicePhase.STARTING)
+        phase.set(VoiceState.STARTING)
         lastError.set(null)
         audioSource.set("—")
         wakeLockHeld.set(false)
@@ -62,6 +70,12 @@ object M1DiagnosticsRepository {
         lastWakeEpochMs.set(null)
         modelId.set(modelIdValue)
         modelSha256.set(modelSha256Value)
+        partialTranscript.set("")
+        finalTranscript.set("")
+        transcriptHash.set("—")
+        asrModelId.set("—")
+        asrRtf.set(null)
+        asrFinalLatencyMs.set(null)
         ringLog.clear()
         log("SERVICE_STARTING")
         publish()
@@ -90,8 +104,37 @@ object M1DiagnosticsRepository {
 
     fun setIdle(audioSourceValue: String) {
         audioSource.set(audioSourceValue)
-        phase.set(VoiceServicePhase.IDLE_KWS)
+        phase.set(VoiceState.IDLE_KWS)
         log("IDLE_KWS", detail = "source=$audioSourceValue")
+        publish()
+    }
+
+    fun setState(state: VoiceState, reason: String) {
+        phase.set(state)
+        log("STATE_$state", detail = "reason=$reason")
+        publish()
+    }
+
+    fun setPartialTranscript(text: String) {
+        partialTranscript.set(text.take(MAX_VISIBLE_TRANSCRIPT))
+        publish()
+    }
+
+    fun setFinalTranscript(displayText: String, result: AsrResult) {
+        partialTranscript.set("")
+        finalTranscript.set(displayText.take(MAX_VISIBLE_TRANSCRIPT))
+        transcriptHash.set(shortHash(result.text))
+        asrRtf.set(result.realTimeFactor)
+        asrFinalLatencyMs.set(result.finalLatencyMs)
+        log(
+            "ASR_FINAL",
+            detail = "length=${result.text.length},hash=${transcriptHash.get()},rtf=${"%.3f".format(result.realTimeFactor)}",
+        )
+        publish()
+    }
+
+    fun setAsrModel(id: String) {
+        asrModelId.set(id)
         publish()
     }
 
@@ -103,13 +146,19 @@ object M1DiagnosticsRepository {
 
     fun recordError(code: VoiceErrorCode, detail: String? = null) {
         lastError.set(code)
-        phase.set(VoiceServicePhase.ERROR)
+        phase.set(VoiceState.ERROR)
         log("ERROR", code, detail)
         publish()
     }
 
+    fun recordSessionError(code: VoiceErrorCode, detail: String? = null) {
+        lastError.set(code)
+        log("SESSION_ERROR", code, detail)
+        publish()
+    }
+
     fun setStopped() {
-        phase.set(VoiceServicePhase.STOPPED)
+        phase.set(VoiceState.STOPPED)
         wakeLockHeld.set(false)
         log("SERVICE_STOPPED")
         publish()
@@ -124,7 +173,7 @@ object M1DiagnosticsRepository {
             wakeCount = wakeCount.get(),
             lastWakeScore = lastWakeScore.get(),
             lastWakeTimestampEpochMs = lastWakeEpochMs.get(),
-            serviceUptimeMs = if (started == 0L || currentPhase == VoiceServicePhase.STOPPED) {
+            serviceUptimeMs = if (started == 0L || currentPhase == VoiceState.STOPPED) {
                 0
             } else {
                 (SystemClock.elapsedRealtime() - started).coerceAtLeast(0)
@@ -136,6 +185,13 @@ object M1DiagnosticsRepository {
             wakeLockHeld = wakeLockHeld.get(),
             modelId = modelId.get(),
             modelSha256 = modelSha256.get(),
+            partialTranscript = partialTranscript.get(),
+            finalTranscript = finalTranscript.get(),
+            transcriptLength = finalTranscript.get().length,
+            transcriptHash = transcriptHash.get(),
+            asrModelId = asrModelId.get(),
+            asrRtf = asrRtf.get(),
+            asrFinalLatencyMs = asrFinalLatencyMs.get(),
         )
     }
 
@@ -153,4 +209,12 @@ object M1DiagnosticsRepository {
             ),
         )
     }
+
+    private fun shortHash(value: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+        return digest.take(6).joinToString("") { "%02x".format(it) }
+    }
+
+    private const val MAX_VISIBLE_TRANSCRIPT = 2_000
 }
