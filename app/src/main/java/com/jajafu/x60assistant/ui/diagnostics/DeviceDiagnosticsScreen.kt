@@ -117,6 +117,7 @@ fun DeviceDiagnosticsScreen(
             item {
                 VoiceSettingsCard(
                     saved = assistantSettings,
+                    message = settingsMessage,
                     enabled = !serviceRunning,
                     onSave = { onSaveSettings(it, "") },
                     onTestTts = onTestTts,
@@ -513,6 +514,7 @@ private fun ProviderSettingsCard(
 @Composable
 private fun VoiceSettingsCard(
     saved: AssistantSettings,
+    message: String?,
     enabled: Boolean,
     onSave: (AssistantSettings) -> Unit,
     onTestTts: (AssistantSettings) -> Unit,
@@ -548,6 +550,16 @@ private fun VoiceSettingsCard(
             valueRange = 0.5f..2.0f,
             enabled = enabled,
         )
+        if (message != null && (message.contains("TTS") || message.contains("語音設定"))) {
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (message.contains("完成") || message.contains("儲存")) {
+                    MaterialTheme.colorScheme.primary
+                } else MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
         Button(
             onClick = { onTestTts(draft.normalized()) },
             enabled = enabled,
