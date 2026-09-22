@@ -160,6 +160,8 @@ class AudioCaptureEngine(
                 break
             }
 
+            if (!running.get()) break
+
             when {
                 read > 0 -> {
                     val frame = AudioFrame(

@@ -20,6 +20,7 @@ class SherpaWakeWordEngine(
     private val onFatalError: (VoiceErrorCode, String) -> Unit,
 ) {
     private val running = AtomicBoolean(false)
+    private val nativeResourceLock = Any()
 
     @Volatile
     private var worker: Thread? = null
@@ -68,15 +69,12 @@ class SherpaWakeWordEngine(
 
     fun stop() {
         running.set(false)
-        worker?.interrupt()
-        if (Thread.currentThread() !== worker) {
-            runCatching { worker?.join(THREAD_JOIN_TIMEOUT_MS) }
+        val currentWorker = worker
+        currentWorker?.interrupt()
+        if (Thread.currentThread() !== currentWorker) {
+            runCatching { currentWorker?.join(THREAD_JOIN_TIMEOUT_MS) }
         }
-        worker = null
-        runCatching { stream?.release() }
-        stream = null
-        runCatching { spotter?.release() }
-        spotter = null
+        if (currentWorker == null || !currentWorker.isAlive) releaseNativeResources()
         frameQueue.clear()
     }
 
@@ -111,6 +109,18 @@ class SherpaWakeWordEngine(
             if (running.getAndSet(false)) {
                 onFatalError(VoiceErrorCode.KWS_RUNTIME_FAILED, error.javaClass.simpleName)
             }
+        } finally {
+            worker = null
+            releaseNativeResources()
+        }
+    }
+
+    private fun releaseNativeResources() {
+        synchronized(nativeResourceLock) {
+            runCatching { stream?.release() }
+            stream = null
+            runCatching { spotter?.release() }
+            spotter = null
         }
     }
 
