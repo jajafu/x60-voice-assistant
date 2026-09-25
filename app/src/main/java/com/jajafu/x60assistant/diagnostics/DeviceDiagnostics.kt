@@ -17,6 +17,7 @@ data class DeviceDiagnostics(
     val batteryPercent: Int,
     val temperatureCelsius: Double?,
     val thermalStatus: Int?,
+    val exactAlarmPermissionGranted: Boolean = true,
 )
 
 object DeviceDiagnosticsFormatter {

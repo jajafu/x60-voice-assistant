@@ -58,7 +58,10 @@ class OpenAiCompatibleLlmProvider(
             while (result == null) {
                 val response = execute(
                     ChatRequest(
-                        messages = listOf(ChatMessage("user", "請只回答：好")),
+                        messages = ConversationHistory(0).messages(
+                            settings.systemInstruction,
+                            "請只回答：好",
+                        ),
                         maxOutputTokens = 1,
                         temperature = 0.0,
                         requestId = "health-check",
@@ -260,8 +263,18 @@ class OpenAiCompatibleLlmProvider(
 
     override fun close() {
         cancel()
-        client.dispatcher.executorService.shutdown()
-        client.connectionPool.evictAll()
+        val executor = client.dispatcher.executorService
+        runCatching {
+            executor.execute {
+                try {
+                    client.connectionPool.evictAll()
+                } finally {
+                    executor.shutdown()
+                }
+            }
+        }.onFailure {
+            executor.shutdown()
+        }
     }
 
     companion object {

@@ -2,6 +2,7 @@ package com.jajafu.x60assistant.diagnostics
 
 import android.Manifest
 import android.app.ActivityManager
+import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -19,6 +20,7 @@ class DeviceDiagnosticsCollector(private val context: Context) {
         }
         val powerManager = context.getSystemService(PowerManager::class.java)
         val batteryManager = context.getSystemService(BatteryManager::class.java)
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
         val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val temperatureTenths = batteryIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
 
@@ -41,6 +43,8 @@ class DeviceDiagnosticsCollector(private val context: Context) {
             batteryPercent = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY),
             temperatureCelsius = temperatureTenths?.takeIf { it != Int.MIN_VALUE }?.div(10.0),
             thermalStatus = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) powerManager.currentThermalStatus else null,
+            exactAlarmPermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                alarmManager.canScheduleExactAlarms(),
         )
     }
 

@@ -4,7 +4,7 @@
 
 ```powershell
 .\scripts\prepare-m1-kws-assets.ps1
-.\scripts\prepare-m2-model-packs.ps1 -Pack small
+.\scripts\prepare-m2-model-packs.ps1 -Pack standard
 .\gradlew.bat test
 .\gradlew.bat lint
 .\gradlew.bat assembleDebug

@@ -1,8 +1,11 @@
 package com.jajafu.x60assistant
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -13,10 +16,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.jajafu.x60assistant.data.AssistantSettings
+import com.jajafu.x60assistant.asr.AsrModelPack
+import com.jajafu.x60assistant.asr.AsrModelPacks
 import com.jajafu.x60assistant.data.SettingsRepository
 import com.jajafu.x60assistant.diagnostics.DeviceDiagnostics
 import com.jajafu.x60assistant.diagnostics.DeviceDiagnosticsCollector
@@ -25,23 +35,50 @@ import com.jajafu.x60assistant.diagnostics.DiagnosticsExporter
 import com.jajafu.x60assistant.service.ServiceStartPolicy
 import com.jajafu.x60assistant.service.ServiceStateRepository
 import com.jajafu.x60assistant.service.VoiceForegroundService
+import com.jajafu.x60assistant.reminder.ReminderScheduler
+import com.jajafu.x60assistant.reminder.ExactAlarmOnboardingPolicy
+import com.jajafu.x60assistant.reminder.ReminderManager
+import com.jajafu.x60assistant.reminder.ReminderPreferences
+import com.jajafu.x60assistant.reminder.ScheduledReminder
+import com.jajafu.x60assistant.reminder.ReminderStore
+import com.jajafu.x60assistant.music.MusicAppCatalog
+import com.jajafu.x60assistant.music.MusicAppOption
+import com.jajafu.x60assistant.music.MusicCabinFavoriteAccess
+import com.jajafu.x60assistant.music.AssistantUiVisibility
+import com.jajafu.x60assistant.model.AsrDownloadProgress
+import com.jajafu.x60assistant.model.AsrModelDownloadWorker
+import com.jajafu.x60assistant.model.ModelPackManager
+import com.jajafu.x60assistant.model.ModelPackStatus
 import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
+import com.jajafu.x60assistant.kws.WakePhraseCompiler
 import com.jajafu.x60assistant.security.AndroidKeystoreSecretStore
 import com.jajafu.x60assistant.tts.AndroidTtsEngine
 import com.jajafu.x60assistant.ui.diagnostics.DeviceDiagnosticsScreen
 import com.jajafu.x60assistant.ui.theme.X60AssistantTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var diagnosticsCollector: DeviceDiagnosticsCollector
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var secretStore: AndroidKeystoreSecretStore
+    private lateinit var reminderManager: ReminderManager
+    private lateinit var modelPackManager: ModelPackManager
     private var diagnostics by mutableStateOf(emptyDiagnostics())
     private var errorMessage by mutableStateOf<String?>(null)
     private var startAfterPermissionGrant = false
     private var settingsMessage by mutableStateOf<String?>(null)
     private var testingConnection by mutableStateOf(false)
     private var pendingDiagnosticsExport: String? = null
+    private var showExactAlarmOnboarding by mutableStateOf(false)
+    private var compatibleMusicApps by mutableStateOf<List<MusicAppOption>>(emptyList())
+    private var musicCabinFavoriteAccessGranted by mutableStateOf(false)
+    private var scheduledReminders by mutableStateOf<List<ScheduledReminder>>(emptyList())
+    private var reminderSoundName by mutableStateOf("系統預設鬧鐘")
+    private var reminderMessage by mutableStateOf<String?>(null)
+    private var asrPackStatuses by mutableStateOf<Map<String, ModelPackStatus>>(emptyMap())
+    private var asrDownloadProgress by mutableStateOf<Map<String, AsrDownloadProgress>>(emptyMap())
 
     private val diagnosticsExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain"),
@@ -60,6 +97,8 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         refreshDiagnostics()
+        refreshMusicApps()
+        refreshMusicCabinFavoriteAccess()
         if (granted && startAfterPermissionGrant) {
             startAfterPermissionGrant = false
             startM1Service()
@@ -89,12 +128,42 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val ringtonePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+        @Suppress("DEPRECATION")
+        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+        } else {
+            result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+        }
+        ReminderPreferences(applicationContext).setSoundUri(
+            uri ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+        )
+        refreshReminderSound()
+        reminderMessage = "提醒鈴聲已更新。"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         diagnosticsCollector = DeviceDiagnosticsCollector(applicationContext)
         settingsRepository = SettingsRepository(applicationContext)
         secretStore = AndroidKeystoreSecretStore(applicationContext)
+        reminderManager = ReminderManager(applicationContext)
+        modelPackManager = ModelPackManager(applicationContext)
+        refreshAsrPackStatuses()
+        observeAsrDownloads()
         refreshDiagnostics()
+        refreshMusicApps()
+        refreshReminders()
+        refreshReminderSound()
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                ReminderStore.changes.collect { refreshReminders() }
+            }
+        }
+        showExactAlarmOnboarding = shouldShowExactAlarmOnboarding()
 
         setContent {
             val serviceRunning by ServiceStateRepository.running.collectAsStateWithLifecycle()
@@ -110,6 +179,9 @@ class MainActivity : ComponentActivity() {
                     maskedApiKey = secretStore.maskedApiKey(),
                     settingsMessage = settingsMessage,
                     testingConnection = testingConnection,
+                    asrPackStatuses = asrPackStatuses,
+                    asrDownloadProgress = asrDownloadProgress,
+                    onDownloadAsrModel = ::downloadAsrModel,
                     onPrimaryAction = {
                         if (serviceRunning) stopM1Service() else requestPermissionsAndStart()
                     },
@@ -120,8 +192,8 @@ class MainActivity : ComponentActivity() {
                             } else VoiceForegroundService.ACTION_PAUSE,
                         )
                     },
-                    onCancelSession = { sendServiceAction(VoiceForegroundService.ACTION_CANCEL) },
                     onOpenAppSettings = ::openAppSettings,
+                    onOpenExactAlarmSettings = ::openExactAlarmSettings,
                     onOpenBatterySettings = ::openBatteryOptimizationSettings,
                     onRefresh = ::refreshDiagnostics,
                     onSaveSettings = ::saveSettings,
@@ -130,6 +202,22 @@ class MainActivity : ComponentActivity() {
                     onTestTts = ::testTts,
                     onExportDiagnostics = { exportDiagnostics(m1Diagnostics, assistantSettings) },
                     onClearPrivateData = ::clearPrivateData,
+                    showExactAlarmOnboarding = showExactAlarmOnboarding,
+                    onOpenExactAlarmFromOnboarding = {
+                        finishExactAlarmOnboarding()
+                        openExactAlarmSettings()
+                    },
+                    onDismissExactAlarmOnboarding = ::finishExactAlarmOnboarding,
+                    compatibleMusicApps = compatibleMusicApps,
+                    onOpenMusicApp = ::openMusicAppForSetup,
+                    musicCabinFavoriteAccessGranted = musicCabinFavoriteAccessGranted,
+                    onOpenMusicCabinFavoriteAccess = ::openMusicCabinFavoriteAccessSettings,
+                    scheduledReminders = scheduledReminders,
+                    reminderSoundName = reminderSoundName,
+                    reminderMessage = reminderMessage,
+                    onSaveReminder = ::saveReminder,
+                    onDeleteReminder = ::deleteReminder,
+                    onChooseReminderSound = ::openRingtonePicker,
                 )
             }
         }
@@ -137,7 +225,24 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::diagnosticsCollector.isInitialized) refreshDiagnostics()
+        if (::diagnosticsCollector.isInitialized) {
+            ReminderScheduler(applicationContext).rescheduleAll()
+            refreshDiagnostics()
+            refreshMusicApps()
+            refreshMusicCabinFavoriteAccess()
+            refreshReminders()
+            refreshReminderSound()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AssistantUiVisibility.onStart()
+    }
+
+    override fun onStop() {
+        AssistantUiVisibility.onStop()
+        super.onStop()
     }
 
     private fun requestPermissionsAndStart() {
@@ -194,13 +299,150 @@ class MainActivity : ComponentActivity() {
         diagnostics = diagnosticsCollector.collect()
     }
 
+    private fun refreshAsrPackStatuses() {
+        lifecycleScope.launch {
+            asrPackStatuses = withContext(Dispatchers.IO) {
+                modelPackManager.allAsrStatuses().associateBy { it.id }
+            }
+        }
+    }
+
+    private fun downloadAsrModel(pack: AsrModelPack) {
+        if (asrDownloadProgress.values.any { it.active } || asrPackStatuses[pack.id]?.valid == true) return
+        asrDownloadProgress = asrDownloadProgress + (pack.id to AsrDownloadProgress(pack.id, "準備下載", 0))
+        settingsMessage = null
+        runCatching { AsrModelDownloadWorker.enqueue(applicationContext, pack) }
+            .onFailure { error ->
+                asrDownloadProgress = asrDownloadProgress - pack.id
+                settingsMessage = "${pack.label} 無法開始下載：${error.message ?: error.javaClass.simpleName}"
+            }
+    }
+
+    private fun observeAsrDownloads() {
+        val workManager = WorkManager.getInstance(applicationContext)
+        AsrModelPacks.all.forEach { pack ->
+            workManager.getWorkInfosForUniqueWorkLiveData(AsrModelDownloadWorker.uniqueWorkName(pack))
+                .observe(this) { workInfos ->
+                    val info = workInfos.firstOrNull { !it.state.isFinished } ?: workInfos.lastOrNull()
+                    if (info == null) {
+                        asrDownloadProgress = asrDownloadProgress - pack.id
+                        return@observe
+                    }
+                    val percent = info.progress.getInt(AsrModelDownloadWorker.KEY_PERCENT, -1).takeIf { it >= 0 }
+                    val active = !info.state.isFinished
+                    val phase = when (info.state) {
+                        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> "等待網路，自動續傳"
+                        WorkInfo.State.RUNNING ->
+                            info.progress.getString(AsrModelDownloadWorker.KEY_PHASE) ?: "正在下載"
+                        WorkInfo.State.FAILED -> "下載暫停：${info.outputData.getString(AsrModelDownloadWorker.KEY_ERROR) ?: "請重試"}"
+                        WorkInfo.State.CANCELLED -> "下載已暫停"
+                        WorkInfo.State.SUCCEEDED -> "下載完成"
+                    }
+                    val wasActive = asrDownloadProgress[pack.id]?.active == true
+                    if (info.state == WorkInfo.State.SUCCEEDED) {
+                        asrDownloadProgress = asrDownloadProgress - pack.id
+                        refreshAsrPackStatuses()
+                        if (wasActive) settingsMessage = "${pack.label} 已下載並通過校驗；停止服務後可選用。"
+                    } else {
+                        asrDownloadProgress = asrDownloadProgress +
+                            (pack.id to AsrDownloadProgress(pack.id, phase, percent, active))
+                    }
+                }
+        }
+    }
+
+    private fun refreshMusicApps() {
+        compatibleMusicApps = MusicAppCatalog(applicationContext).compatibleApps()
+    }
+
+    private fun openMusicAppForSetup(packageName: String, appName: String) {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        if (launchIntent == null) {
+            settingsMessage = "找不到${appName.ifBlank { "音樂 App" }}，請重新選擇。"
+            refreshMusicApps()
+            return
+        }
+        runCatching {
+            startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
+        }.onSuccess {
+            settingsMessage = "請依音樂 App 畫面完成必要授權，並先手動播放一首歌。"
+        }.onFailure {
+            settingsMessage = "無法開啟${appName.ifBlank { "音樂 App" }}：${it.javaClass.simpleName}"
+        }
+    }
+
+    private fun refreshReminders() {
+        if (::reminderManager.isInitialized) scheduledReminders = reminderManager.pending()
+    }
+
+    private fun refreshReminderSound() {
+        val uri = ReminderPreferences(applicationContext).soundUri()
+        reminderSoundName = runCatching {
+            RingtoneManager.getRingtone(applicationContext, uri)?.getTitle(applicationContext)
+        }.getOrNull().takeUnless { it.isNullOrBlank() } ?: "系統預設鬧鐘"
+    }
+
+    private fun saveReminder(id: String?, message: String, triggerAtEpochMillis: Long) {
+        val result = runCatching {
+            if (id == null) {
+                reminderManager.create(message, triggerAtEpochMillis)
+            } else {
+                reminderManager.update(id, message, triggerAtEpochMillis)
+            }
+        }
+        result.onSuccess {
+            reminderMessage = if (id == null) "提醒已新增。" else "提醒已更新。"
+            refreshReminders()
+            refreshDiagnostics()
+        }.onFailure {
+            reminderMessage = "提醒儲存失敗：${it.message ?: it.javaClass.simpleName}"
+        }
+    }
+
+    private fun deleteReminder(id: String) {
+        runCatching { reminderManager.delete(id) }.onSuccess {
+            reminderMessage = "提醒已刪除。"
+            refreshReminders()
+        }.onFailure {
+            reminderMessage = "提醒刪除失敗：${it.message ?: it.javaClass.simpleName}"
+        }
+    }
+
+    private fun openRingtonePicker() {
+        val currentUri = ReminderPreferences(applicationContext).soundUri()
+        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "選擇提醒鈴聲")
+            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, currentUri)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+        }
+        runCatching { ringtonePickerLauncher.launch(intent) }
+            .onFailure { reminderMessage = "此裝置無法開啟鈴聲選擇器。" }
+    }
+
     private fun saveSettings(settings: AssistantSettings, apiKey: String) {
         lifecycleScope.launch {
+            var connectionStillVerified = false
             runCatching {
-                settingsRepository.save(settings.copy(connectionVerified = false))
+                WakePhraseCompiler.compile(assets, settings.wakePhrase)
+                val current = settingsRepository.current()
+                val providerUnchanged = settings.baseUrl.trim() == current.baseUrl &&
+                    settings.model.trim() == current.model &&
+                    settings.endpoint.trim() == current.endpoint &&
+                    apiKey.isBlank()
+                connectionStillVerified = current.connectionVerified && providerUnchanged
+                settingsRepository.save(
+                    settings.copy(connectionVerified = connectionStillVerified),
+                )
                 if (apiKey.isNotBlank()) secretStore.saveApiKey(apiKey.toCharArray())
             }.onSuccess {
-                settingsMessage = "設定已儲存；請按「測試連線」後再啟動服務。"
+                settingsMessage = if (connectionStillVerified) {
+                    "設定已儲存。"
+                } else {
+                    "設定已儲存；請按「測試 LLM 連線」後再啟動服務。"
+                }
             }.onFailure {
                 settingsMessage = "設定儲存失敗：${it.javaClass.simpleName}"
             }
@@ -214,6 +456,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             var provider: OpenAiCompatibleLlmProvider? = null
             runCatching {
+                WakePhraseCompiler.compile(assets, settings.wakePhrase)
                 settingsRepository.save(settings.copy(connectionVerified = false))
                 if (apiKey.isNotBlank()) secretStore.saveApiKey(apiKey.toCharArray())
                 provider = OpenAiCompatibleLlmProvider(
@@ -250,7 +493,7 @@ class MainActivity : ComponentActivity() {
             runCatching {
                 val status = engine.initialize()
                 check(status.available) { status.message }
-                engine.speak("小助手語音測試完成。")
+                engine.speak("${settings.wakePhrase}語音測試完成。")
                 status
             }.onSuccess {
                 settingsMessage = "TTS 測試完成：${it.locale}，${it.voice}"
@@ -277,14 +520,28 @@ class MainActivity : ComponentActivity() {
     private fun clearPrivateData() {
         lifecycleScope.launch {
             settingsRepository.clear()
+            ReminderScheduler(applicationContext).cancelAll()
+            ReminderPreferences(applicationContext).clear()
             secretStore.deleteApiKey()
             M1DiagnosticsRepository.clearDiagnostics()
-            settingsMessage = "設定、API Key、記憶體內逐字稿／回答與診斷已清除。"
+            getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE).edit { clear() }
+            settingsMessage = "設定、API Key、排程提醒、記憶體內逐字稿／回答與診斷已清除。"
+            refreshReminders()
+            refreshReminderSound()
         }
     }
 
     private fun hasPermission(permission: String): Boolean =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    private fun refreshMusicCabinFavoriteAccess() {
+        musicCabinFavoriteAccessGranted = MusicCabinFavoriteAccess.isGranted(this)
+    }
+
+    private fun openMusicCabinFavoriteAccessSettings() {
+        runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+            .onFailure { openAppSettings() }
+    }
 
     private fun openAppSettings() {
         val intent = Intent(
@@ -300,8 +557,34 @@ class MainActivity : ComponentActivity() {
             .onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
     }
 
+    private fun openExactAlarmSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val intent = Intent(
+            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+            "package:$packageName".toUri(),
+        )
+        runCatching { startActivity(intent) }
+            .onFailure { openAppSettings() }
+    }
+
+    private fun shouldShowExactAlarmOnboarding(): Boolean = ExactAlarmOnboardingPolicy.shouldShow(
+        apiLevel = Build.VERSION.SDK_INT,
+        permissionGranted = diagnostics.exactAlarmPermissionGranted,
+        promptAlreadyShown = getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE)
+            .getBoolean(KEY_EXACT_ALARM_PROMPT_SHOWN, false),
+    )
+
+    private fun finishExactAlarmOnboarding() {
+        getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE).edit {
+            putBoolean(KEY_EXACT_ALARM_PROMPT_SHOWN, true)
+        }
+        showExactAlarmOnboarding = false
+    }
+
     companion object {
         private const val POST_NOTIFICATIONS_PERMISSION = "android.permission.POST_NOTIFICATIONS"
+        private const val ONBOARDING_PREFERENCES = "assistant_onboarding"
+        private const val KEY_EXACT_ALARM_PROMPT_SHOWN = "exact_alarm_prompt_shown"
 
         private fun emptyDiagnostics() = DeviceDiagnostics(
             androidVersion = "—",
@@ -318,6 +601,7 @@ class MainActivity : ComponentActivity() {
             batteryPercent = -1,
             temperatureCelsius = null,
             thermalStatus = null,
+            exactAlarmPermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S,
         )
     }
 }

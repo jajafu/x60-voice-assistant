@@ -19,10 +19,25 @@
 
 ## M2–M5
 
-- 兩個中文 ASR archive 都沒有模型專屬 `LICENSE`／`NOTICE`；目前只允許本機評估，APK 不含 ASR binary。
-- 目前 X60 只完成 small ASR 的單句合成短測。standard 模型、20 句真人語意、連續 30 次、P95、Peak PSS、熱降頻與 OOM/LMK 仍待正式量測。
+- Small／Standard 中文 ASR archive 沒有模型專屬 `LICENSE`／`NOTICE`；Moonshine 中文權重附 Moonshine AI Community License。APK 不含 ASR binary，授權條款見 `docs/model-packs.md`。
+- 目前 X60 只完成 Small ASR 的單句合成短測和 Standard 的載入短測。Moonshine 尚未在真機下載、載入或辨識；20 句真人語意、連續 30 次、P95、Peak PSS、熱降頻與 OOM/LMK 仍待正式量測。
 - 沒有使用者在手機 App 內輸入私人 API Key，因此真實 Provider 的 DNS/TLS/認證/Model/Endpoint 與完整問答仍待驗收；MockWebServer 不代表外部服務通過。
 - Android TTS 的 Engine/Voice 可用性取決於手機已安裝資料。沒有中文 voice 時保留畫面文字並記錄 `TTS_ENGINE_MISSING`，不自動下載第三方 voice。
 - Follow Up、通知 action、Boot Reminder 與 TTS 真機結果需以最終 APK 再驗；鎖屏 action 仍受 OriginOS 鎖屏隱私與省電策略影響。
 - X60 reboot 實測沒有自動啟動麥克風（正確），但 Boot Reminder 通知也未出現。Manifest receiver 與權限存在；需開啟 vivo 自啟動／背景權限後重測，現階段不得宣稱 Boot Reminder 通過。
 - release variant 沒有 production keystore，不能當正式商店簽章版本。
+
+## 排程提醒
+
+- Android 12 以上未授予「鬧鐘與提醒」特殊權限時，只能使用近似時間排程，Doze 或 OEM 省電可能造成延遲。
+- 強制停止 App 會由 Android 取消鬧鐘且禁止接收廣播；重新開啟 App 後才會從私有儲存補排程。
+- 目前支援一次性提醒與通知上的停止按鈕，尚未提供提醒清單、逐筆取消、重複排程或貪睡。
+- 鈴聲、鎖屏通知、重新開機補排程與 TTS 仍需在 vivo X60／OriginOS 真機驗收；裝置沒有可用中文 TTS 時仍會播放鬧鐘鈴聲，但無法朗讀內容。
+
+## 音樂 App 相容性
+
+- 2026-09-25 使用者回報：舊版「收藏」回覆已送出，但 MusicCabin 喜愛清單未更新。原實作透過平台 `MediaController.sendCustomAction`，無法取得 MusicCabin 的接收結果。已改為 Media3 `sendCustomCommand` 並檢查指令可用性、回傳碼及清單變更；新版仍需 X60 真機重測，未驗證前不宣稱收藏成功。
+- 2026-09-25 使用者實測 rc18：說「播放音樂收藏」後 MusicCabin 已開始播放，但小助手仍回覆「尚未確認喜愛清單開始播放」。**開發決定（rc19）**：此操作在確認 MusicCabin 喜愛清單非空、播放器宣告支援 `PLAY_FROM_MEDIA_ID` 後，送出 `playFromMediaId` 就回覆「好的，正在播放喜愛歌曲」，不再等待播放狀態，也不比對歌曲 ID、佇列或曲目資料。MusicCabin 的媒體狀態在這條路徑無法作為可靠的成功判斷；日後 code review 不應恢復此項事後確認。若送出指令後播放器實際未播放，此回覆可能過於樂觀；rc19 仍需 X60 真機重測。收藏與取消收藏的結果驗證維持不變。
+- 選擇器只列出公開 `MediaBrowserService` 的播放器；只有啟動圖示、只提供私有服務或只建立不可瀏覽 MediaSession 的 App 不會列出。
+- 各播放器支援的控制動作不同；播放、暫停與切歌通常可用，但語音點歌需要播放器提供 `PLAY_FROM_SEARCH`，否則會明確回覆不支援。
+- 部分播放器雖宣告媒體服務，仍可能拒絕第三方連線或要求先開啟 App／登入；需逐一真機驗收，選擇器不代表所有功能保證相容。

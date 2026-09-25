@@ -24,6 +24,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun save(value: AssistantSettings) {
         val settings = value.normalized()
         context.assistantDataStore.edit { prefs ->
+            prefs[Keys.WAKE_PHRASE] = settings.wakePhrase
+            prefs[Keys.WAKE_ACKNOWLEDGEMENT] = settings.wakeAcknowledgement
             prefs[Keys.BASE_URL] = settings.baseUrl.trim()
             prefs[Keys.MODEL] = settings.model.trim()
             prefs[Keys.ENDPOINT] = settings.endpoint.trim()
@@ -41,6 +43,9 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.FOLLOW_UP] = settings.followUpSeconds
             prefs[Keys.AUDIO_RESUME_DELAY] = settings.audioResumeDelayMs
             prefs[Keys.ASR_MODEL_ID] = settings.asrModelId
+            prefs[Keys.MUSIC_APP_NAME] = settings.musicAppName
+            prefs[Keys.MUSIC_PACKAGE_NAME] = settings.musicPackageName
+            prefs[Keys.MUSIC_SERVICE_NAME] = settings.musicServiceName
             prefs[Keys.TTS_ENGINE] = settings.ttsEngine
             prefs[Keys.TTS_VOICE] = settings.ttsVoice
             prefs[Keys.SPEECH_RATE] = settings.speechRate
@@ -56,6 +61,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun clear() = context.assistantDataStore.edit { it.clear() }
 
     private fun fromPreferences(prefs: Preferences): AssistantSettings = AssistantSettings(
+        wakePhrase = prefs[Keys.WAKE_PHRASE] ?: AssistantSettings.DEFAULT_WAKE_PHRASE,
+        wakeAcknowledgement = prefs[Keys.WAKE_ACKNOWLEDGEMENT]
+            ?: AssistantSettings.DEFAULT_WAKE_ACKNOWLEDGEMENT,
         baseUrl = prefs[Keys.BASE_URL].orEmpty(),
         model = prefs[Keys.MODEL].orEmpty(),
         endpoint = prefs[Keys.ENDPOINT] ?: "/chat/completions",
@@ -73,6 +81,9 @@ class SettingsRepository(private val context: Context) {
         followUpSeconds = prefs[Keys.FOLLOW_UP] ?: 10,
         audioResumeDelayMs = prefs[Keys.AUDIO_RESUME_DELAY] ?: 300,
         asrModelId = prefs[Keys.ASR_MODEL_ID] ?: AssistantSettings.DEFAULT_ASR_MODEL_ID,
+        musicAppName = prefs[Keys.MUSIC_APP_NAME] ?: AssistantSettings.DEFAULT_MUSIC_APP_NAME,
+        musicPackageName = prefs[Keys.MUSIC_PACKAGE_NAME] ?: AssistantSettings.DEFAULT_MUSIC_PACKAGE_NAME,
+        musicServiceName = prefs[Keys.MUSIC_SERVICE_NAME] ?: AssistantSettings.DEFAULT_MUSIC_SERVICE_NAME,
         ttsEngine = prefs[Keys.TTS_ENGINE].orEmpty(),
         ttsVoice = prefs[Keys.TTS_VOICE].orEmpty(),
         speechRate = prefs[Keys.SPEECH_RATE] ?: 1.0f,
@@ -81,6 +92,8 @@ class SettingsRepository(private val context: Context) {
     ).normalized()
 
     private object Keys {
+        val WAKE_PHRASE = stringPreferencesKey("wake_phrase")
+        val WAKE_ACKNOWLEDGEMENT = stringPreferencesKey("wake_acknowledgement")
         val BASE_URL = stringPreferencesKey("llm_base_url")
         val MODEL = stringPreferencesKey("llm_model")
         val ENDPOINT = stringPreferencesKey("llm_endpoint")
@@ -98,6 +111,9 @@ class SettingsRepository(private val context: Context) {
         val FOLLOW_UP = intPreferencesKey("follow_up_seconds")
         val AUDIO_RESUME_DELAY = longPreferencesKey("audio_resume_delay_ms")
         val ASR_MODEL_ID = stringPreferencesKey("asr_model_id")
+        val MUSIC_APP_NAME = stringPreferencesKey("music_app_name")
+        val MUSIC_PACKAGE_NAME = stringPreferencesKey("music_package_name")
+        val MUSIC_SERVICE_NAME = stringPreferencesKey("music_service_name")
         val TTS_ENGINE = stringPreferencesKey("tts_engine")
         val TTS_VOICE = stringPreferencesKey("tts_voice")
         val SPEECH_RATE = floatPreferencesKey("tts_speech_rate")

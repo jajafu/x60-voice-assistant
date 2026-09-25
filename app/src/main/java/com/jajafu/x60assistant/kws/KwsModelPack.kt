@@ -13,6 +13,7 @@ object KwsModelPack {
     const val TOKENS = "$ASSET_DIR/tokens.txt"
     const val KEYWORDS = "$ASSET_DIR/keywords.txt"
     const val KEYWORD = "小助手"
+    const val DEFAULT_KEYWORD_SPEC = "x iǎo zh ù sh ǒu @小助手"
     const val KEYWORDS_SCORE = 1.5f
     const val KEYWORDS_THRESHOLD = 0.25f
     const val COOLDOWN_MS = 2_000L
@@ -39,7 +40,7 @@ object KwsModelPack {
         }.getOrElse {
             return ModelVerificationResult(false, "missing:$KEYWORDS")
         }
-        if (keywordLine != "x iǎo zh ù sh ǒu @小助手") {
+        if (keywordLine != DEFAULT_KEYWORD_SPEC) {
             return ModelVerificationResult(false, "keywords-format")
         }
         return ModelVerificationResult(true, null)
