@@ -52,17 +52,29 @@ sherpa runtime repository 的 Apache-2.0 不應自動推定為 model weights 的
 | Pack | Archive / file | Bytes | SHA256 | 用途 |
 |---|---|---:|---|---|
 | Silero VAD | `silero_vad.onnx` | 643,854 | `9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6` | APK asset，本機 VAD；上游 MIT |
-| Small ASR | `sherpa-onnx-streaming-zipformer-small-ctc-zh-int8-2025-04-01.tar.bz2` | 21,264,113 | `b3b309f7ce4a737195fcc6963ea19b0653a7d3401580af5ae0d3e284cbb71f0b` | X60 預設 |
-| Standard ASR | `sherpa-onnx-streaming-zipformer-ctc-zh-int8-2025-06-30.tar.bz2` | 127,965,713 | `f2ab7a5deb02717801f6a5b26c751b42f8a2db891b07f5b095e6da7442081448` | benchmark 候選 |
-
-Small pack 逐檔：
-
-| 檔名 | Bytes | SHA256 |
-|---|---:|---|
-| `model.int8.onnx` | 26,342,340 | `68c9c943840f7d9cf3e8a4970ba50f404feb5277f611fa82b7e72267786fa84a` |
-| `tokens.txt` | — | `6fed8c6c248516f38e7faa19404b57413e8ce259f1cbc1fa4aebc86eac32fdfd` |
-| `bbpe.model` | — | `503204e0690eff065e30d0e01898c9ab06d0e6dc376a741eb6846198f95b2f82` |
+| Standard ASR | `sherpa-onnx-streaming-zipformer-ctc-zh-int8-2025-06-30.tar.bz2` | 127,965,713 | `f2ab7a5deb02717801f6a5b26c751b42f8a2db891b07f5b095e6da7442081448` | X60 預設 |
+| Moonshine v2 base zh | `sherpa-onnx-moonshine-base-zh-quantized-2026-02-27.tar.bz2` | 99,905,420 | `6495d4240f66bcdd2bbbbfefaa687c463150d467854001270934e88940b733c1` | X60 中文比較候選；整句辨識 |
+| X-ASR zh-en punct INT8 | `sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2` | 136,396,739 | `5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224` | X60 中英混合比較候選；句尾交付辨識結果 |
 
 Standard pack 的 `model.int8.onnx` 為 162,290,887 bytes，SHA256 `24ffdc19ba9aaed5a6a9beaede1e087745217d82425cf4041bca0c696661801e`；`tokens.txt` SHA256 `6193c7ea1c96d0d9a1e9652789b40d13a8a913b434a5451e93158f5a09fd6652`。
 
-兩個 ASR archive 來自 sherpa-onnx 官方 model release，與 1.13.8 的 OnlineRecognizer / Zipformer2 CTC Android API 相容；但 archive 未附模型專屬 `LICENSE`／`NOTICE`。因此 provisioning script 只供本機評估，ASR files 放在 App Private Storage 且不進 APK／Git。詳細比較與尚待測欄位見 `docs/asr-benchmark.md`。
+Moonshine pack 逐檔：
+
+| 檔名 | Bytes | SHA256 |
+|---|---:|---|
+| `encoder_model.ort` | 31,326,816 | `c725a24b58595905921ea2a47e2bcf0f18c78f4d171d96136f2dcbc8c77a58a6` |
+| `decoder_model_merged.ort` | 109,424,520 | `bf79fce626e123739ec37eceb2b2a010a93d720da266dd5d8ef9a47ef9a7dc36` |
+| `tokens.txt` | 549,350 | `2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049` |
+| `LICENSE` | 13,344 | `6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd` |
+
+X-ASR pack 逐檔（以 GitHub release archive 內容計算；Hugging Face 目錄的 encoder／decoder 版本不同，不能混用雜湊）：
+
+| 檔名 | Bytes | SHA256 |
+|---|---:|---|
+| `encoder-epoch-99-avg-1.int8.onnx` | 161,015,713 | `7f6aa62056efd8af9da13e0faa81cd3f284d2fb2e3b63de56fd2dfd3450910dc` |
+| `decoder-epoch-99-avg-1.onnx` | 11,309,084 | `72f47405d3c1033bebccbef82f90071e7b4ba3e71b9c986f2b74244b25723aed` |
+| `joiner-epoch-99-avg-1.int8.onnx` | 2,581,422 | `aedb7fa697b2ab43f20499826fff7c997eea7d67db77be97769aeeeb726e63b3` |
+| `bpe.model` | 119,265 | `f87a38025a5fdd1e4e9591f6a44bb81295097ce0b80df6f4ab9f44e52c64ca5f` |
+| `tokens.txt` | 58,806 | `b818a60878b9aae978cbb8ad594acbd403d76d1af2e31ef4197c84e2dbdba27c` |
+
+三個 archive 均來自 sherpa-onnx 官方 model release。Standard 使用 1.13.8 的 `OnlineRecognizer` / Zipformer2 CTC API；X-ASR 與 Moonshine v2 使用 `OfflineRecognizer`，在 VAD 偵測一句話結束後辨識並交付結果。X-ASR release 的 encoder 介面是整句輸入，不適用 `OnlineRecognizer`。Standard 與 X-ASR archive 未附模型專屬授權，僅供本機評估。Moonshine 中文權重附有 Moonshine AI Community License，個人評估與測試可用，商用與散布需依該授權條款。ASR files 下載至 App Private Storage，不進 APK／Git。App 逐檔驗證 SHA256 後才可載入，安裝新模型不會移除其他模型。

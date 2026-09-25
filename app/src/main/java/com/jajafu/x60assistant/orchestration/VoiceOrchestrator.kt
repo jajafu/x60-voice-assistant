@@ -16,14 +16,29 @@ import com.jajafu.x60assistant.llm.ConversationHistory
 import com.jajafu.x60assistant.llm.LlmErrorCode
 import com.jajafu.x60assistant.llm.LlmException
 import com.jajafu.x60assistant.llm.LlmProvider
+import com.jajafu.x60assistant.music.MusicActionExecutor
+import com.jajafu.x60assistant.music.MusicActionResult
+import com.jajafu.x60assistant.music.MusicCommand
+import com.jajafu.x60assistant.music.MusicCommandRouter
+import com.jajafu.x60assistant.music.MusicRefusalRecovery
+import com.jajafu.x60assistant.music.MusicRefusalRecoveryRouter
+import com.jajafu.x60assistant.reminder.ReminderActionExecutor
+import com.jajafu.x60assistant.reminder.ReminderActionResult
+import com.jajafu.x60assistant.reminder.ReminderCommandRouter
+import com.jajafu.x60assistant.reminder.AlarmActionExecutor
 import com.jajafu.x60assistant.tts.BoundedTtsQueue
 import com.jajafu.x60assistant.tts.SpeechOutputEngine
 import com.jajafu.x60assistant.tts.SpeechSegmenter
 import com.jajafu.x60assistant.vad.SpeechEndpointDetector
 import com.jajafu.x60assistant.vad.SpeechEndpointEvent
 import com.jajafu.x60assistant.vad.VadEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +46,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -47,6 +63,9 @@ class VoiceOrchestrator(
     private val converter: TraditionalChineseConverter,
     private val settings: AssistantSettings = AssistantSettings(),
     private val llm: LlmProvider? = null,
+    private val musicExecutor: MusicActionExecutor? = null,
+    private val reminderExecutor: ReminderActionExecutor? = null,
+    private val alarmExecutor: AlarmActionExecutor? = null,
     speechOutput: SpeechOutputEngine? = null,
     private val speechOutputFactory: (suspend () -> SpeechOutputEngine?)? = null,
     private val clock: MonotonicClock = AndroidMonotonicClock,
@@ -65,6 +84,8 @@ class VoiceOrchestrator(
     private val recoveryPolicy = RecoveryPolicy()
     private var speechOutput: SpeechOutputEngine? = speechOutput
     private var ttsRecoveryAttempted = false
+    @Volatile private var resumeMusicAfterSession = false
+    @Volatile private var resumeAlarmAfterSession = false
 
     val state = mutableState.asStateFlow()
 
@@ -91,6 +112,9 @@ class VoiceOrchestrator(
                 is Command.SpeechRejected -> handleSpeechRejected(command.code)
                 is Command.TranscriptReady -> handleTranscriptReady(command.result)
                 is Command.AnswerReady -> handleAnswerReady(command)
+                is Command.MusicActionReady -> handleMusicActionReady(command)
+                is Command.ReminderActionReady -> handleReminderActionReady(command.result)
+                is Command.ContextualCloseFinished -> handleContextualCloseFinished(command.message)
                 Command.SpeechFinished -> handleSpeechFinished()
                 is Command.FollowUpSpeech -> handleFollowUpSpeech(command.firstFrame)
                 Command.FollowUpTimeout -> handleFollowUpTimeout()
@@ -156,19 +180,37 @@ class VoiceOrchestrator(
     private suspend fun handleWakeDetected() {
         if (machine.state != VoiceState.IDLE_KWS) return
         sessionId = UUID.randomUUID().toString().replace("-", "").take(8)
-        M1DiagnosticsRepository.onWake(KwsModelPack.KEYWORDS_SCORE)
+        M1DiagnosticsRepository.onWake(KwsModelPack.KEYWORDS_SCORE, settings.wakePhrase)
         transition(VoiceState.WAKE_ACK, TransitionReason.WAKE_DETECTED)
-        audio.stop()
         stateJob = scope.launch {
-            acknowledgementPlayer.playAndAwait()
-            delay(audioResumeDelayMs)
-            dispatch(Command.AcknowledgementFinished)
+            try {
+                withContext(NonCancellable) {
+                    resumeAlarmAfterSession = try {
+                        alarmExecutor?.pauseForVoice() == true
+                    } catch (_: Exception) {
+                        false
+                    }
+                    resumeMusicAfterSession = try {
+                        musicExecutor?.pauseForVoice() == true
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+                acknowledgementPlayer.playAndAwait(speechOutput, settings.wakeAcknowledgement)
+                dispatch(Command.AcknowledgementFinished)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                dispatch(Command.SessionFailed(VoiceErrorCode.AUDIO_START_FAILED, error.javaClass.simpleName))
+            }
         }
     }
 
     private suspend fun handleAcknowledgementFinished() {
         if (machine.state != VoiceState.WAKE_ACK) return
-        beginListening(firstFrame = null, audioAlreadyRunning = false)
+        // Capture stays active during the acknowledgement. Discard its echo before accepting speech.
+        audio.frameQueue.clear()
+        beginListening(firstFrame = null, audioAlreadyRunning = audio.isRunning())
     }
 
     private suspend fun beginListening(firstFrame: AudioFrame?, audioAlreadyRunning: Boolean) {
@@ -238,8 +280,34 @@ class VoiceOrchestrator(
             returnToIdle(TransitionReason.USER_CANCEL)
             return
         }
-        M1DiagnosticsRepository.setFinalTranscript(converter.convert(result.text), result)
+        val userText = converter.convert(result.text)
+        M1DiagnosticsRepository.setFinalTranscript(userText, result)
         transition(VoiceState.ROUTING, TransitionReason.TRANSCRIPT_READY)
+        if (ContextualCloseCommandRouter.matches(userText)) {
+            handleContextualClose()
+            return
+        }
+        val reminderCommand = ReminderCommandRouter.parse(userText)
+        if (reminderCommand != null && reminderExecutor != null) {
+            transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
+            stateJob = scope.launch {
+                val response = try {
+                    reminderExecutor.execute(reminderCommand)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    ReminderActionResult("提醒設定失敗，請稍後再試一次。")
+                }
+                if (isActive) dispatch(Command.ReminderActionReady(response))
+            }
+            return
+        }
+        val musicCommand = MusicCommandRouter.parse(userText, settings.musicAppName)
+        if (musicCommand != null && musicExecutor != null) {
+            transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
+            executeMusic(musicCommand)
+            return
+        }
         val provider = llm
         if (provider == null || settings.baseUrl.isBlank() || settings.model.isBlank()) {
             M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.LLM_CONFIG_INVALID, "session=$sessionId")
@@ -247,12 +315,12 @@ class VoiceOrchestrator(
             return
         }
         transition(VoiceState.THINKING, TransitionReason.ROUTE_REMOTE)
-        val userText = converter.convert(result.text)
         stateJob = scope.launch {
             val started = clock.elapsedRealtimeMs()
             var firstTokenMs: Long? = null
             val answer = StringBuilder()
             val segmenter = SpeechSegmenter()
+            val holdPreview = musicExecutor != null && MusicRefusalRecoveryRouter.mightBePlaybackRequest(userText)
             try {
                 provider.streamChat(
                     ChatRequest(
@@ -264,6 +332,7 @@ class VoiceOrchestrator(
                 ).collect { chunk ->
                     if (firstTokenMs == null) firstTokenMs = clock.elapsedRealtimeMs() - started
                     answer.append(chunk.text)
+                    if (!holdPreview) M1DiagnosticsRepository.setAnswerPreview(answer.toString())
                     segmenter.accept(chunk.text).forEach { sentence ->
                         if (!ttsQueue.offer(sentence)) throw IllegalStateException("tts-queue-full")
                         M1DiagnosticsRepository.setTtsQueue(ttsQueue.size, ttsQueue.highWaterMark)
@@ -289,11 +358,113 @@ class VoiceOrchestrator(
         }
     }
 
+    private fun executeMusic(command: MusicCommand, recoveredFromLlm: Boolean = false) {
+        val executor = requireNotNull(musicExecutor)
+        if (command == MusicCommand.Pause) resumeMusicAfterSession = false
+        stateJob = scope.launch {
+            val response = try {
+                executor.execute(command)
+            } catch (_: TimeoutCancellationException) {
+                MusicActionResult("音樂操作等太久了，請再試一次。")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                MusicActionResult("音樂操作失敗，請再試一次。")
+            }
+            if (resumeMusicAfterSession && command != MusicCommand.Open) {
+                try {
+                    executor.pauseForVoice()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // The session-level resume check still runs when the conversation ends.
+                }
+            }
+            if (isActive) dispatch(Command.MusicActionReady(response, recoveredFromLlm))
+        }
+    }
+
+    private suspend fun handleContextualClose() {
+        val musicWasHeld = resumeMusicAfterSession
+        val alarmWasHeld = resumeAlarmAfterSession
+        resumeMusicAfterSession = false
+        resumeAlarmAfterSession = false
+        transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
+        stateJob = scope.launch {
+            val alarmStopped = try {
+                alarmExecutor?.stop() == true
+            } catch (_: Exception) {
+                false
+            }
+            if (!alarmStopped && alarmWasHeld) {
+                runCatching { alarmExecutor?.resumeAfterVoice() }
+            }
+            val musicStopped = if (musicWasHeld) {
+                try {
+                    musicExecutor?.stopForClose() == true
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    false
+                }
+            } else {
+                false
+            }
+            val message = when {
+                alarmStopped && musicStopped -> "已關閉鬧鐘與音樂。"
+                alarmStopped -> "已關閉鬧鐘。"
+                musicStopped -> "已停止音樂。"
+                musicWasHeld -> "音樂已保持暫停，不會自動繼續播放。"
+                else -> null
+            }
+            if (isActive) dispatch(Command.ContextualCloseFinished(message))
+        }
+    }
+
+    private suspend fun handleContextualCloseFinished(message: String?) {
+        if (machine.state != VoiceState.EXECUTING_ACTION) return
+        message?.let(M1DiagnosticsRepository::setAnswerPreview)
+        returnToIdle(TransitionReason.USER_CANCEL)
+    }
+
     private suspend fun handleAnswerReady(command: Command.AnswerReady) {
         if (machine.state != VoiceState.THINKING) return
         if (command.answer.isBlank()) {
             M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.LLM_RESPONSE_INVALID, "empty-answer")
             returnToIdle(TransitionReason.USER_CANCEL)
+            return
+        }
+        val recovery = if (musicExecutor != null) {
+            MusicRefusalRecoveryRouter.recover(command.userText, command.answer)
+        } else {
+            null
+        }
+        if (recovery != null) {
+            ttsQueue.clear()
+            M1DiagnosticsRepository.setTtsQueue(0, ttsQueue.highWaterMark)
+            M1DiagnosticsRepository.setLlmResult(
+                command.answer, 200, command.firstTokenMs, command.totalMs, displayAnswer = false,
+            )
+            when (recovery) {
+                is MusicRefusalRecovery.SearchAndPlay -> {
+                    M1DiagnosticsRepository.setAnswerPreview("")
+                    transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
+                    executeMusic(MusicCommand.SearchAndPlay(recovery.query), recoveredFromLlm = true)
+                }
+                MusicRefusalRecovery.AskForTarget -> {
+                    val message = "我沒聽清要播放的歌曲或歌手，請再說一次。"
+                    M1DiagnosticsRepository.setAnswerPreview(message)
+                    if (speechOutput == null || !ttsQueue.offer(message)) {
+                        M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.TTS_ENGINE_MISSING, "music-target-no-output")
+                        returnToIdle(TransitionReason.USER_CANCEL)
+                    } else {
+                        M1DiagnosticsRepository.setTtsQueue(ttsQueue.size, ttsQueue.highWaterMark)
+                        transition(VoiceState.SPEAKING, TransitionReason.ANSWER_READY)
+                        ttsRecoveryAttempted = false
+                        startSpeaking()
+                    }
+                }
+            }
             return
         }
         history.add(command.userText, command.answer)
@@ -304,6 +475,48 @@ class VoiceOrchestrator(
             returnToIdle(TransitionReason.USER_CANCEL)
             return
         }
+        transition(VoiceState.SPEAKING, TransitionReason.ANSWER_READY)
+        ttsRecoveryAttempted = false
+        startSpeaking()
+    }
+
+    private suspend fun handleMusicActionReady(command: Command.MusicActionReady) {
+        if (machine.state != VoiceState.EXECUTING_ACTION) return
+        val result = command.result
+        val original = if (resumeMusicAfterSession) result.deferredMessage ?: result.message else result.message
+        val message = if (command.recoveredFromLlm && result.confirmedPlayback) {
+            when {
+                original.startsWith("好的，正在播放") -> original.replaceFirst("好的，正在播放", "好的，為你播放")
+                original.startsWith("好的，準備播放") -> original.replaceFirst("好的，準備播放", "好的，準備為你播放")
+                original == "好的，音樂已開始播放。" -> "好的，為你播放音樂。"
+                else -> original
+            }
+        } else {
+            original
+        }
+        M1DiagnosticsRepository.setAnswerPreview(message)
+        val output = speechOutput
+        if (output == null || !ttsQueue.offer(message)) {
+            M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.TTS_ENGINE_MISSING, "action-no-output")
+            returnToIdle(TransitionReason.USER_CANCEL)
+            return
+        }
+        M1DiagnosticsRepository.setTtsQueue(ttsQueue.size, ttsQueue.highWaterMark)
+        transition(VoiceState.SPEAKING, TransitionReason.ANSWER_READY)
+        ttsRecoveryAttempted = false
+        startSpeaking()
+    }
+
+    private suspend fun handleReminderActionReady(result: ReminderActionResult) {
+        if (machine.state != VoiceState.EXECUTING_ACTION) return
+        M1DiagnosticsRepository.setAnswerPreview(result.message)
+        val output = speechOutput
+        if (output == null || !ttsQueue.offer(result.message)) {
+            M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.TTS_ENGINE_MISSING, "reminder-no-output")
+            returnToIdle(TransitionReason.USER_CANCEL)
+            return
+        }
+        M1DiagnosticsRepository.setTtsQueue(ttsQueue.size, ttsQueue.highWaterMark)
         transition(VoiceState.SPEAKING, TransitionReason.ANSWER_READY)
         ttsRecoveryAttempted = false
         startSpeaking()
@@ -411,6 +624,8 @@ class VoiceOrchestrator(
         ttsQueue.clear()
         audio.stop()
         transition(VoiceState.PAUSED, TransitionReason.USER_PAUSE)
+        resumeHeldAlarm()
+        resumeHeldMusic()
     }
 
     private suspend fun returnToIdle(reason: TransitionReason) {
@@ -424,10 +639,32 @@ class VoiceOrchestrator(
         audio.stop()
         delay(audioResumeDelayMs)
         enterIdle(reason, audioAlreadyRunning = false)
+        resumeHeldAlarm()
+        resumeHeldMusic()
+    }
+
+    private fun resumeHeldAlarm() {
+        if (!resumeAlarmAfterSession) return
+        resumeAlarmAfterSession = false
+        runCatching { alarmExecutor?.resumeAfterVoice() }
+    }
+
+    private suspend fun resumeHeldMusic() {
+        if (!resumeMusicAfterSession) return
+        try {
+            musicExecutor?.resumeAfterVoice()
+            resumeMusicAfterSession = false
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            resumeMusicAfterSession = false
+        }
     }
 
     private suspend fun handleAudioFailure(code: VoiceErrorCode, detail: String) {
         M1DiagnosticsRepository.onAudioError(code, detail)
+        resumeHeldAlarm()
+        resumeHeldMusic()
         val decision = recoveryPolicy.recordFailure(clock.elapsedRealtimeMs())
         if (!decision.recover || !machine.canTransition(VoiceState.RECOVERING)) {
             transition(VoiceState.ERROR, TransitionReason.FATAL_ERROR)
@@ -451,12 +688,16 @@ class VoiceOrchestrator(
         M1DiagnosticsRepository.recordError(code, detail)
         transition(VoiceState.ERROR, TransitionReason.FATAL_ERROR)
         releaseSessionResources()
+        resumeHeldAlarm()
+        resumeHeldMusic()
     }
 
     private suspend fun handleStop() {
         if (machine.state == VoiceState.STOPPED) return
         transition(VoiceState.STOPPED, TransitionReason.USER_STOP)
         releaseSessionResources()
+        resumeHeldAlarm()
+        resumeHeldMusic()
         M1DiagnosticsRepository.setStopped()
     }
 
@@ -481,6 +722,16 @@ class VoiceOrchestrator(
         commands.close()
         processorJob.cancel()
         releaseSessionResources()
+        if (resumeAlarmAfterSession) {
+            resumeAlarmAfterSession = false
+            runCatching { alarmExecutor?.resumeAfterVoice() }
+        }
+        if (resumeMusicAfterSession) {
+            resumeMusicAfterSession = false
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
+                runCatching { musicExecutor?.resumeAfterVoice() }
+            }
+        }
         runCatching { asr.close() }
         runCatching { vad.close() }
         runCatching { kws.close() }
@@ -502,6 +753,12 @@ class VoiceOrchestrator(
             val firstTokenMs: Long?,
             val totalMs: Long,
         ) : Command
+        data class MusicActionReady(
+            val result: MusicActionResult,
+            val recoveredFromLlm: Boolean = false,
+        ) : Command
+        data class ReminderActionReady(val result: ReminderActionResult) : Command
+        data class ContextualCloseFinished(val message: String?) : Command
         data object SpeechFinished : Command
         data class FollowUpSpeech(val firstFrame: AudioFrame) : Command
         data object FollowUpTimeout : Command

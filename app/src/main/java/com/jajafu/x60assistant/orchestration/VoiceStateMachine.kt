@@ -46,6 +46,7 @@ class VoiceStateMachine(initial: VoiceState = VoiceState.STOPPED) {
                 VoiceState.STOPPED,
             )
             VoiceState.ROUTING -> setOf(
+                VoiceState.EXECUTING_ACTION,
                 VoiceState.THINKING,
                 VoiceState.SPEAKING,
                 VoiceState.IDLE_KWS,
@@ -53,7 +54,15 @@ class VoiceStateMachine(initial: VoiceState = VoiceState.STOPPED) {
                 VoiceState.ERROR,
                 VoiceState.STOPPED,
             )
+            VoiceState.EXECUTING_ACTION -> setOf(
+                VoiceState.SPEAKING,
+                VoiceState.IDLE_KWS,
+                VoiceState.PAUSED,
+                VoiceState.ERROR,
+                VoiceState.STOPPED,
+            )
             VoiceState.THINKING -> setOf(
+                VoiceState.EXECUTING_ACTION,
                 VoiceState.SPEAKING,
                 VoiceState.FOLLOW_UP,
                 VoiceState.IDLE_KWS,

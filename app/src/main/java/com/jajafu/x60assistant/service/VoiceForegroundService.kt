@@ -18,6 +18,8 @@ import com.jajafu.x60assistant.MainActivity
 import com.jajafu.x60assistant.R
 import com.jajafu.x60assistant.BuildConfig
 import com.jajafu.x60assistant.asr.AsrModelPacks
+import com.jajafu.x60assistant.asr.AsrRecognizerKind
+import com.jajafu.x60assistant.asr.OfflineSpeechRecognizerEngine
 import com.jajafu.x60assistant.asr.SherpaSpeechRecognizerEngine
 import com.jajafu.x60assistant.asr.TraditionalChineseConverter
 import com.jajafu.x60assistant.audio.AudioCaptureEngine
@@ -26,6 +28,9 @@ import com.jajafu.x60assistant.diagnostics.M1DiagnosticsRepository
 import com.jajafu.x60assistant.diagnostics.VoiceErrorCode
 import com.jajafu.x60assistant.data.SettingsRepository
 import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
+import com.jajafu.x60assistant.music.MusicCabinController
+import com.jajafu.x60assistant.reminder.AndroidReminderActionExecutor
+import com.jajafu.x60assistant.reminder.AndroidAlarmActionExecutor
 import com.jajafu.x60assistant.kws.KwsModelPack
 import com.jajafu.x60assistant.kws.SherpaWakeWordEngine
 import com.jajafu.x60assistant.model.ModelPackManager
@@ -61,6 +66,7 @@ class VoiceForegroundService : Service() {
     private var audioCapture: AudioCaptureEngine? = null
     private var healthJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var activeWakePhrase = AssistantSettings.DEFAULT_WAKE_PHRASE
 
     override fun onCreate() {
         super.onCreate()
@@ -145,12 +151,17 @@ class VoiceForegroundService : Service() {
             }
             val modelManager = ModelPackManager(applicationContext)
             val settings = SettingsRepository(applicationContext).current()
+            activeWakePhrase = settings.wakePhrase
             val vadStatus = modelManager.verifyVadAsset()
             if (!vadStatus.valid) {
                 failAndStop(VoiceErrorCode.VAD_INIT_FAILED, vadStatus.reason.orEmpty())
                 return
             }
-            val asrPack = AsrModelPacks.small
+            val asrPack = AsrModelPacks.byId(settings.asrModelId)
+            if (asrPack == null) {
+                failAndStop(VoiceErrorCode.ASR_MODEL_INVALID, "unknown-model:${settings.asrModelId}")
+                return
+            }
             val asrStatus = modelManager.verifyAsrPack(asrPack)
             if (!asrStatus.valid) {
                 failAndStop(VoiceErrorCode.ASR_MODEL_INVALID, asrStatus.reason.orEmpty())
@@ -187,18 +198,41 @@ class VoiceForegroundService : Service() {
             val created = VoiceOrchestrator(
                 scope = serviceScope,
                 audio = audio,
-                kws = SherpaWakeWordEngine(assets),
+                kws = SherpaWakeWordEngine(assets, settings.wakePhrase),
                 vad = SherpaVadEngine(assets),
-                asr = SherpaSpeechRecognizerEngine(
-                    modelId = asrPack.id,
-                    modelDirectory = modelManager.asrDirectory(asrPack),
-                    pack = asrPack,
-                    clock = AndroidMonotonicClock,
-                ),
+                asr = when (asrPack.recognizerKind) {
+                    AsrRecognizerKind.ZIPFORMER_CTC -> SherpaSpeechRecognizerEngine(
+                        modelId = asrPack.id,
+                        modelDirectory = modelManager.asrDirectory(asrPack),
+                        pack = asrPack,
+                        clock = AndroidMonotonicClock,
+                    )
+                    AsrRecognizerKind.MOONSHINE_V2,
+                    AsrRecognizerKind.X_ASR_OFFLINE_TRANSDUCER -> OfflineSpeechRecognizerEngine(
+                        modelId = asrPack.id,
+                        modelDirectory = modelManager.asrDirectory(asrPack),
+                        pack = asrPack,
+                        clock = AndroidMonotonicClock,
+                    )
+                },
                 acknowledgementPlayer = WakeAcknowledgementPlayer(applicationContext),
                 converter = TraditionalChineseConverter(),
                 settings = settings,
                 llm = llmProvider,
+                musicExecutor = if (
+                    settings.musicPackageName.isNotBlank() && settings.musicServiceName.isNotBlank()
+                ) {
+                    MusicCabinController(
+                        context = applicationContext,
+                        musicPackageName = settings.musicPackageName,
+                        musicServiceName = settings.musicServiceName,
+                        musicAppName = settings.musicAppName.ifBlank { "音樂 App" },
+                    )
+                } else {
+                    null
+                },
+                reminderExecutor = AndroidReminderActionExecutor(applicationContext),
+                alarmExecutor = AndroidAlarmActionExecutor(applicationContext),
                 speechOutput = if (ttsStatus.available) ttsEngine else null,
                 speechOutputFactory = { createTtsEngine(settings) },
                 audioResumeDelayMs = settings.audioResumeDelayMs,
@@ -226,6 +260,7 @@ class VoiceForegroundService : Service() {
                 created.close()
                 return
             }
+            M1DiagnosticsRepository.setAsrModel(asrPack.id)
             startHealthPublishing()
             created.start()
         } catch (error: OutOfMemoryError) {
@@ -357,7 +392,8 @@ class VoiceForegroundService : Service() {
         )
         val primaryAction = when (state) {
             VoiceState.PAUSED -> notificationAction(ACTION_RESUME, REQUEST_RESUME, "恢復")
-            VoiceState.THINKING, VoiceState.LISTENING, VoiceState.TRANSCRIBING, VoiceState.ROUTING ->
+            VoiceState.THINKING, VoiceState.EXECUTING_ACTION, VoiceState.LISTENING,
+            VoiceState.TRANSCRIBING, VoiceState.ROUTING ->
                 notificationAction(ACTION_CANCEL, REQUEST_CANCEL, "取消")
             VoiceState.SPEAKING -> notificationAction(ACTION_SILENCE, REQUEST_SILENCE, "閉嘴")
             else -> notificationAction(ACTION_PAUSE, REQUEST_PAUSE, "暫停")
@@ -386,8 +422,9 @@ class VoiceForegroundService : Service() {
         )
 
     private fun notificationText(state: VoiceState): String = when (state) {
-        VoiceState.IDLE_KWS -> "等待喚醒詞「小助手」"
+        VoiceState.IDLE_KWS -> "等待喚醒詞「$activeWakePhrase」"
         VoiceState.LISTENING -> "正在聆聽"
+        VoiceState.EXECUTING_ACTION -> "正在執行本機操作"
         VoiceState.THINKING, VoiceState.ROUTING, VoiceState.TRANSCRIBING -> "正在取得回答"
         VoiceState.SPEAKING -> "正在回答"
         VoiceState.FOLLOW_UP -> "等待追問"

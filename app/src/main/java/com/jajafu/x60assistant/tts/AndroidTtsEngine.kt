@@ -5,6 +5,8 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import com.jajafu.x60assistant.data.AssistantSettings
@@ -24,9 +26,13 @@ class AndroidTtsEngine(
 ) : SpeechOutputEngine {
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
+    private val speechAudioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+        .build()
     private val activeUtterance = AtomicReference<CancellableContinuation<Unit>?>(null)
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        if (change <= AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) stop()
+        if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) stop()
     }
     private var focusRequest: AudioFocusRequest? = null
     private var tts: TextToSpeech? = null
@@ -34,22 +40,74 @@ class AndroidTtsEngine(
 
     override suspend fun initialize(): TtsStatus = withContext(Dispatchers.Main.immediate) {
         closeTtsOnly()
-        suspendCancellableCoroutine { continuation ->
-            var engine: TextToSpeech? = null
-            engine = TextToSpeech(appContext, { result ->
-                val instance = engine
-                if (result != TextToSpeech.SUCCESS || instance == null) {
-                    status = TtsStatus(false, message = "TTS Engine 初始化失敗")
-                    continuation.resume(status)
-                    return@TextToSpeech
-                }
-                tts = instance
-                configureListener(instance)
-                status = selectVoice(instance)
-                continuation.resume(status)
-            }, settings.ttsEngine.ifBlank { null })
-            continuation.invokeOnCancellation { engine.shutdown() }
+        val requestedEngine = settings.ttsEngine.trim().ifBlank { null }
+        val requestedInstance = createTts(requestedEngine)
+
+        if (requestedInstance != null) {
+            val requestedStatus = activate(requestedInstance, requestedEngine)
+            if (requestedStatus.available || requestedEngine == null ||
+                requestedEngine.equals(requestedInstance.defaultEngine, ignoreCase = true)
+            ) {
+                return@withContext requestedStatus
+            }
+
+            requestedInstance.shutdown()
+            tts = null
         }
+
+        val defaultInstance = createTts(null)
+        if (defaultInstance == null) {
+            status = TtsStatus(false, message = "系統預設 TTS Engine 初始化失敗")
+            return@withContext status
+        }
+
+        val defaultStatus = activate(defaultInstance, null)
+        status = if (requestedEngine != null && defaultStatus.available) {
+            defaultStatus.copy(message = "已自動改用系統預設 TTS；${defaultStatus.message}")
+        } else {
+            defaultStatus
+        }
+        status
+    }
+
+    private suspend fun createTts(enginePackage: String?): TextToSpeech? =
+        suspendCancellableCoroutine { continuation ->
+            var instance: TextToSpeech? = null
+            val listener = TextToSpeech.OnInitListener { result ->
+                // Android may report an immediate failure before the constructor assignment completes.
+                Handler(Looper.getMainLooper()).post {
+                    val created = instance
+                    if (!continuation.isActive) {
+                        created?.shutdown()
+                        return@post
+                    }
+                    if (result == TextToSpeech.SUCCESS && created != null) {
+                        continuation.resume(created)
+                    } else {
+                        created?.shutdown()
+                        continuation.resume(null)
+                    }
+                }
+            }
+
+            try {
+                instance = if (enginePackage == null) {
+                    TextToSpeech(appContext, listener)
+                } else {
+                    TextToSpeech(appContext, listener, enginePackage)
+                }
+            } catch (_: RuntimeException) {
+                if (continuation.isActive) continuation.resume(null)
+            }
+            continuation.invokeOnCancellation { instance?.shutdown() }
+        }
+
+    private fun activate(engine: TextToSpeech, requestedEngine: String?): TtsStatus {
+        tts = engine
+        configureListener(engine)
+        engine.setAudioAttributes(speechAudioAttributes)
+        status = selectVoice(engine, requestedEngine)
+        return status
     }
 
     override suspend fun speak(text: String) {
@@ -62,7 +120,10 @@ class AndroidTtsEngine(
             suspendCancellableCoroutine { continuation ->
                 activeUtterance.set(continuation)
                 continuation.invokeOnCancellation { engine.stop() }
-                val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), utteranceId)
+                val params = Bundle().apply {
+                    putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC)
+                }
+                val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
                 if (result != TextToSpeech.SUCCESS && activeUtterance.compareAndSet(continuation, null)) {
                     continuation.resumeWithException(TtsException("TTS 播放要求失敗"))
                 }
@@ -91,9 +152,12 @@ class AndroidTtsEngine(
         if (error == null) continuation.resume(Unit) else continuation.resumeWithException(error)
     }
 
-    private fun selectVoice(engine: TextToSpeech): TtsStatus {
+    private fun selectVoice(engine: TextToSpeech, requestedEngine: String?): TtsStatus {
         engine.setSpeechRate(settings.speechRate)
         engine.setPitch(settings.pitch)
+        val activeEngine = requestedEngine
+            ?.takeIf { requested -> engine.engines.any { it.name == requested } }
+            ?: engine.defaultEngine.orEmpty()
         val voices = engine.voices.orEmpty()
         val requested = voices.firstOrNull { it.name == settings.ttsVoice }
         val selected = requested
@@ -101,11 +165,11 @@ class AndroidTtsEngine(
             ?: voices.filter { !it.isNetworkConnectionRequired }.firstOrNull { it.locale.matchesLanguage("zh", "CN") }
             ?: voices.firstOrNull { it.locale.language.equals("zh", ignoreCase = true) }
         if (selected == null || engine.setVoice(selected) != TextToSpeech.SUCCESS) {
-            return TtsStatus(false, engine.defaultEngine.orEmpty(), message = "沒有可用的中文 Voice")
+            return TtsStatus(false, activeEngine, message = "沒有可用的中文 Voice")
         }
         return TtsStatus(
             available = true,
-            engine = engine.defaultEngine.orEmpty(),
+            engine = activeEngine,
             voice = selected.name,
             locale = selected.locale.toLanguageTag(),
             message = if (selected.isNetworkConnectionRequired) "使用網路 Voice" else "使用離線 Voice",
@@ -116,12 +180,8 @@ class AndroidTtsEngine(
         this.language.equals(language, ignoreCase = true) && this.country.equals(country, ignoreCase = true)
 
     private fun requestAudioFocus(): Boolean {
-        val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANT)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-            .build()
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-            .setAudioAttributes(attributes)
+            .setAudioAttributes(speechAudioAttributes)
             .setOnAudioFocusChangeListener(focusListener)
             .build()
         focusRequest = request

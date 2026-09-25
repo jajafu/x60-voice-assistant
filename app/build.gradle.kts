@@ -9,14 +9,14 @@ plugins {
 
 android {
     namespace = "com.jajafu.x60assistant"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.jajafu.x60assistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.0.0-rc1"
+        versionCode = 23
+        versionName = "1.0.0-rc19"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -80,6 +80,9 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.commons.compress)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.media3.session)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 

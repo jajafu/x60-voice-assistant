@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import com.jajafu.x60assistant.asr.AsrResult
 import com.jajafu.x60assistant.orchestration.VoiceState
+import com.jajafu.x60assistant.tts.MarkdownSpeechCleaner
 
 data class M1DiagnosticsSnapshot(
     val phase: VoiceState = VoiceState.STOPPED,
@@ -129,11 +130,14 @@ object M1DiagnosticsRepository {
         recordError(code, detail)
     }
 
-    fun onWake(configuredScore: Float) {
+    fun onWake(configuredScore: Float, wakePhrase: String) {
         wakeCount.incrementAndGet()
         lastWakeScore.set(configuredScore)
         lastWakeEpochMs.set(System.currentTimeMillis())
-        log("WAKE_DETECTED", detail = "keyword=小助手")
+        partialTranscript.set("")
+        finalTranscript.set("")
+        answerPreview.set("")
+        log("WAKE_DETECTED", detail = "keyword=$wakePhrase")
         publish()
     }
 
@@ -173,13 +177,18 @@ object M1DiagnosticsRepository {
         publish()
     }
 
-    fun setLlmResult(answer: String, httpStatus: Int?, firstTokenMs: Long?, totalMs: Long) {
-        answerPreview.set(answer.take(MAX_VISIBLE_TRANSCRIPT))
+    fun setLlmResult(answer: String, httpStatus: Int?, firstTokenMs: Long?, totalMs: Long, displayAnswer: Boolean = true) {
+        if (displayAnswer) answerPreview.set(MarkdownSpeechCleaner.clean(answer).take(MAX_VISIBLE_TRANSCRIPT))
         answerHash.set(shortHash(answer))
         llmHttpStatus.set(httpStatus)
         llmFirstTokenLatencyMs.set(firstTokenMs)
         llmTotalLatencyMs.set(totalMs)
         log("LLM_COMPLETE", detail = "status=${httpStatus ?: "-"},length=${answer.length},hash=${answerHash.get()}")
+        publish()
+    }
+
+    fun setAnswerPreview(answer: String) {
+        answerPreview.set(MarkdownSpeechCleaner.clean(answer).take(MAX_VISIBLE_TRANSCRIPT))
         publish()
     }
 

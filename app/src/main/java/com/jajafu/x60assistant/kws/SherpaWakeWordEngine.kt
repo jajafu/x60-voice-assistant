@@ -12,12 +12,16 @@ import com.k2fsa.sherpa.onnx.OnlineStream
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 
 /** Frame-driven KWS. It never owns a microphone, thread, queue, player, or state. */
-class SherpaWakeWordEngine(assetManager: AssetManager) : AutoCloseable {
+class SherpaWakeWordEngine(
+    assetManager: AssetManager,
+    private val wakePhrase: String = KwsModelPack.KEYWORD,
+) : AutoCloseable {
     private var spotter: KeywordSpotter? = null
     private var stream: OnlineStream? = null
     private var lastWakeElapsedMs = Long.MIN_VALUE
 
     init {
+        val keywordSpec = WakePhraseCompiler.compile(assetManager, wakePhrase)
         val config = KeywordSpotterConfig(
             featConfig = FeatureConfig(
                 sampleRate = AudioCaptureEngine.SAMPLE_RATE_HZ,
@@ -45,7 +49,7 @@ class SherpaWakeWordEngine(assetManager: AssetManager) : AutoCloseable {
         val createdSpotter = KeywordSpotter(assetManager = assetManager, config = config)
         spotter = createdSpotter
         stream = try {
-            createdSpotter.createStream()
+            createdSpotter.createStream(keywordSpec)
         } catch (error: Throwable) {
             createdSpotter.release()
             spotter = null
@@ -60,7 +64,7 @@ class SherpaWakeWordEngine(assetManager: AssetManager) : AutoCloseable {
         activeStream.acceptWaveform(samples, AudioCaptureEngine.SAMPLE_RATE_HZ)
         while (activeSpotter.isReady(activeStream)) {
             activeSpotter.decode(activeStream)
-            if (activeSpotter.getResult(activeStream).keyword == KwsModelPack.KEYWORD) {
+            if (activeSpotter.getResult(activeStream).keyword == wakePhrase) {
                 activeSpotter.reset(activeStream)
                 val now = SystemClock.elapsedRealtime()
                 if (lastWakeElapsedMs == Long.MIN_VALUE || now - lastWakeElapsedMs >= KwsModelPack.COOLDOWN_MS) {

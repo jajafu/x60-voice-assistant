@@ -8,6 +8,7 @@ enum class VoiceState {
     LISTENING,
     TRANSCRIBING,
     ROUTING,
+    EXECUTING_ACTION,
     THINKING,
     SPEAKING,
     FOLLOW_UP,

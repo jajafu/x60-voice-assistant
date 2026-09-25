@@ -5,8 +5,10 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.content.Context
 import android.media.ToneGenerator
+import com.jajafu.x60assistant.tts.SpeechOutputEngine
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 class WakeAcknowledgementPlayer(context: Context) {
@@ -22,7 +24,7 @@ class WakeAcknowledgementPlayer(context: Context) {
     @Volatile
     private var released = false
     private val toneLock = Any()
-    private val toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, TONE_VOLUME_PERCENT)
+    private val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, TONE_VOLUME_PERCENT)
 
     fun play() {
         if (released) return
@@ -33,7 +35,17 @@ class WakeAcknowledgementPlayer(context: Context) {
         }
     }
 
-    suspend fun playAndAwait() {
+    suspend fun playAndAwait(speechOutput: SpeechOutputEngine?, response: String) {
+        if (speechOutput != null && response.isNotBlank()) {
+            try {
+                speechOutput.speak(response)
+                return
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Keep the tone as a reliable fallback if TTS becomes unavailable at runtime.
+            }
+        }
         requestFocus()
         play()
         delay(TONE_DURATION_MS.toLong() + 30L)
@@ -51,7 +63,7 @@ class WakeAcknowledgementPlayer(context: Context) {
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build(),
             )
@@ -67,7 +79,7 @@ class WakeAcknowledgementPlayer(context: Context) {
     }
 
     companion object {
-        private const val TONE_VOLUME_PERCENT = 80
-        private const val TONE_DURATION_MS = 120
+        private const val TONE_VOLUME_PERCENT = 100
+        private const val TONE_DURATION_MS = 200
     }
 }
