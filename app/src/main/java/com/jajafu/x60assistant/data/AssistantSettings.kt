@@ -1,6 +1,7 @@
 package com.jajafu.x60assistant.data
 
 data class AssistantSettings(
+    val autoStartListening: Boolean = false,
     val wakePhrase: String = DEFAULT_WAKE_PHRASE,
     val wakeAcknowledgement: String = DEFAULT_WAKE_ACKNOWLEDGEMENT,
     val baseUrl: String = "",
@@ -45,7 +46,7 @@ data class AssistantSettings(
         maxUtteranceMs = maxUtteranceMs.coerceIn(10_000, 60_000),
         followUpSeconds = followUpSeconds.coerceIn(0, 30),
         audioResumeDelayMs = audioResumeDelayMs.coerceIn(250, 500),
-        asrModelId = if (asrModelId == LEGACY_SMALL_ASR_MODEL_ID) DEFAULT_ASR_MODEL_ID else asrModelId,
+        asrModelId = DEFAULT_ASR_MODEL_ID,
         musicAppName = musicAppName.trim().take(100),
         musicPackageName = musicPackageName.trim().take(200),
         musicServiceName = musicServiceName.trim().take(300),
@@ -59,14 +60,12 @@ data class AssistantSettings(
         const val DEFAULT_WAKE_ACKNOWLEDGEMENT = "我在"
         const val MAX_WAKE_ACKNOWLEDGEMENT_LENGTH = 20
         const val DEFAULT_ASR_MODEL_ID =
-            "sherpa-onnx-streaming-zipformer-ctc-zh-int8-2025-06-30"
-        private const val LEGACY_SMALL_ASR_MODEL_ID =
-            "sherpa-onnx-streaming-zipformer-small-ctc-zh-int8-2025-04-01"
+            "sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03"
         const val DEFAULT_MUSIC_APP_NAME = "MusicCabin"
         const val DEFAULT_MUSIC_PACKAGE_NAME = "com.jajafu.musiccabin"
         const val DEFAULT_MUSIC_SERVICE_NAME = "com.metrolist.music.playback.MusicService"
-        const val DEFAULT_SYSTEM_INSTRUCTION = """使用繁體中文口語回答。先回答重點，再補充必要說明。
-回答將由語音朗讀，避免 Markdown 表格、過多符號、長網址與太長的清單。
+        const val DEFAULT_SYSTEM_INSTRUCTION = """使用繁體中文口語回答。先回答重點，50字以內，有必要我會再補充請你說明。
+回答將由語音朗讀，避免 Markdown格式碼、emoji、表格、過多符號、網址與太長的清單。記得移除所有引用標記或引用來源。
 若答案很長，先提供簡短版本，再詢問是否要繼續。
 不知道時直接說明，不要捏造資料。"""
     }

@@ -5,6 +5,11 @@ import org.junit.Test
 
 class AssistantSettingsTest {
     @Test
+    fun `older model selections migrate to bundled X-ASR`() {
+        assertEquals(AssistantSettings.DEFAULT_ASR_MODEL_ID, AssistantSettings(asrModelId = "old-model").normalized().asrModelId)
+    }
+
+    @Test
     fun `follow up accepts zero and clamps outside range`() {
         assertEquals(0, AssistantSettings(followUpSeconds = 0).normalized().followUpSeconds)
         assertEquals(0, AssistantSettings(followUpSeconds = -1).normalized().followUpSeconds)

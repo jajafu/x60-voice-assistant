@@ -5,6 +5,7 @@ import com.jajafu.x60assistant.asr.AsrModelPack
 import com.jajafu.x60assistant.asr.AsrModelPacks
 import com.jajafu.x60assistant.vad.SherpaVadEngine
 import java.io.File
+import java.io.IOException
 
 data class ModelPackStatus(
     val id: String,
@@ -56,4 +57,21 @@ class ModelPackManager(private val context: Context) {
     }
 
     fun allAsrStatuses(): List<ModelPackStatus> = AsrModelPacks.all.map(::verifyAsrPack)
+
+    fun deleteAsrPack(pack: AsrModelPack) = deleteAsrPackFiles(context.filesDir, pack)
+}
+
+internal fun deleteAsrPackFiles(filesDir: File, pack: AsrModelPack) {
+    val root = File(filesDir, "model-packs")
+    val files = listOf(
+        File(root, "asr/${pack.id}"),
+        File(root, "asr/${pack.id}.staging"),
+        File(root, "asr/${pack.id}.backup"),
+        File(root, "downloads/${pack.id}.part"),
+    )
+    files.forEach { file ->
+        if (file.exists() && !file.deleteRecursively()) {
+            throw IOException("無法刪除模型檔案：${file.name}")
+        }
+    }
 }

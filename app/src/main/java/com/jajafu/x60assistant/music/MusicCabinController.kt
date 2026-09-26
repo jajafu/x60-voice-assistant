@@ -8,6 +8,7 @@ import android.media.session.MediaController
 import android.media.session.PlaybackState
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import androidx.media3.common.Player
 import androidx.media3.session.MediaController as Media3Controller
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
@@ -151,7 +152,9 @@ class MusicCabinController(
         try {
             executeConnected(command)
         } catch (_: TimeoutCancellationException) {
-            if (command == MusicCommand.SaveCurrent || command == MusicCommand.RemoveCurrent ||
+            if (command == MusicCommand.RepeatOne || command == MusicCommand.RepeatOff) {
+                MusicActionResult("循環設定沒有確認成功，請再試一次。")
+            } else if (command == MusicCommand.SaveCurrent || command == MusicCommand.RemoveCurrent ||
                 command == MusicCommand.PlayFavorites) {
                 MusicActionResult("MusicCabin 喜愛清單操作等太久，請到 App 確認結果。")
             } else launchForPlaybackSetup(command)
@@ -160,7 +163,9 @@ class MusicCabinController(
         } catch (_: SecurityException) {
             MusicActionResult("音樂 App 拒絕了控制要求。")
         } catch (_: Exception) {
-            if (command == MusicCommand.SaveCurrent || command == MusicCommand.RemoveCurrent) {
+            if (command == MusicCommand.RepeatOne || command == MusicCommand.RepeatOff) {
+                MusicActionResult("無法確認循環設定，沒有回報成功。")
+            } else if (command == MusicCommand.SaveCurrent || command == MusicCommand.RemoveCurrent) {
                 MusicActionResult("無法確認 MusicCabin 收藏狀態，請到 App 確認結果。")
             } else launchForPlaybackSetup(command)
         }
@@ -177,6 +182,12 @@ class MusicCabinController(
         }
 
     private suspend fun launchForPlaybackSetup(command: MusicCommand): MusicActionResult {
+        if (command == MusicCommand.NowPlaying) {
+            return MusicActionResult("目前無法讀取$musicAppName 的歌曲資訊。")
+        }
+        if (command == MusicCommand.RepeatOne || command == MusicCommand.RepeatOff) {
+            return MusicActionResult("目前無法連接$musicAppName，循環設定沒有變更。")
+        }
         if (command !is MusicCommand.Play && command !is MusicCommand.SearchAndPlay &&
             command != MusicCommand.PlayFavorites
         ) {
@@ -228,6 +239,21 @@ class MusicCabinController(
         val state = controller.playbackState
         val controls = controller.transportControls
         when (command) {
+            MusicCommand.RepeatOne, MusicCommand.RepeatOff -> return setRepeatMode(command)
+            MusicCommand.NowPlaying -> {
+                if (state?.state !in setOf(
+                        PlaybackState.STATE_PLAYING,
+                        PlaybackState.STATE_BUFFERING,
+                        PlaybackState.STATE_PAUSED,
+                    )
+                ) return MusicActionResult("目前沒有正在播放的歌曲。")
+                val metadata = controller.metadata
+                val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+                val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+                    ?.substringBefore(", 播放次數")
+                    ?.substringBefore("，播放次數")
+                return MusicActionResult(MusicReplyFormatter.currentTrack(title, artist))
+            }
             MusicCommand.SaveCurrent -> return changeCurrentFavorite(browser, controller, shouldBeLiked = true)
             MusicCommand.RemoveCurrent -> return changeCurrentFavorite(browser, controller, shouldBeLiked = false)
             MusicCommand.PlayFavorites -> return playFavorites(browser, controller)
@@ -286,6 +312,60 @@ class MusicCabinController(
                 else MusicActionResult("$musicAppName 尚未找到並開始播放這首歌，請在 App 中確認搜尋結果。")
             }
             MusicCommand.Open -> error("Handled before connecting")
+        }
+    }
+
+    private suspend fun setRepeatMode(command: MusicCommand): MusicActionResult {
+        if (musicPackageName == DEFAULT_PACKAGE_NAME && !MusicCabinFavoriteAccess.isGranted(appContext)) {
+            return MusicActionResult("單曲循環需要通知存取權，請到小助手的音樂 App 設定開啟。")
+        }
+        val target = if (command == MusicCommand.RepeatOne) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        val token = SessionToken(appContext, ComponentName(musicPackageName, musicServiceName))
+        val future = Media3Controller.Builder(appContext, token).buildAsync()
+        try {
+            val controller = awaitFuture(future)
+            val customToggle = SessionCommand(TOGGLE_REPEAT_ACTION, Bundle.EMPTY)
+            if (!controller.isCommandAvailable(Player.COMMAND_SET_REPEAT_MODE) &&
+                !controller.availableSessionCommands.contains(customToggle)
+            ) {
+                return MusicActionResult("$musicAppName 沒有開放循環控制。")
+            }
+            if (controller.repeatMode != target) {
+                if (controller.isCommandAvailable(Player.COMMAND_SET_REPEAT_MODE)) {
+                    controller.repeatMode = target
+                } else {
+                    repeat(2) {
+                        if (controller.repeatMode == target) return@repeat
+                        val previous = controller.repeatMode
+                        val result = awaitFuture(controller.sendCustomCommand(customToggle, Bundle.EMPTY))
+                        if (result.resultCode != SessionResult.RESULT_SUCCESS) {
+                            return MusicActionResult("$musicAppName 拒絕循環控制，設定沒有變更。")
+                        }
+                        val changed = withTimeoutOrNull(REPEAT_STEP_TIMEOUT_MS) {
+                            while (controller.repeatMode == previous) delay(100)
+                            true
+                        } == true
+                        if (!changed) return MusicActionResult("循環設定沒有確認成功，請再試一次。")
+                    }
+                }
+            }
+            val confirmed = withTimeoutOrNull(REPEAT_CONFIRM_TIMEOUT_MS) {
+                val checkFuture = Media3Controller.Builder(appContext, token).buildAsync()
+                try {
+                    val check = awaitFuture(checkFuture)
+                    while (check.repeatMode != target) delay(100)
+                    true
+                } finally {
+                    Media3Controller.releaseFuture(checkFuture)
+                }
+            } == true
+            return MusicActionResult(if (confirmed) {
+                if (target == Player.REPEAT_MODE_ONE) "已開啟單曲循環。" else "已取消單曲循環。"
+            } else {
+                "循環設定沒有確認成功，請再試一次。"
+            })
+        } finally {
+            Media3Controller.releaseFuture(future)
         }
     }
 
@@ -465,6 +545,7 @@ class MusicCabinController(
         const val DEFAULT_SERVICE_NAME = "com.metrolist.music.playback.MusicService"
         private const val LIKED_PLAYLIST_ID = "playlist/LP_LIKED"
         private const val TOGGLE_LIKE_ACTION = "TOGGLE_LIKE"
+        private const val TOGGLE_REPEAT_ACTION = "TOGGLE_REPEAT_MODE"
         private const val SAVE_CONFIRM_WAIT_MS = 4_000L
         private const val SAVE_CONFIRM_POLL_MS = 350L
         private const val CONNECTION_AND_ACTION_TIMEOUT_MS = 30_000L
@@ -474,5 +555,7 @@ class MusicCabinController(
         private const val RESUME_CONFIRM_TIMEOUT_MS = 1_500L
         private const val PLAYBACK_WAIT_MS = 4_000L
         private const val SEARCH_WAIT_MS = 20_000L
+        private const val REPEAT_CONFIRM_TIMEOUT_MS = 3_000L
+        private const val REPEAT_STEP_TIMEOUT_MS = 1_000L
     }
 }

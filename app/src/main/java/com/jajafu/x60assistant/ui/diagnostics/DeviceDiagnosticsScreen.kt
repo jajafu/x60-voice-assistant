@@ -65,10 +65,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.jajafu.x60assistant.asr.AsrModelPacks
-import com.jajafu.x60assistant.asr.AsrModelPack
-import com.jajafu.x60assistant.model.AsrDownloadProgress
-import com.jajafu.x60assistant.model.ModelPackStatus
 import com.jajafu.x60assistant.data.AssistantSettings
 import com.jajafu.x60assistant.diagnostics.DeviceDiagnostics
 import com.jajafu.x60assistant.diagnostics.M1DiagnosticsSnapshot
@@ -92,9 +88,6 @@ fun DeviceDiagnosticsScreen(
     maskedApiKey: String,
     settingsMessage: String?,
     testingConnection: Boolean,
-    asrPackStatuses: Map<String, ModelPackStatus>,
-    asrDownloadProgress: Map<String, AsrDownloadProgress>,
-    onDownloadAsrModel: (AsrModelPack) -> Unit,
     onPrimaryAction: () -> Unit,
     onPauseOrResume: () -> Unit,
     onOpenAppSettings: () -> Unit,
@@ -165,9 +158,6 @@ fun DeviceDiagnosticsScreen(
                 maskedApiKey = maskedApiKey,
                 message = settingsMessage,
                 testingConnection = testingConnection,
-                asrPackStatuses = asrPackStatuses,
-                asrDownloadProgress = asrDownloadProgress,
-                onDownloadAsrModel = onDownloadAsrModel,
                 enabled = !serviceRunning,
                 onSave = onSaveSettings,
                 onTestConnection = onTestConnection,
@@ -466,9 +456,6 @@ private fun ModelsPage(
     maskedApiKey: String,
     message: String?,
     testingConnection: Boolean,
-    asrPackStatuses: Map<String, ModelPackStatus>,
-    asrDownloadProgress: Map<String, AsrDownloadProgress>,
-    onDownloadAsrModel: (AsrModelPack) -> Unit,
     enabled: Boolean,
     onSave: (AssistantSettings, String) -> Unit,
     onTestConnection: (AssistantSettings, String) -> Unit,
@@ -486,7 +473,7 @@ private fun ModelsPage(
         item {
             Text("模型", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "設定 LLM 服務並下載、選用本機語音辨識模型。",
+                "設定 LLM 服務；本機語音辨識固定使用內建 X-ASR。首次啟動語音服務時會解壓模型，請預留約 175 MB 空間。",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -494,63 +481,6 @@ private fun ModelsPage(
         }
         if (!enabled) item { MessageCard("請先到「對話」停止服務，再修改模型設定。") }
         if (message != null) item { MessageCard(message, error = message.contains("失敗") || message.contains("無效")) }
-        item {
-            SectionCard("本機語音辨識") {
-                AsrModelPacks.all.forEach { pack ->
-                    val selected = draft.asrModelId == pack.id
-                    val label = pack.label
-                    val status = asrPackStatuses[pack.id]
-                    val progress = asrDownloadProgress[pack.id]
-                    if (selected) {
-                        Button(
-                            onClick = { draft = draft.copy(asrModelId = pack.id) },
-                            enabled = enabled && status?.valid == true,
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
-                        ) { Text("目前選用：$label") }
-                    } else {
-                        OutlinedButton(
-                            onClick = { draft = draft.copy(asrModelId = pack.id) },
-                            enabled = enabled && status?.valid == true,
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
-                        ) { Text("選用 $label") }
-                    }
-                    Text(
-                        text = when {
-                            progress != null -> "${progress.phase}${progress.percent?.let { " $it%" } ?: ""}"
-                            status == null -> "正在檢查模型檔案…"
-                            status.valid -> "已下載並驗證（${status.bytes / 1_000_000} MB）"
-                            status.installed -> "模型檔案無效：${status.reason}"
-                            else -> "尚未下載"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    OutlinedButton(
-                        onClick = { onDownloadAsrModel(pack) },
-                        enabled = status != null && !status.valid && asrDownloadProgress.values.none { it.active },
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(48.dp),
-                    ) {
-                        Text(
-                            when {
-                                status?.valid == true -> "已下載 $label"
-                                progress?.active == true -> "正在下載 $label"
-                                progress != null -> "繼續下載 $label"
-                                status?.installed == true -> "重新下載 $label"
-                                else -> "下載 $label"
-                            },
-                        )
-                    }
-                }
-                Text(
-                    "模型會下載到 App 私有儲存空間，彼此保留。鎖屏後可在背景繼續下載；網路中斷會自動續傳，失敗時可按「繼續下載」。下載完成後停止服務、選用模型並儲存，再啟動服務生效。Moonshine 與 X-ASR 會在一句話結束後交付辨識結果。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-        }
-
         item {
             SectionCard("LLM Provider") {
                 StatusPill(if (saved.connectionVerified) "已驗證" else "尚未驗證", saved.connectionVerified)
@@ -589,7 +519,7 @@ private fun ModelsPage(
                 onClick = { onSave(draft.normalized(), apiKey) },
                 enabled = enabled,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-            ) { Text("儲存模型設定") }
+            ) { Text("儲存 LLM 設定") }
         }
     }
 }
@@ -637,6 +567,15 @@ private fun SettingsPage(
 
         item {
             SectionCard("喚醒方式") {
+                ToggleRow("開啟 App 後自動開始聆聽", draft.autoStartListening, enabled) {
+                    draft = draft.copy(autoStartListening = it)
+                }
+                Text(
+                    "儲存後，下次開啟 App 且服務未啟動時，會自動開始聆聽；首次使用仍需授權麥克風與通知。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
                 OutlinedTextField(
                     value = draft.wakePhrase,
                     onValueChange = { draft = draft.copy(wakePhrase = it) },
@@ -754,8 +693,8 @@ private fun SettingsPage(
                     }
                     if (draft.musicPackageName == "com.jajafu.musiccabin") {
                         Text(
-                            if (musicCabinFavoriteAccessGranted) "MusicCabin 收藏控制：通知存取權已開啟。"
-                            else "語音收藏 MusicCabin 歌曲需要通知存取權；授權後小幫手才能送出收藏指令。此權限也允許小幫手讀取其他通知。",
+                            if (musicCabinFavoriteAccessGranted) "MusicCabin 收藏與單曲循環控制：通知存取權已開啟。"
+                            else "語音收藏及單曲循環需要通知存取權；授權後小幫手才能送出指令。此權限也允許小幫手讀取其他通知。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 12.dp),
@@ -764,7 +703,7 @@ private fun SettingsPage(
                             OutlinedButton(
                                 onClick = onOpenMusicCabinFavoriteAccess,
                                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
-                            ) { Text("開啟 MusicCabin 收藏所需的通知存取權") }
+                            ) { Text("開啟 MusicCabin 控制所需的通知存取權") }
                         }
                     }
                 }

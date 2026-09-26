@@ -5,6 +5,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class MusicReplyFormatterTest {
+    @Test fun `current song reply uses only supplied player metadata`() {
+        assertEquals("這首歌是周杰倫唱的晴天。", MusicReplyFormatter.currentTrack(" 晴天 ", " 周杰倫 "))
+        assertEquals("這首歌叫晴天，但播放器沒有提供歌手。", MusicReplyFormatter.currentTrack("晴天", null))
+        assertEquals("播放器沒有提供這首歌的歌名。", MusicReplyFormatter.currentTrack(null, "周杰倫"))
+    }
     @Test
     fun `song request names the confirmed track naturally`() {
         val result = MusicReplyFormatter.confirmedPlayback(
