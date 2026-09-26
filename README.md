@@ -15,16 +15,14 @@ Android 13／vivo X60 的本機喚醒語音助理 release candidate。使用者�
 
 ## 準備模型
 
-模型 binary 不進 Git。KWS 模型仍需先於建置時準備；ASR 模型可直接在 App「設定 → 本機語音辨識」按各模型的下載按鈕，下載並校驗後保存在 App 私有儲存空間。下載會在鎖屏後繼續；允許通知時可查看下載進度。網路中斷時會自動重試並從已下載的位元組續傳。若重試次數用盡，回到 App 按「繼續下載」。Standard、Moonshine 與 X-ASR 可同時保留，切換不會刪除其他模型。也可透過腳本手動安裝：
+模型 binary 不進 Git。KWS 模型與內建 X-ASR 壓縮檔需在建置前準備；App 固定使用 X-ASR，不需下載或選擇 ASR 模型。首次啟動語音服務時，App 會校驗 APK 內的壓縮檔，將模型解壓並逐檔校驗至 App 私有儲存空間。首次啟動需要額外時間及約 175 MB 可用空間；往後會驗證已安裝模型，若損壞則從 APK 重新安裝。準備建置資產：
 
 ```powershell
 .\scripts\prepare-m1-kws-assets.ps1
-.\scripts\prepare-m2-model-packs.ps1 -Pack standard -InstallToDevice -Serial 9654983303001DD
-.\scripts\prepare-m2-model-packs.ps1 -Pack moonshine -InstallToDevice -Serial 9654983303001DD
-.\scripts\prepare-m2-model-packs.ps1 -Pack xasr -InstallToDevice -Serial 9654983303001DD
+.\scripts\prepare-bundled-xasr.ps1
 ```
 
-到 App「設定 → 本機語音辨識」選擇 Standard、Moonshine v2 中文或 X-ASR 中英混合，儲存後重新啟動語音服務。舊版若選用 Small，升級後會改選 Standard。Moonshine 與 X-ASR 在一句話結束後辨識並交付結果。診斷頁會分別顯示設定值與實際載入的模型。完整來源、大小、SHA256 與授權見 [docs/model-packs.md](docs/model-packs.md)，候選比較見 [docs/asr-benchmark.md](docs/asr-benchmark.md)。
+舊版的 ASR 模型選擇會自動改為 X-ASR；模型在一句話結束後交付辨識結果。診斷頁會分別顯示設定值與實際載入的模型。完整來源、大小、SHA256 與授權見 [docs/model-packs.md](docs/model-packs.md)，候選比較見 [docs/asr-benchmark.md](docs/asr-benchmark.md)。
 
 明確的音樂播放指令優先交給選用的音樂 App。若語句進入 LLM，而回答表示無法播放音樂，App 會嘗試從回答及原語句還原歌手或歌曲，再交給音樂 App 搜尋播放；不朗讀或保留該段 LLM 拒絕回答。找不到目標時會請使用者重說，音樂 App 未確認播放時會回報實際狀態。
 
@@ -59,7 +57,9 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Release variant 未配
 
 可說「播放音樂」、「暫停音樂」、「下一首」、「上一首」，或用「幫我放晴天」、「我想聽晴天」、「來首晴天」、「播放周杰倫的晴天」等方式點歌。這些指令由本機規則判斷，不需設定 LLM；未匹配的自由說法仍不會自動操作手機。說「打開音樂 App」或所選 App 名稱時，小助手會顯示通知，點擊並解鎖後開啟播放器；鎖屏時不會強制彈出畫面。
 
-MusicCabin 可說「收藏」或「取消收藏」，操作目前播放的歌曲；成功時分別回覆「收藏成功」與「已取消」。已收藏時再說「收藏」，小助手會回覆「已經收藏過了」，不會反向取消。說「播放音樂收藏」或「播放喜愛歌曲」會從 MusicCabin 的喜愛清單開始播放；送出播放指令後不再等待歌曲／清單狀態確認，因為實測已播放仍會誤報未確認。收藏變更需先在「設定 → 音樂 App」開啟小助手的通知存取權；一般播放控制及讀取喜愛清單不需要。若 MusicCabin 未回報明確結果，小助手不會宣稱收藏成功。
+MusicCabin 可說「收藏」或「取消收藏」，操作目前播放的歌曲；成功時分別回覆「收藏成功」與「已取消」。已收藏時再說「收藏」，小助手會回覆「已經收藏過了」，不會反向取消。說「播放音樂收藏」或「播放喜愛歌曲」會從 MusicCabin 的喜愛清單開始播放；送出播放指令後不再等待歌曲／清單狀態確認，因為實測已播放仍會誤報未確認。收藏變更及單曲循環需先在「設定 → 音樂 App」開啟小助手的通知存取權；一般播放控制及讀取喜愛清單不需要。若 MusicCabin 未回報明確結果，小助手不會宣稱收藏成功。
+
+可說「單曲循環」或「重複播放這首歌」設定單曲循環；說「取消單曲循環」會改為不循環。小助手會讀回播放器的循環模式，確認後才回覆成功。MusicCabin 的循環控制需在設定中開啟小助手的通知存取權；尚待 X60 真機驗證。
 
 播放成功時，小助手直接用歌名回覆，例如「好的，準備播放周杰倫的《晴天》。」；切歌時會說「好的，下一首是……，稍後播放。」成功回覆不再以播放器名稱開頭。若播放器沒有回報歌名，則只說「準備播放音樂」，不猜測曲目。
 
@@ -80,3 +80,11 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 自動化、ADB 證據及正式驗收門檻見 [docs/testing.md](docs/testing.md)。M2 短測使用 Windows 合成語音，不能等同真人 20 句或 30 次壓力驗收。沒有使用者在 App 內提供的私人 API Key 時，真實 Provider 測試必須保持「待驗收」；MockWebServer 只證明協定處理。
 
 另見：[隱私](docs/privacy.md)、[疑難排解](docs/troubleshooting.md)、[已知限制](docs/known-issues.md)、[決策紀錄](docs/decision-log.md)、[第三方聲明](THIRD_PARTY_NOTICES.md)。
+
+## AI 開發流程
+
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.0-rc20` 候選版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
+
+從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
+
+產品候選版號與流程範本版本分開管理；Issue 的產品版本決定及可選工作日誌見 [開發流程](docs/DEVELOPMENT.md)。Android 行為變更時，MuMu 安裝與啟動檢查依 [smoke test](docs/ANDROID_MUMU_SMOKE.md) 記錄，不能替代 X60 真機驗收。單純升級流程範本不改 App 版號或建立 APK。

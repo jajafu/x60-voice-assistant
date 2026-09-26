@@ -76,4 +76,35 @@ class MusicCommandRouterTest {
         assertNull(MusicCommandRouter.parse("可以播放音樂嗎？"))
         assertNull(MusicCommandRouter.parse("MusicCabin 是什麼？"))
     }
+
+    @Test fun `routes current song questions to local metadata lookup`() {
+        val questions = listOf(
+            "這是什麼歌？", "這首什麼歌？", "這首甚麼歌？",
+            "這首歌叫什麼名字？", "這首歌的歌手是誰？",
+            "請問現在播放的是什麼歌？", "这首歌叫什么名字", "這首歌叫什麼名字呢",
+            "MusicCabin 這首歌的歌名是什麼呀", "誰唱這首歌？",
+        )
+        questions.forEach { question ->
+            assertEquals(question, MusicCommand.NowPlaying, MusicCommandRouter.parse(question))
+        }
+        assertNull(MusicCommandRouter.parse("這首歌為什麼好聽？"))
+    }
+
+    @Test fun `routes single song repeat commands without treating them as song searches`() {
+        val enable = listOf(
+            "單曲循環", "請幫我開啟單曲循環", "重複播放這首歌",
+            "MusicCabin 把這首歌設成單曲循環", "单曲循环",
+        )
+        enable.forEach { request ->
+            assertEquals(request, MusicCommand.RepeatOne, MusicCommandRouter.parse(request))
+        }
+        val disable = listOf(
+            "取消單曲循環", "請不要單曲循環", "關掉單曲循環",
+            "不要重複播放這首歌", "取消单曲循环",
+        )
+        disable.forEach { request ->
+            assertEquals(request, MusicCommand.RepeatOff, MusicCommandRouter.parse(request))
+        }
+        assertNull(MusicCommandRouter.parse("可以單曲循環嗎？"))
+    }
 }

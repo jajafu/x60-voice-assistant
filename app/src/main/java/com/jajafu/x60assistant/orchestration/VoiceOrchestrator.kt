@@ -85,6 +85,7 @@ class VoiceOrchestrator(
     private var speechOutput: SpeechOutputEngine? = speechOutput
     private var ttsRecoveryAttempted = false
     @Volatile private var resumeMusicAfterSession = false
+    @Volatile private var keepMusicPausedAfterSession = false
     @Volatile private var resumeAlarmAfterSession = false
 
     val state = mutableState.asStateFlow()
@@ -179,6 +180,7 @@ class VoiceOrchestrator(
 
     private suspend fun handleWakeDetected() {
         if (machine.state != VoiceState.IDLE_KWS) return
+        keepMusicPausedAfterSession = false
         sessionId = UUID.randomUUID().toString().replace("-", "").take(8)
         M1DiagnosticsRepository.onWake(KwsModelPack.KEYWORDS_SCORE, settings.wakePhrase)
         transition(VoiceState.WAKE_ACK, TransitionReason.WAKE_DETECTED)
@@ -360,7 +362,15 @@ class VoiceOrchestrator(
 
     private fun executeMusic(command: MusicCommand, recoveredFromLlm: Boolean = false) {
         val executor = requireNotNull(musicExecutor)
-        if (command == MusicCommand.Pause) resumeMusicAfterSession = false
+        if (command == MusicCommand.Pause) {
+            resumeMusicAfterSession = false
+            keepMusicPausedAfterSession = true
+        } else if (command == MusicCommand.Play || command == MusicCommand.PlayFavorites ||
+            command == MusicCommand.Next || command == MusicCommand.Previous ||
+            command is MusicCommand.SearchAndPlay
+        ) {
+            keepMusicPausedAfterSession = false
+        }
         stateJob = scope.launch {
             val response = try {
                 executor.execute(command)
@@ -371,9 +381,9 @@ class VoiceOrchestrator(
             } catch (_: Exception) {
                 MusicActionResult("音樂操作失敗，請再試一次。")
             }
-            if (resumeMusicAfterSession && command != MusicCommand.Open) {
+            if (MusicHoldPolicy.shouldPauseAfterAction(command, resumeMusicAfterSession)) {
                 try {
-                    executor.pauseForVoice()
+                    if (executor.pauseForVoice()) resumeMusicAfterSession = true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
@@ -547,6 +557,15 @@ class VoiceOrchestrator(
 
     private suspend fun enterFollowUp() {
         delay(audioResumeDelayMs)
+        try {
+            if (musicExecutor?.pauseForVoice() == true && !keepMusicPausedAfterSession) {
+                resumeMusicAfterSession = true
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Continue listening even if the selected player cannot be reached.
+        }
         runCatching {
             vad.reset()
             audioSource = audio.start()

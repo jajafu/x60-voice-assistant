@@ -22,11 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import com.jajafu.x60assistant.data.AssistantSettings
-import com.jajafu.x60assistant.asr.AsrModelPack
-import com.jajafu.x60assistant.asr.AsrModelPacks
 import com.jajafu.x60assistant.data.SettingsRepository
 import com.jajafu.x60assistant.diagnostics.DeviceDiagnostics
 import com.jajafu.x60assistant.diagnostics.DeviceDiagnosticsCollector
@@ -45,10 +41,6 @@ import com.jajafu.x60assistant.music.MusicAppCatalog
 import com.jajafu.x60assistant.music.MusicAppOption
 import com.jajafu.x60assistant.music.MusicCabinFavoriteAccess
 import com.jajafu.x60assistant.music.AssistantUiVisibility
-import com.jajafu.x60assistant.model.AsrDownloadProgress
-import com.jajafu.x60assistant.model.AsrModelDownloadWorker
-import com.jajafu.x60assistant.model.ModelPackManager
-import com.jajafu.x60assistant.model.ModelPackStatus
 import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
 import com.jajafu.x60assistant.kws.WakePhraseCompiler
 import com.jajafu.x60assistant.security.AndroidKeystoreSecretStore
@@ -56,18 +48,16 @@ import com.jajafu.x60assistant.tts.AndroidTtsEngine
 import com.jajafu.x60assistant.ui.diagnostics.DeviceDiagnosticsScreen
 import com.jajafu.x60assistant.ui.theme.X60AssistantTheme
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var diagnosticsCollector: DeviceDiagnosticsCollector
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var secretStore: AndroidKeystoreSecretStore
     private lateinit var reminderManager: ReminderManager
-    private lateinit var modelPackManager: ModelPackManager
     private var diagnostics by mutableStateOf(emptyDiagnostics())
     private var errorMessage by mutableStateOf<String?>(null)
     private var startAfterPermissionGrant = false
+    private var skipAutoStartOnNextStart = false
     private var settingsMessage by mutableStateOf<String?>(null)
     private var testingConnection by mutableStateOf(false)
     private var pendingDiagnosticsExport: String? = null
@@ -77,8 +67,6 @@ class MainActivity : ComponentActivity() {
     private var scheduledReminders by mutableStateOf<List<ScheduledReminder>>(emptyList())
     private var reminderSoundName by mutableStateOf("系統預設鬧鐘")
     private var reminderMessage by mutableStateOf<String?>(null)
-    private var asrPackStatuses by mutableStateOf<Map<String, ModelPackStatus>>(emptyMap())
-    private var asrDownloadProgress by mutableStateOf<Map<String, AsrDownloadProgress>>(emptyMap())
 
     private val diagnosticsExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain"),
@@ -147,13 +135,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        skipAutoStartOnNextStart = savedInstanceState != null
         diagnosticsCollector = DeviceDiagnosticsCollector(applicationContext)
         settingsRepository = SettingsRepository(applicationContext)
         secretStore = AndroidKeystoreSecretStore(applicationContext)
         reminderManager = ReminderManager(applicationContext)
-        modelPackManager = ModelPackManager(applicationContext)
-        refreshAsrPackStatuses()
-        observeAsrDownloads()
         refreshDiagnostics()
         refreshMusicApps()
         refreshReminders()
@@ -179,9 +165,6 @@ class MainActivity : ComponentActivity() {
                     maskedApiKey = secretStore.maskedApiKey(),
                     settingsMessage = settingsMessage,
                     testingConnection = testingConnection,
-                    asrPackStatuses = asrPackStatuses,
-                    asrDownloadProgress = asrDownloadProgress,
-                    onDownloadAsrModel = ::downloadAsrModel,
                     onPrimaryAction = {
                         if (serviceRunning) stopM1Service() else requestPermissionsAndStart()
                     },
@@ -238,6 +221,22 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AssistantUiVisibility.onStart()
+        if (skipAutoStartOnNextStart) {
+            skipAutoStartOnNextStart = false
+            return
+        }
+        lifecycleScope.launch {
+            runCatching { settingsRepository.current() }
+                .onSuccess { settings ->
+                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) &&
+                        settings.autoStartListening && !ServiceStateRepository.running.value &&
+                        !startAfterPermissionGrant
+                    ) {
+                        requestPermissionsAndStart()
+                    }
+                }
+                .onFailure { errorMessage = "無法讀取自動聆聽設定。" }
+        }
     }
 
     override fun onStop() {
@@ -297,58 +296,6 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshDiagnostics() {
         diagnostics = diagnosticsCollector.collect()
-    }
-
-    private fun refreshAsrPackStatuses() {
-        lifecycleScope.launch {
-            asrPackStatuses = withContext(Dispatchers.IO) {
-                modelPackManager.allAsrStatuses().associateBy { it.id }
-            }
-        }
-    }
-
-    private fun downloadAsrModel(pack: AsrModelPack) {
-        if (asrDownloadProgress.values.any { it.active } || asrPackStatuses[pack.id]?.valid == true) return
-        asrDownloadProgress = asrDownloadProgress + (pack.id to AsrDownloadProgress(pack.id, "準備下載", 0))
-        settingsMessage = null
-        runCatching { AsrModelDownloadWorker.enqueue(applicationContext, pack) }
-            .onFailure { error ->
-                asrDownloadProgress = asrDownloadProgress - pack.id
-                settingsMessage = "${pack.label} 無法開始下載：${error.message ?: error.javaClass.simpleName}"
-            }
-    }
-
-    private fun observeAsrDownloads() {
-        val workManager = WorkManager.getInstance(applicationContext)
-        AsrModelPacks.all.forEach { pack ->
-            workManager.getWorkInfosForUniqueWorkLiveData(AsrModelDownloadWorker.uniqueWorkName(pack))
-                .observe(this) { workInfos ->
-                    val info = workInfos.firstOrNull { !it.state.isFinished } ?: workInfos.lastOrNull()
-                    if (info == null) {
-                        asrDownloadProgress = asrDownloadProgress - pack.id
-                        return@observe
-                    }
-                    val percent = info.progress.getInt(AsrModelDownloadWorker.KEY_PERCENT, -1).takeIf { it >= 0 }
-                    val active = !info.state.isFinished
-                    val phase = when (info.state) {
-                        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> "等待網路，自動續傳"
-                        WorkInfo.State.RUNNING ->
-                            info.progress.getString(AsrModelDownloadWorker.KEY_PHASE) ?: "正在下載"
-                        WorkInfo.State.FAILED -> "下載暫停：${info.outputData.getString(AsrModelDownloadWorker.KEY_ERROR) ?: "請重試"}"
-                        WorkInfo.State.CANCELLED -> "下載已暫停"
-                        WorkInfo.State.SUCCEEDED -> "下載完成"
-                    }
-                    val wasActive = asrDownloadProgress[pack.id]?.active == true
-                    if (info.state == WorkInfo.State.SUCCEEDED) {
-                        asrDownloadProgress = asrDownloadProgress - pack.id
-                        refreshAsrPackStatuses()
-                        if (wasActive) settingsMessage = "${pack.label} 已下載並通過校驗；停止服務後可選用。"
-                    } else {
-                        asrDownloadProgress = asrDownloadProgress +
-                            (pack.id to AsrDownloadProgress(pack.id, phase, percent, active))
-                    }
-                }
-        }
     }
 
     private fun refreshMusicApps() {
