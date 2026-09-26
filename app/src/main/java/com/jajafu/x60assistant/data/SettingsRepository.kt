@@ -24,6 +24,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun save(value: AssistantSettings) {
         val settings = value.normalized()
         context.assistantDataStore.edit { prefs ->
+            prefs[Keys.AUTO_START_LISTENING] = settings.autoStartListening
             prefs[Keys.WAKE_PHRASE] = settings.wakePhrase
             prefs[Keys.WAKE_ACKNOWLEDGEMENT] = settings.wakeAcknowledgement
             prefs[Keys.BASE_URL] = settings.baseUrl.trim()
@@ -61,6 +62,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun clear() = context.assistantDataStore.edit { it.clear() }
 
     private fun fromPreferences(prefs: Preferences): AssistantSettings = AssistantSettings(
+        autoStartListening = prefs[Keys.AUTO_START_LISTENING] ?: false,
         wakePhrase = prefs[Keys.WAKE_PHRASE] ?: AssistantSettings.DEFAULT_WAKE_PHRASE,
         wakeAcknowledgement = prefs[Keys.WAKE_ACKNOWLEDGEMENT]
             ?: AssistantSettings.DEFAULT_WAKE_ACKNOWLEDGEMENT,
@@ -92,6 +94,7 @@ class SettingsRepository(private val context: Context) {
     ).normalized()
 
     private object Keys {
+        val AUTO_START_LISTENING = booleanPreferencesKey("auto_start_listening")
         val WAKE_PHRASE = stringPreferencesKey("wake_phrase")
         val WAKE_ACKNOWLEDGEMENT = stringPreferencesKey("wake_acknowledgement")
         val BASE_URL = stringPreferencesKey("llm_base_url")

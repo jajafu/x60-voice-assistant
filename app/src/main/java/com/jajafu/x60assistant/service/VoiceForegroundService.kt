@@ -34,6 +34,7 @@ import com.jajafu.x60assistant.reminder.AndroidAlarmActionExecutor
 import com.jajafu.x60assistant.kws.KwsModelPack
 import com.jajafu.x60assistant.kws.SherpaWakeWordEngine
 import com.jajafu.x60assistant.model.ModelPackManager
+import com.jajafu.x60assistant.model.BundledAsrInstaller
 import com.jajafu.x60assistant.orchestration.AndroidMonotonicClock
 import com.jajafu.x60assistant.orchestration.VoiceOrchestrator
 import com.jajafu.x60assistant.security.AndroidKeystoreSecretStore
@@ -157,12 +158,8 @@ class VoiceForegroundService : Service() {
                 failAndStop(VoiceErrorCode.VAD_INIT_FAILED, vadStatus.reason.orEmpty())
                 return
             }
-            val asrPack = AsrModelPacks.byId(settings.asrModelId)
-            if (asrPack == null) {
-                failAndStop(VoiceErrorCode.ASR_MODEL_INVALID, "unknown-model:${settings.asrModelId}")
-                return
-            }
-            val asrStatus = modelManager.verifyAsrPack(asrPack)
+            val asrPack = AsrModelPacks.xAsr
+            val asrStatus = BundledAsrInstaller(applicationContext).ensureInstalled()
             if (!asrStatus.valid) {
                 failAndStop(VoiceErrorCode.ASR_MODEL_INVALID, asrStatus.reason.orEmpty())
                 return

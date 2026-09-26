@@ -1,0 +1,26 @@
+name: 新功能
+description: 記錄要解決的問題與預期結果；做法留待 Issue Plan。
+title: "[Feature] "
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 要完成什麼？
+      description: 說明使用情境與目前問題。
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 怎樣算完成？
+      description: 寫可觀察、可測試的結果。
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 補充資料與範圍限制
+      description: 可附連結或截圖；不要放密碼或 Token。
+    validations:
+      required: false

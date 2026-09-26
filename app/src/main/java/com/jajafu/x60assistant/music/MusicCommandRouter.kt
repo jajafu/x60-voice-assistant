@@ -6,6 +6,9 @@ sealed interface MusicCommand {
     data object Pause : MusicCommand
     data object Next : MusicCommand
     data object Previous : MusicCommand
+    data object NowPlaying : MusicCommand
+    data object RepeatOne : MusicCommand
+    data object RepeatOff : MusicCommand
     data object SaveCurrent : MusicCommand
     data object RemoveCurrent : MusicCommand
     data object PlayFavorites : MusicCommand
@@ -14,8 +17,30 @@ sealed interface MusicCommand {
 
 /** Only explicit, low-risk requests for the selected music app are handled locally. */
 object MusicCommandRouter {
-    private val politePrefix = Regex("^(?:(?:(?:請|请|麻煩|麻烦)(?:你)?|幫我|帮我|給我|给我|替我)\\s*)+")
+    private val politePrefix = Regex("^(?:(?:(?:請問|请问|請|请|麻煩|麻烦)(?:你)?|幫我|帮我|給我|给我|替我)\\s*)+")
     private val punctuation = Regex("[，。！!？?、,]")
+    private val nowPlayingQuestions = setOf(
+        "這是什麼歌", "這首是什麼歌", "這首什麼歌", "這首歌是什麼歌", "這首歌是什麼",
+        "這首歌叫什麼", "這首歌叫什麼名字", "這首歌的名字是什麼",
+        "這首歌的歌名是什麼", "這歌叫什麼名字",
+        "現在播的是什麼歌", "現在播放的是什麼歌", "現在在放什麼歌",
+        "現在播什麼歌", "目前播的是什麼歌", "目前播放的是什麼歌",
+        "目前在播什麼歌", "現在這首歌叫什麼", "現在這首歌叫什麼名字",
+        "這首歌是誰唱的", "這首歌誰唱的", "這首歌的歌手是誰",
+        "這首歌歌手是誰", "這歌誰唱的", "這是誰唱的", "誰唱這首歌",
+    )
+    private val repeatOneRequests = setOf(
+        "單曲循環", "單曲循環播放", "播放單曲循環", "開啟單曲循環", "設定單曲循環",
+        "設為單曲循環", "把這首歌設為單曲循環", "把這首歌設成單曲循環",
+        "這首歌單曲循環", "單曲重播", "循環這首歌", "重複這首歌",
+        "重複播放這首歌", "這首歌一直重播",
+    )
+    private val repeatOffRequests = setOf(
+        "取消單曲循環", "關閉單曲循環", "關掉單曲循環", "停止單曲循環",
+        "停止單曲循環播放", "不要單曲循環", "不要再單曲循環",
+        "取消這首歌的循環", "取消循環播放這首歌",
+        "不要重複播放這首歌", "恢復正常播放",
+    )
     private val songPrefixes = listOf(
         "我想要聽", "我想要听", "我想聽", "我想听", "我要聽", "我要听",
         "我想放", "我要放", "想聽", "想听", "想放",
@@ -25,9 +50,7 @@ object MusicCommandRouter {
 
     fun parse(transcript: String, selectedAppName: String = "MusicCabin"): MusicCommand? {
         val phrase = transcript.trim().replace(punctuation, "").replace(politePrefix, "").trim()
-        if (phrase.isBlank() || phrase.contains("不要") || phrase.contains("別") ||
-            phrase.contains("别") || phrase.endsWith("嗎") || phrase.endsWith("吗")
-        ) return null
+        if (phrase.isBlank()) return null
 
         val selectedNamePattern = selectedAppName.trim().takeIf { it.isNotBlank() }?.let(Regex::escape)
         val aliases = listOfNotNull("music\\s*cabin", "音樂小屋", "音乐小屋", "音樂App", "音乐App", "音樂程式", "音乐程序", "播放器", selectedNamePattern)
@@ -39,6 +62,21 @@ object MusicCommandRouter {
         }
         val withoutApp = normalized.replace(Regex("(?i)(?:在\\s*)?MusicApp(?:裡|里|上)?\\s*"), "")
             .replace(politePrefix, "").trim()
+        val question = withoutApp.replace(Regex("\\s+"), "")
+            .replace('这', '這').replace('么', '麼').replace('现', '現').replace('谁', '誰')
+            .replace("甚麼", "什麼")
+            .removeSuffix("呢").removeSuffix("啊").removeSuffix("呀")
+        if (question in nowPlayingQuestions) return MusicCommand.NowPlaying
+        val repeatRequest = withoutApp.replace(Regex("\\s+"), "")
+            .replace('这', '這').replace('单', '單').replace('环', '環')
+            .replace('开', '開').replace('启', '啟').replace('设', '設')
+            .replace('关', '關').replace('复', '復')
+        if (repeatRequest in repeatOneRequests) return MusicCommand.RepeatOne
+        if (repeatRequest in repeatOffRequests) return MusicCommand.RepeatOff
+        if (withoutApp.contains("不要") || withoutApp.contains("別") ||
+            withoutApp.contains("别")
+        ) return null
+        if (withoutApp.endsWith("嗎") || withoutApp.endsWith("吗")) return null
         return when (withoutApp) {
             "取消收藏", "取消收藏這首歌", "取消收藏这首歌", "取消這首歌的收藏", "取消这首歌的收藏",
             "移除收藏", "把這首歌取消收藏", "把这首歌取消收藏" -> MusicCommand.RemoveCurrent
