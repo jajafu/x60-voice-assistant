@@ -35,6 +35,7 @@ import com.jajafu.x60assistant.reminder.ReminderScheduler
 import com.jajafu.x60assistant.reminder.ExactAlarmOnboardingPolicy
 import com.jajafu.x60assistant.reminder.ReminderManager
 import com.jajafu.x60assistant.reminder.ReminderPreferences
+import com.jajafu.x60assistant.reminder.ReminderRecurrence
 import com.jajafu.x60assistant.reminder.ScheduledReminder
 import com.jajafu.x60assistant.reminder.ReminderStore
 import com.jajafu.x60assistant.music.MusicAppCatalog
@@ -329,12 +330,17 @@ class MainActivity : ComponentActivity() {
         }.getOrNull().takeUnless { it.isNullOrBlank() } ?: "系統預設鬧鐘"
     }
 
-    private fun saveReminder(id: String?, message: String, triggerAtEpochMillis: Long) {
+    private fun saveReminder(
+        id: String?,
+        message: String,
+        triggerAtEpochMillis: Long,
+        recurrence: ReminderRecurrence?,
+    ) {
         val result = runCatching {
             if (id == null) {
-                reminderManager.create(message, triggerAtEpochMillis)
+                reminderManager.create(message, triggerAtEpochMillis, recurrence)
             } else {
-                reminderManager.update(id, message, triggerAtEpochMillis)
+                reminderManager.update(id, message, triggerAtEpochMillis, recurrence)
             }
         }
         result.onSuccess {
