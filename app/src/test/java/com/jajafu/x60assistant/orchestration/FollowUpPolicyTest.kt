@@ -17,4 +17,11 @@ class FollowUpPolicyTest {
         assertFalse(policy.expired(1_000, 30_999))
         assertTrue(policy.expired(1_000, 31_000))
     }
+
+    @Test
+    fun `five seconds keeps follow up open until the full interval ends`() {
+        val policy = FollowUpPolicy(5)
+        assertFalse(policy.expired(10_000, 14_999))
+        assertTrue(policy.expired(10_000, 15_000))
+    }
 }

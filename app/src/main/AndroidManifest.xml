@@ -53,7 +53,7 @@
 
         <service
             android:name=".music.MusicCabinFavoriteListenerService"
-            android:label="小幫手：MusicCabin 收藏控制"
+            android:label="小幫手：MusicCabin 收藏與循環控制"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>

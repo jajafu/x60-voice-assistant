@@ -1,0 +1,51 @@
+# 系統現況：小助手 X60 Voice Assistant
+
+> 以目前 README、Gradle、Manifest 與程式碼為準；早期規劃文件中的未完成方案不視為已實作。
+
+## 架構與技術
+
+Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，將本機 KWS → VAD → 固定內建 X-ASR 的文字優先送本機音樂／提醒指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給 Android TTS。設定與提醒留在裝置；APK 內的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
+
+主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，目標 Android SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。
+
+`VoiceForegroundService` 擁有語音服務生命週期與資源；`AudioCaptureEngine` 建立唯一 `AudioRecord`，以 16 kHz／mono／PCM16／20 ms frame 送入有界佇列。`VoiceOrchestrator` 是唯一狀態切換者，將喚醒後語音交給 VAD／ASR；本機 `MusicCommandRouter` 與 `ReminderCommandRouter` 優先處理明確指令，一般問答才走 `OpenAiCompatibleLlmProvider` 的 SSE，完整句送 TTS，結束後可進 Follow Up。實際分支、失敗與恢復策略依程式碼及 `docs/decision-log.md`。
+
+## 重要目錄與模組
+
+- `app/src/main/java/com/jajafu/x60assistant/`：Activity、UI 與 Android 應用入口。
+- `service/`、`audio/`、`orchestration/`：前景服務、單一音訊來源、狀態機與恢復策略。
+- `kws/`、`vad/`、`asr/`、`model/`：本機語音偵測／固定 X-ASR 辨識、APK 內建模型安裝與 SHA256 驗證；舊版下載工作保留升級相容處理。
+- `music/`、`reminder/`：媒體操作與本機提醒路由、執行與排程。
+- `llm/`、`tts/`：可設定的 OpenAI 相容 SSE 用戶端與 Android 語音輸出。
+- `data/`、`security/`、`diagnostics/`：DataStore 設定、Keystore 密鑰、有限且遮罩的診斷。
+- `app/src/test/`、`app/src/androidTest/`、`docs/test-reports/`：單元測試、裝置測試與真機紀錄。
+- `scripts/`、`docs/model-packs.md`：模型資產準備及來源／授權資訊。
+
+## 資料與外部整合
+
+- 16 kHz PCM frame 保持在記憶體的 50-frame 有界佇列；逐字稿、回覆與近期對話預設只在 process 記憶體，不寫入診斷匯出。
+- 非敏感設定使用 DataStore；API Key 由 Android Keystore AES-GCM 加密；提醒由裝置內儲存與 Android alarm 排程，重開機或時間變動後補排程。
+- KWS／VAD／ASR 模型本機執行；X-ASR 壓縮檔由 `scripts/prepare-bundled-xasr.ps1` 放進被 Git 忽略的 APK assets，建置與首次啟動時依現有程式校驗 SHA256，解壓至 App 私有空間。App 不再提供 ASR 模型下載／選擇；舊設定改用 X-ASR，既有模型檔不自動刪除。模型 binary 不進 Git。
+- 一般問答由使用者在 App 設定的 OpenAI 相容 HTTPS endpoint 處理；未提供 API Key 時不能宣稱真實 Provider 已驗收。
+- 選定的播放器以 Android 媒體服務／MediaSession 控制；MusicCabin 收藏與循環另需使用者授予通知存取。裝置提醒使用系統鬧鐘與通知。
+
+## 需保持相容的介面／資料
+
+- `com.jajafu.x60assistant` application ID、最低／目標 SDK、`arm64-v8a`、錄音格式與 foreground service 啟動／停止規則不可無意改動。
+- DataStore 設定、Keystore 密文、提醒持久化格式與 X-ASR 模型包 ID／SHA256 需在變更時檢查升級相容；舊版 ASR 選擇遷移及既有檔案保留行為見 `README.md`、`docs/model-packs.md`。
+- OpenAI 相容端點使用可設定 Base URL／Model／Endpoint 及 SSE；Release 僅 HTTPS，Debug HTTP 僅限明列本機位址。
+- 音樂控制依對方公開媒體能力；不能將發出指令一概表述為已播放。MusicCabin 喜愛清單播放另依 rc19 已記錄例外，詳見 `docs/known-issues.md`。
+- 診斷不得輸出 PCM、完整逐字稿、回答、API Key 或敏感 URL 部分；模型授權與分發限制依 `docs/model-packs.md`。
+
+## 測試方式
+
+- `app/src/test/` 的 JUnit、Coroutines Test 與 MockWebServer 覆蓋狀態機、指令路由、模型、SSE、密鑰與提醒等邏輯；`app/src/androidTest/` 含 Keystore 裝置測試。
+- `.\gradlew.bat test`、`.\gradlew.bat lint`、`.\gradlew.bat assembleDebug` 為程式變更的基本自動驗證；KWS 與內建 X-ASR 資產須依 `README.md` 先準備。行為變更且有對應 APK 時，按 `docs/ANDROID_MUMU_SMOKE.md` 記錄可行的安裝／啟動 smoke，仍以 X60 真機資料判定語音功能。
+- vivo X60 實機依 `docs/testing.md` 與 `docs/test-reports/` 記錄錄音、鎖屏、音樂、提醒、真實 Provider 與長時間穩定性；短測及合成音不替代正式門檻。
+
+## 已知風險
+
+- 真實 Provider 需使用者在 App 內提供私人設定；現有 MockWebServer 結果不能替代真實服務驗收。
+- vivo 背景保活、長時間鎖屏、真人語音與部分 MusicCabin 操作仍須依 `docs/testing.md`、`docs/known-issues.md` 完成驗收。
+- 模型來源／授權與含模型 APK 分發受 `docs/model-packs.md`、`docs/decision-log.md` 限制。
+- Release variant 尚未配置正式簽章，不可將 `assembleRelease` 產物當作正式可發行版本。
