@@ -544,14 +544,22 @@ private fun SettingsPage(
     onOpenMusicCabinFavoriteAccess: () -> Unit,
     onOpenDiagnostics: () -> Unit,
 ) {
-    var draft by remember(saved) { mutableStateOf(saved) }
-    var followUpInput by remember(saved) { mutableStateOf(saved.followUpSeconds.toString()) }
+    // 不以 saved 為 remember key：設定流每次發布都是新物件，否則外部更新會清掉整份草稿。
+    var draft by remember { mutableStateOf(saved) }
+    var lastLoaded by remember { mutableStateOf(saved) }
+    val numberFields = remember { NumberSettingsFields(saved) }
     var advancedExpanded by rememberSaveable { mutableStateOf(false) }
     var musicMenuExpanded by remember { mutableStateOf(false) }
     val wakeError = wakePhraseError(draft.wakePhrase)
     val wakeAcknowledgementError = wakeAcknowledgementError(draft.wakeAcknowledgement)
-    val followUpValue = followUpInput.toIntOrNull()
-    val followUpValid = followUpValue?.let { it in 0..30 } == true
+    LaunchedEffect(saved) {
+        // 只有在使用者尚未改動任何欄位時才重新載入，避免編輯到一半被外部更新還原。
+        if (saved != lastLoaded && draft == lastLoaded && numberFields.isPristine(lastLoaded)) {
+            draft = saved
+            numberFields.assign(saved)
+            lastLoaded = saved
+        }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -718,24 +726,18 @@ private fun SettingsPage(
 
         item {
             SectionCard("語音與追問") {
-                NumberSetting("Follow Up（秒，0–30）", followUpInput, enabled) { input ->
-                    if (input.isEmpty() || input.all(Char::isDigit)) {
-                        followUpInput = input
-                        input.toIntOrNull()?.let { value -> draft = draft.copy(followUpSeconds = value) }
-                    }
-                }
-                Text(
-                    if (followUpValid) "設為 0 秒可關閉回答後的追問等待。" else "請輸入 0–30 秒。",
-                    color = if (followUpValid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 4.dp),
+                NumberSetting(
+                    label = "Follow Up（${numberFields.followUpSeconds.rangeLabel}）",
+                    state = numberFields.followUpSeconds,
+                    enabled = enabled,
+                    hint = "設為 0 可關閉回答後的追問等待。",
                 )
                 Text("語速 ${String.format(Locale.ROOT, "%.1f", draft.speechRate)}", modifier = Modifier.padding(top = 12.dp))
                 Slider(draft.speechRate, { draft = draft.copy(speechRate = it) }, valueRange = 0.5f..2.0f, enabled = enabled)
                 Text("音高 ${String.format(Locale.ROOT, "%.1f", draft.pitch)}")
                 Slider(draft.pitch, { draft = draft.copy(pitch = it) }, valueRange = 0.5f..2.0f, enabled = enabled)
                 OutlinedButton(
-                    onClick = { onTestTts(draft.normalized()) },
+                    onClick = { onTestTts(numberFields.applyTo(draft).normalized()) },
                     enabled = enabled,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
                 ) { Text("測試語音") }
@@ -750,47 +752,55 @@ private fun SettingsPage(
                 ) { Text(if (advancedExpanded) "收起進階設定" else "展開進階設定") }
                 if (advancedExpanded) {
                     ToggleRow("Streaming", draft.streaming, enabled) { draft = draft.copy(streaming = it) }
-                    NumberSetting("Temperature", draft.temperature.toString(), enabled, KeyboardType.Decimal) {
-                        it.toDoubleOrNull()?.let { value -> draft = draft.copy(temperature = value) }
-                    }
-                    NumberSetting("Max Output Tokens", draft.maxOutputTokens.toString(), enabled) {
-                        it.toIntOrNull()?.let { value -> draft = draft.copy(maxOutputTokens = value) }
-                    }
-                    NumberSetting("Connect Timeout（秒）", draft.connectTimeoutSeconds.toString(), enabled) {
-                        it.toIntOrNull()?.let { value -> draft = draft.copy(connectTimeoutSeconds = value) }
-                    }
-                    NumberSetting("Read Timeout（秒）", draft.readTimeoutSeconds.toString(), enabled) {
-                        it.toIntOrNull()?.let { value -> draft = draft.copy(readTimeoutSeconds = value) }
-                    }
-                    NumberSetting("Context Turns", draft.contextTurns.toString(), enabled) {
-                        it.toIntOrNull()?.let { value -> draft = draft.copy(contextTurns = value) }
-                    }
                     NumberSetting(
-                        "等待說話（秒）",
-                        formatMillisecondsAsSeconds(draft.waitForSpeechMs),
-                        enabled,
-                        KeyboardType.Decimal,
-                    ) {
-                        it.toDoubleOrNull()?.let { seconds ->
-                            draft = draft.copy(waitForSpeechMs = (seconds * 1_000).toLong())
-                        }
-                    }
-                    NumberSetting("最短語音（ms）", draft.minSpeechMs.toString(), enabled) {
-                        it.toLongOrNull()?.let { value -> draft = draft.copy(minSpeechMs = value) }
-                    }
-                    NumberSetting("結尾靜音（ms）", draft.trailingSilenceMs.toString(), enabled) {
-                        it.toLongOrNull()?.let { value -> draft = draft.copy(trailingSilenceMs = value) }
-                    }
+                        label = "Temperature（${numberFields.temperature.rangeLabel}）",
+                        state = numberFields.temperature,
+                        enabled = enabled,
+                        keyboardType = KeyboardType.Decimal,
+                    )
                     NumberSetting(
-                        "最長單句（秒）",
-                        formatMillisecondsAsSeconds(draft.maxUtteranceMs),
-                        enabled,
-                        KeyboardType.Decimal,
-                    ) {
-                        it.toDoubleOrNull()?.let { seconds ->
-                            draft = draft.copy(maxUtteranceMs = (seconds * 1_000).toLong())
-                        }
-                    }
+                        label = "Max Output Tokens（${numberFields.maxOutputTokens.rangeLabel}）",
+                        state = numberFields.maxOutputTokens,
+                        enabled = enabled,
+                    )
+                    NumberSetting(
+                        label = "Connect Timeout（${numberFields.connectTimeoutSeconds.rangeLabel}）",
+                        state = numberFields.connectTimeoutSeconds,
+                        enabled = enabled,
+                    )
+                    NumberSetting(
+                        label = "Read Timeout（${numberFields.readTimeoutSeconds.rangeLabel}）",
+                        state = numberFields.readTimeoutSeconds,
+                        enabled = enabled,
+                    )
+                    NumberSetting(
+                        label = "Context Turns（${numberFields.contextTurns.rangeLabel}）",
+                        state = numberFields.contextTurns,
+                        enabled = enabled,
+                        hint = "設為 0 則每次提問都不帶入先前對話。",
+                    )
+                    NumberSetting(
+                        label = "等待說話（${numberFields.waitForSpeechSeconds.rangeLabel}）",
+                        state = numberFields.waitForSpeechSeconds,
+                        enabled = enabled,
+                        keyboardType = KeyboardType.Decimal,
+                    )
+                    NumberSetting(
+                        label = "最短語音（${numberFields.minSpeechMs.rangeLabel}）",
+                        state = numberFields.minSpeechMs,
+                        enabled = enabled,
+                    )
+                    NumberSetting(
+                        label = "結尾靜音（${numberFields.trailingSilenceMs.rangeLabel}）",
+                        state = numberFields.trailingSilenceMs,
+                        enabled = enabled,
+                    )
+                    NumberSetting(
+                        label = "最長單句（${numberFields.maxUtteranceSeconds.rangeLabel}）",
+                        state = numberFields.maxUtteranceSeconds,
+                        enabled = enabled,
+                        keyboardType = KeyboardType.Decimal,
+                    )
                     OutlinedTextField(
                         value = draft.systemInstruction,
                         onValueChange = { draft = draft.copy(systemInstruction = it) },
@@ -815,8 +825,8 @@ private fun SettingsPage(
 
         item {
             Button(
-                onClick = { onSave(draft.normalized(), "") },
-                enabled = enabled && wakeError == null && wakeAcknowledgementError == null && followUpValid,
+                onClick = { onSave(numberFields.applyTo(draft).normalized(), "") },
+                enabled = enabled && wakeError == null && wakeAcknowledgementError == null && numberFields.allValid,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
             ) { Text("儲存設定") }
         }
@@ -1382,11 +1392,26 @@ private fun SettingsField(
 @Composable
 private fun NumberSetting(
     label: String,
-    value: String,
+    state: NumberFieldState,
     enabled: Boolean,
     keyboardType: KeyboardType = KeyboardType.Number,
-    onChange: (String) -> Unit,
-) = SettingsField(label, value, enabled, keyboardType, onChange)
+    hint: String? = null,
+) {
+    OutlinedTextField(
+        value = state.text,
+        onValueChange = state::update,
+        enabled = enabled,
+        label = { Text(label) },
+        supportingText = {
+            val message = state.error ?: hint
+            if (message != null) Text(message)
+        },
+        isError = state.error != null,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+    )
+}
 
 @Composable
 private fun ToggleRow(label: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
@@ -1489,7 +1514,7 @@ private fun formatDuration(durationMs: Long): String {
     return String.format(Locale.ROOT, "%02d:%02d:%02d", hours, minutes, seconds)
 }
 
-private fun formatMillisecondsAsSeconds(milliseconds: Long): String =
+internal fun formatMillisecondsAsSeconds(milliseconds: Long): String =
     if (milliseconds % 1_000L == 0L) {
         (milliseconds / 1_000L).toString()
     } else {

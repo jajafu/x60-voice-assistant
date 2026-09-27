@@ -35,23 +35,23 @@ data class AssistantSettings(
         wakeAcknowledgement = wakeAcknowledgement.trim()
             .ifBlank { DEFAULT_WAKE_ACKNOWLEDGEMENT }
             .take(MAX_WAKE_ACKNOWLEDGEMENT_LENGTH),
-        temperature = temperature.coerceIn(0.0, 2.0),
-        maxOutputTokens = maxOutputTokens.coerceIn(16, 4_096),
-        connectTimeoutSeconds = connectTimeoutSeconds.coerceIn(3, 30),
-        readTimeoutSeconds = readTimeoutSeconds.coerceIn(10, 120),
-        contextTurns = contextTurns.coerceIn(0, 12),
-        waitForSpeechMs = waitForSpeechMs.coerceIn(3_000, 10_000),
-        minSpeechMs = minSpeechMs.coerceIn(150, 600),
-        trailingSilenceMs = trailingSilenceMs.coerceIn(500, 1_500),
-        maxUtteranceMs = maxUtteranceMs.coerceIn(10_000, 60_000),
-        followUpSeconds = followUpSeconds.coerceIn(0, 30),
-        audioResumeDelayMs = audioResumeDelayMs.coerceIn(250, 500),
+        temperature = temperature.coerceIn(TEMPERATURE_RANGE),
+        maxOutputTokens = maxOutputTokens.coerceIn(MAX_OUTPUT_TOKENS_RANGE),
+        connectTimeoutSeconds = connectTimeoutSeconds.coerceIn(CONNECT_TIMEOUT_SECONDS_RANGE),
+        readTimeoutSeconds = readTimeoutSeconds.coerceIn(READ_TIMEOUT_SECONDS_RANGE),
+        contextTurns = contextTurns.coerceIn(CONTEXT_TURNS_RANGE),
+        waitForSpeechMs = waitForSpeechMs.coerceIn(WAIT_FOR_SPEECH_MS_RANGE),
+        minSpeechMs = minSpeechMs.coerceIn(MIN_SPEECH_MS_RANGE),
+        trailingSilenceMs = trailingSilenceMs.coerceIn(TRAILING_SILENCE_MS_RANGE),
+        maxUtteranceMs = maxUtteranceMs.coerceIn(MAX_UTTERANCE_MS_RANGE),
+        followUpSeconds = followUpSeconds.coerceIn(FOLLOW_UP_SECONDS_RANGE),
+        audioResumeDelayMs = audioResumeDelayMs.coerceIn(AUDIO_RESUME_DELAY_MS_RANGE),
         asrModelId = DEFAULT_ASR_MODEL_ID,
         musicAppName = musicAppName.trim().take(100),
         musicPackageName = musicPackageName.trim().take(200),
         musicServiceName = musicServiceName.trim().take(300),
-        speechRate = speechRate.coerceIn(0.5f, 2.0f),
-        pitch = pitch.coerceIn(0.5f, 2.0f),
+        speechRate = speechRate.coerceIn(SPEECH_RATE_RANGE),
+        pitch = pitch.coerceIn(PITCH_RANGE),
     )
 
     companion object {
@@ -68,5 +68,24 @@ data class AssistantSettings(
 回答將由語音朗讀，避免 Markdown格式碼、emoji、表格、過多符號、網址與太長的清單。記得移除所有引用標記或引用來源。
 若答案很長，先提供簡短版本，再詢問是否要繼續。
 不知道時直接說明，不要捏造資料。"""
+
+        // 設定頁顯示的上下限、欄位驗證與 normalized() 的夾限共用同一組常數。
+        val TEMPERATURE_RANGE = 0.0..2.0
+        val MAX_OUTPUT_TOKENS_RANGE = 16..4_096
+        val CONNECT_TIMEOUT_SECONDS_RANGE = 3..30
+        val READ_TIMEOUT_SECONDS_RANGE = 10..120
+        val CONTEXT_TURNS_RANGE = 0..12
+        val FOLLOW_UP_SECONDS_RANGE = 0..30
+        val WAIT_FOR_SPEECH_MS_RANGE = 3_000L..10_000L
+        val MIN_SPEECH_MS_RANGE = 150L..600L
+        val TRAILING_SILENCE_MS_RANGE = 500L..1_500L
+        val MAX_UTTERANCE_MS_RANGE = 10_000L..60_000L
+        val AUDIO_RESUME_DELAY_MS_RANGE = 250L..500L
+        val SPEECH_RATE_RANGE = 0.5f..2.0f
+        val PITCH_RANGE = 0.5f..2.0f
+        val WAIT_FOR_SPEECH_SECONDS_RANGE =
+            (WAIT_FOR_SPEECH_MS_RANGE.first / 1_000.0)..(WAIT_FOR_SPEECH_MS_RANGE.last / 1_000.0)
+        val MAX_UTTERANCE_SECONDS_RANGE =
+            (MAX_UTTERANCE_MS_RANGE.first / 1_000.0)..(MAX_UTTERANCE_MS_RANGE.last / 1_000.0)
     }
 }
