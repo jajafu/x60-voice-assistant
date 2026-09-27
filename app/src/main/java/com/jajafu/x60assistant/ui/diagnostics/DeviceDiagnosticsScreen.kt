@@ -5,6 +5,8 @@ import android.app.TimePickerDialog
 import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -75,6 +78,9 @@ import com.jajafu.x60assistant.diagnostics.M1DiagnosticsSnapshot
 import com.jajafu.x60assistant.orchestration.VoiceState
 import com.jajafu.x60assistant.music.MusicAppOption
 import com.jajafu.x60assistant.reminder.ScheduledReminder
+import com.jajafu.x60assistant.reminder.ReminderFrequency
+import com.jajafu.x60assistant.reminder.ReminderRecurrence
+import com.jajafu.x60assistant.reminder.label
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -117,7 +123,7 @@ fun DeviceDiagnosticsScreen(
     scheduledReminders: List<ScheduledReminder>,
     reminderSoundName: String,
     reminderMessage: String?,
-    onSaveReminder: (String?, String, Long) -> Unit,
+    onSaveReminder: (String?, String, Long, ReminderRecurrence?) -> Unit,
     onDeleteReminder: (String) -> Unit,
     onChooseReminderSound: () -> Unit,
 ) {
@@ -885,7 +891,7 @@ private fun RemindersPage(
     exactAlarmPermissionGranted: Boolean,
     soundName: String,
     message: String?,
-    onSave: (String?, String, Long) -> Unit,
+    onSave: (String?, String, Long, ReminderRecurrence?) -> Unit,
     onDelete: (String) -> Unit,
     onChooseSound: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
@@ -988,6 +994,14 @@ private fun RemindersPage(
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(top = 6.dp),
                         )
+                        reminder.recurrence?.let { recurrence ->
+                            Text(
+                                recurrence.label(),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1014,8 +1028,8 @@ private fun RemindersPage(
                 addingReminder = false
                 editingReminder = null
             },
-            onSave = { id, reminderText, triggerAt ->
-                onSave(id, reminderText, triggerAt)
+            onSave = { id, reminderText, triggerAt, recurrence ->
+                onSave(id, reminderText, triggerAt, recurrence)
                 addingReminder = false
                 editingReminder = null
             },
@@ -1044,7 +1058,7 @@ private fun RemindersPage(
 private fun ReminderEditorDialog(
     reminder: ScheduledReminder?,
     onDismiss: () -> Unit,
-    onSave: (String?, String, Long) -> Unit,
+    onSave: (String?, String, Long, ReminderRecurrence?) -> Unit,
 ) {
     val context = LocalContext.current
     val zone = remember { ZoneId.systemDefault() }
@@ -1054,14 +1068,32 @@ private fun ReminderEditorDialog(
     }
     var reminderText by remember(reminder?.id) { mutableStateOf(reminder?.message.orEmpty()) }
     var triggerTime by remember(reminder?.id) { mutableStateOf(initialTime) }
-    val validTime = triggerTime.toInstant().toEpochMilli() > System.currentTimeMillis()
-    val canSave = reminderText.isNotBlank() && validTime
+    var repeatOption by remember(reminder?.id) {
+        mutableStateOf(
+            when (reminder?.recurrence?.frequency) {
+                ReminderFrequency.DAILY -> ReminderRepeatOption.DAILY
+                ReminderFrequency.WEEKLY -> ReminderRepeatOption.WEEKLY
+                null -> ReminderRepeatOption.ONCE
+            },
+        )
+    }
+    var selectedWeekdays by remember(reminder?.id) {
+        mutableStateOf(reminder?.recurrence?.daysOfWeek.orEmpty().toSet())
+    }
+    val validTime = repeatOption != ReminderRepeatOption.ONCE ||
+        triggerTime.toInstant().toEpochMilli() > System.currentTimeMillis()
+    val validWeekdays = repeatOption != ReminderRepeatOption.WEEKLY || selectedWeekdays.isNotEmpty()
+    val canSave = reminderText.isNotBlank() && validTime && validWeekdays
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (reminder == null) "新增提醒" else "修改提醒") },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
                 OutlinedTextField(
                     value = reminderText,
                     onValueChange = { reminderText = it },
@@ -1070,24 +1102,69 @@ private fun ReminderEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Text(
+                    "重複",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ReminderRepeatOption.entries.forEach { option ->
+                        FilterChip(
+                            selected = repeatOption == option,
+                            onClick = { repeatOption = option },
+                            label = { Text(option.label) },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        )
+                    }
+                }
+                if (repeatOption == ReminderRepeatOption.WEEKLY) {
+                    Text(
+                        "星期",
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    WeekdayPicker(
+                        selectedDays = selectedWeekdays,
+                        onToggle = { day ->
+                            selectedWeekdays = if (day in selectedWeekdays) {
+                                selectedWeekdays - day
+                            } else {
+                                selectedWeekdays + day
+                            }
+                        },
+                    )
+                    if (!validWeekdays) {
+                        Text(
+                            "每週提醒至少要選擇一天。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            DatePickerDialog(
-                                context,
-                                { _, year, month, day ->
-                                    triggerTime = triggerTime.with(LocalDate.of(year, month + 1, day))
-                                },
-                                triggerTime.year,
-                                triggerTime.monthValue - 1,
-                                triggerTime.dayOfMonth,
-                            ).show()
-                        },
-                        modifier = Modifier.weight(1f).height(52.dp),
-                    ) { Text(triggerTime.format(DateTimeFormatter.ofPattern("MM/dd"))) }
+                    if (repeatOption == ReminderRepeatOption.ONCE) {
+                        OutlinedButton(
+                            onClick = {
+                                DatePickerDialog(
+                                    context,
+                                    { _, year, month, day ->
+                                        triggerTime = triggerTime.with(LocalDate.of(year, month + 1, day))
+                                    },
+                                    triggerTime.year,
+                                    triggerTime.monthValue - 1,
+                                    triggerTime.dayOfMonth,
+                                ).show()
+                            },
+                            modifier = Modifier.weight(1f).height(52.dp),
+                        ) { Text(triggerTime.format(DateTimeFormatter.ofPattern("MM/dd"))) }
+                    }
                     OutlinedButton(
                         onClick = {
                             TimePickerDialog(
@@ -1116,13 +1193,73 @@ private fun ReminderEditorDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    onSave(reminder?.id, reminderText.trim(), triggerTime.toInstant().toEpochMilli())
+                    val recurrence = when (repeatOption) {
+                        ReminderRepeatOption.ONCE -> null
+                        ReminderRepeatOption.DAILY -> ReminderRecurrence(
+                            frequency = ReminderFrequency.DAILY,
+                            hour = triggerTime.hour,
+                            minute = triggerTime.minute,
+                        )
+                        ReminderRepeatOption.WEEKLY -> ReminderRecurrence(
+                            frequency = ReminderFrequency.WEEKLY,
+                            daysOfWeek = selectedWeekdays.sorted(),
+                            hour = triggerTime.hour,
+                            minute = triggerTime.minute,
+                        )
+                    }
+                    onSave(
+                        reminder?.id,
+                        reminderText.trim(),
+                        triggerTime.toInstant().toEpochMilli(),
+                        recurrence,
+                    )
                 },
                 enabled = canSave,
             ) { Text("儲存") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+}
+
+private enum class ReminderRepeatOption(val label: String) {
+    ONCE("單次"),
+    DAILY("每天"),
+    WEEKLY("每週"),
+}
+
+@Composable
+private fun WeekdayPicker(
+    selectedDays: Set<Int>,
+    onToggle: (Int) -> Unit,
+) {
+    listOf((1..4).toList(), (5..7).toList()).forEach { rowDays ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            rowDays.forEach { day ->
+                FilterChip(
+                    selected = day in selectedDays,
+                    onClick = { onToggle(day) },
+                    label = {
+                        Text(
+                            when (day) {
+                                1 -> "一"
+                                2 -> "二"
+                                3 -> "三"
+                                4 -> "四"
+                                5 -> "五"
+                                6 -> "六"
+                                else -> "日"
+                            },
+                        )
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                )
+            }
+            repeat(4 - rowDays.size) { Spacer(Modifier.weight(1f)) }
+        }
+    }
 }
 
 private fun formatReminderTime(epochMillis: Long): String = Instant.ofEpochMilli(epochMillis)

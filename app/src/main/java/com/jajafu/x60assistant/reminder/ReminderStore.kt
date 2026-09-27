@@ -10,11 +10,25 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 @Serializable
+enum class ReminderFrequency { DAILY, WEEKLY }
+
+@Serializable
+data class ReminderRecurrence(
+    val frequency: ReminderFrequency,
+    /** ISO-8601 weekday numbers: Monday=1 through Sunday=7. Empty for DAILY. */
+    val daysOfWeek: List<Int> = emptyList(),
+    val hour: Int,
+    val minute: Int,
+)
+
+@Serializable
 data class ScheduledReminder(
     val id: String,
     val message: String,
     val triggerAtEpochMillis: Long,
     val createdAtEpochMillis: Long,
+    /** Missing in older JSON and therefore decoded as a one-shot reminder. */
+    val recurrence: ReminderRecurrence? = null,
 )
 
 @Serializable

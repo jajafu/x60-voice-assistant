@@ -23,6 +23,7 @@ class AndroidReminderActionExecutor(context: Context) : ReminderActionExecutor {
                 message = request.message,
                 triggerAtEpochMillis = request.triggerAtEpochMillis,
                 createdAtEpochMillis = System.currentTimeMillis(),
+                recurrence = request.recurrence,
             )
             store.add(reminder)
             try {
