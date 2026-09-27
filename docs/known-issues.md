@@ -27,6 +27,11 @@
 - X60 reboot 實測沒有自動啟動麥克風（正確），但 Boot Reminder 通知也未出現。Manifest receiver 與權限存在；需開啟 vivo 自啟動／背景權限後重測，現階段不得宣稱 Boot Reminder 通過。
 - release variant 沒有 production keystore，不能當正式商店簽章版本。
 
+## 設定與版面
+
+- rc24 修正設定頁 10 個數字欄位無法輸入上下限內任意值的問題（欄位無法清空、前導數字被吃掉、超界值靜默夾限），並修正設定頁與模型頁草稿被設定流清空、App 固定直式顯示。`test`、`lint`、`assembleDebug` 與 MuMu vmindex 0 安裝開啟 smoke 已通過；**數字欄位輸入行為仍待 vivo X60 真機驗收**，驗收項目見 `docs/testing.md`「設定頁數字欄位（rc24）」。此問題依賴真機 IME，MuMu 結果不能替代，未驗證前不宣稱已修正。
+- App 自 rc24 起固定直式；`docs/test-reports/m0-2026-09-22-vivo-x60.md` 的橫向測試屬變更前紀錄，不重測、不改寫。
+
 ## 排程提醒
 
 - Android 12 以上未授予「鬧鐘與提醒」特殊權限時，只能使用近似時間排程，Doze 或 OEM 省電可能造成延遲。
