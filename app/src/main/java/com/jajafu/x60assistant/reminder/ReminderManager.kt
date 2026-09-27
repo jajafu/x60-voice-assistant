@@ -8,16 +8,22 @@ class ReminderManager(context: Context) {
     private val scheduler = ReminderScheduler(context.applicationContext)
 
     fun pending(nowEpochMillis: Long = System.currentTimeMillis()): List<ScheduledReminder> =
-        store.all().filter { it.triggerAtEpochMillis > nowEpochMillis }
+        store.all().filter { it.recurrence != null || it.triggerAtEpochMillis > nowEpochMillis }
             .sortedBy(ScheduledReminder::triggerAtEpochMillis)
 
-    fun create(message: String, triggerAtEpochMillis: Long): ReminderScheduleMode {
-        requireValid(message, triggerAtEpochMillis)
+    fun create(
+        message: String,
+        triggerAtEpochMillis: Long,
+        recurrence: ReminderRecurrence? = null,
+    ): ReminderScheduleMode {
+        val effectiveTrigger = effectiveTrigger(triggerAtEpochMillis, recurrence)
+        requireValid(message, effectiveTrigger, recurrence)
         val reminder = ScheduledReminder(
             id = UUID.randomUUID().toString(),
             message = message.trim(),
-            triggerAtEpochMillis = triggerAtEpochMillis,
+            triggerAtEpochMillis = effectiveTrigger,
             createdAtEpochMillis = System.currentTimeMillis(),
+            recurrence = recurrence,
         )
         store.add(reminder)
         return try {
@@ -28,10 +34,20 @@ class ReminderManager(context: Context) {
         }
     }
 
-    fun update(id: String, message: String, triggerAtEpochMillis: Long): ReminderScheduleMode {
-        requireValid(message, triggerAtEpochMillis)
+    fun update(
+        id: String,
+        message: String,
+        triggerAtEpochMillis: Long,
+        recurrence: ReminderRecurrence? = null,
+    ): ReminderScheduleMode {
+        val effectiveTrigger = effectiveTrigger(triggerAtEpochMillis, recurrence)
+        requireValid(message, effectiveTrigger, recurrence)
         val previous = store.find(id) ?: error("Reminder no longer exists")
-        val updated = previous.copy(message = message.trim(), triggerAtEpochMillis = triggerAtEpochMillis)
+        val updated = previous.copy(
+            message = message.trim(),
+            triggerAtEpochMillis = effectiveTrigger,
+            recurrence = recurrence,
+        )
         store.add(updated)
         return try {
             scheduler.schedule(updated)
@@ -48,8 +64,25 @@ class ReminderManager(context: Context) {
         store.remove(id)
     }
 
-    private fun requireValid(message: String, triggerAtEpochMillis: Long) {
+    private fun effectiveTrigger(triggerAtEpochMillis: Long, recurrence: ReminderRecurrence?): Long =
+        recurrence?.let {
+            ReminderRecurrenceCalculator.nextTriggerAtEpochMillis(it, System.currentTimeMillis())
+        } ?: triggerAtEpochMillis
+
+    private fun requireValid(
+        message: String,
+        triggerAtEpochMillis: Long,
+        recurrence: ReminderRecurrence?,
+    ) {
         require(message.isNotBlank()) { "Reminder message is blank" }
         require(triggerAtEpochMillis > System.currentTimeMillis()) { "Reminder time is not in the future" }
+        recurrence?.let {
+            require(it.hour in 0..23 && it.minute in 0..59) { "Reminder recurrence time is invalid" }
+            if (it.frequency == ReminderFrequency.WEEKLY) {
+                require(it.daysOfWeek.isNotEmpty() && it.daysOfWeek.all { day -> day in 1..7 }) {
+                    "Weekly reminder requires valid weekdays"
+                }
+            }
+        }
     }
 }

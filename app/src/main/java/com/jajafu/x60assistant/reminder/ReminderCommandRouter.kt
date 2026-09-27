@@ -11,6 +11,7 @@ data class ReminderRequest(
     val message: String,
     val triggerAtEpochMillis: Long,
     val confirmationTime: String,
+    val recurrence: ReminderRecurrence? = null,
 )
 
 sealed interface ReminderCommand {
@@ -20,6 +21,18 @@ sealed interface ReminderCommand {
 
 /** Parses a deliberately small, deterministic set of Traditional-Chinese reminder phrases. */
 object ReminderCommandRouter {
+    private val daily = Regex(
+        "^(?:(?:請|麻煩)?(?:你)?(?:在)?)?每天(凌晨|早上|上午|中午|下午|晚上)?([0-9零〇一二兩三四五六七八九十兩]{1,3})(?:[:：點時]([0-9零〇一二兩三四五六七八九十兩半]{1,3})?分?)?(?:的時候)?(?:提醒我|叫我|提醒)(.+)$",
+    )
+    private val reminderFirstDaily = Regex(
+        "^(?:請|麻煩)?(?:提醒我|叫我)(?:在)?每天(凌晨|早上|上午|中午|下午|晚上)?([0-9零〇一二兩三四五六七八九十兩]{1,3})(?:[:：點時]([0-9零〇一二兩三四五六七八九十兩半]{1,3})?分?)?(?:要)?(.+)$",
+    )
+    private val weekly = Regex(
+        "^(?:(?:請|麻煩)?(?:你)?(?:在)?)?每(?:個)?(?:星期|禮拜|週|周)((?:星期|禮拜|週|周)?[一二三四五六日天1-7](?:(?:、|和|及|與)?(?:星期|禮拜|週|周)?[一二三四五六日天1-7])*)(凌晨|早上|上午|中午|下午|晚上)?([0-9零〇一二兩三四五六七八九十兩]{1,3})(?:[:：點時]([0-9零〇一二兩三四五六七八九十兩半]{1,3})?分?)?(?:的時候)?(?:提醒我|叫我|提醒)(.+)$",
+    )
+    private val reminderFirstWeekly = Regex(
+        "^(?:請|麻煩)?(?:提醒我|叫我)(?:在)?每(?:個)?(?:星期|禮拜|週|周)((?:星期|禮拜|週|周)?[一二三四五六日天1-7](?:(?:、|和|及|與)?(?:星期|禮拜|週|周)?[一二三四五六日天1-7])*)(凌晨|早上|上午|中午|下午|晚上)?([0-9零〇一二兩三四五六七八九十兩]{1,3})(?:[:：點時]([0-9零〇一二兩三四五六七八九十兩半]{1,3})?分?)?(?:要)?(.+)$",
+    )
     private val compoundRelative = Regex(
         "^(?:(?:請|麻煩)?(?:你)?(?:在)?)?([0-9零〇一二兩三四五六七八九十百]+)(?:個)?(?:小時|鐘頭)(?:又)?([0-9零〇一二兩三四五六七八九十百]+)(?:分鐘?|分)後(?:再)?(?:提醒我|叫我|提醒)(.+)$",
     )
@@ -64,10 +77,96 @@ object ReminderCommandRouter {
             .replace("時鐘", "時")
             .replace("點整", "點")
             .replace("時整", "時")
+        parseRecurring(text, now)?.let { return it }
         parseRelative(text, now)?.let { return it }
         parseWeekdayAbsolute(text, now)?.let { return it }
         parseMonthDayAbsolute(text, now)?.let { return it }
         return parseAbsolute(text, now)
+    }
+
+    private fun parseRecurring(text: String, now: ZonedDateTime): ReminderCommand? {
+        val dailyMatch = daily.matchEntire(text) ?: reminderFirstDaily.matchEntire(text)
+        if (dailyMatch != null) {
+            val schedule = recurringSchedule(
+                frequency = ReminderFrequency.DAILY,
+                period = dailyMatch.groupValues[1],
+                hourText = dailyMatch.groupValues[2],
+                minuteText = dailyMatch.groupValues[3],
+                now = now,
+            ) ?: return ReminderCommand.Invalid("我沒有聽懂每天提醒的時間，請再說一次。")
+            val message = cleanMessage(dailyMatch.groupValues[4])
+            if (message.isBlank()) return ReminderCommand.Invalid("請告訴我要提醒你做什麼。")
+            return ReminderCommand.Schedule(
+                ReminderRequest(
+                    message = message,
+                    triggerAtEpochMillis = schedule.triggerAtEpochMillis,
+                    confirmationTime = "每天 ${formatClock(schedule.recurrence.hour, schedule.recurrence.minute)}",
+                    recurrence = schedule.recurrence,
+                ),
+            )
+        }
+
+        val weeklyMatch = weekly.matchEntire(text) ?: reminderFirstWeekly.matchEntire(text) ?: return null
+        val weekdays = parseDaysOfWeek(weeklyMatch.groupValues[1])
+        if (weekdays.isEmpty()) return ReminderCommand.Invalid("我沒有聽懂每週要在星期幾提醒。")
+        val schedule = recurringSchedule(
+            frequency = ReminderFrequency.WEEKLY,
+            daysOfWeek = weekdays,
+            period = weeklyMatch.groupValues[2],
+            hourText = weeklyMatch.groupValues[3],
+            minuteText = weeklyMatch.groupValues[4],
+            now = now,
+        ) ?: return ReminderCommand.Invalid("我沒有聽懂每週提醒的時間，請再說一次。")
+        val message = cleanMessage(weeklyMatch.groupValues[5])
+        if (message.isBlank()) return ReminderCommand.Invalid("請告訴我要提醒你做什麼。")
+        return ReminderCommand.Schedule(
+            ReminderRequest(
+                message = message,
+                triggerAtEpochMillis = schedule.triggerAtEpochMillis,
+                confirmationTime = "${schedule.recurrence.label()} " +
+                    formatClock(schedule.recurrence.hour, schedule.recurrence.minute),
+                recurrence = schedule.recurrence,
+            ),
+        )
+    }
+
+    private data class RecurringSchedule(
+        val recurrence: ReminderRecurrence,
+        val triggerAtEpochMillis: Long,
+    )
+
+    private fun recurringSchedule(
+        frequency: ReminderFrequency,
+        daysOfWeek: List<Int> = emptyList(),
+        period: String,
+        hourText: String,
+        minuteText: String,
+        now: ZonedDateTime,
+    ): RecurringSchedule? {
+        val clock = parseClock(period, hourText, minuteText) ?: return null
+        val rawHour = parseNumber(hourText) ?: return null
+        val candidateHours = when {
+            period.isNotBlank() -> listOf(clock.first)
+            rawHour in 1..11 -> listOf(rawHour, rawHour + 12)
+            rawHour == 12 -> listOf(0, 12)
+            else -> listOf(clock.first)
+        }
+        return candidateHours.map { hour ->
+            val recurrence = ReminderRecurrence(
+                frequency = frequency,
+                daysOfWeek = daysOfWeek,
+                hour = hour,
+                minute = clock.second,
+            )
+            RecurringSchedule(
+                recurrence = recurrence,
+                triggerAtEpochMillis = ReminderRecurrenceCalculator.nextTriggerAtEpochMillis(
+                    recurrence,
+                    now.toInstant().toEpochMilli(),
+                    now.zone,
+                ),
+            )
+        }.minByOrNull(RecurringSchedule::triggerAtEpochMillis)
     }
 
     private fun parseWeekdayAbsolute(text: String, now: ZonedDateTime): ReminderCommand? {
@@ -290,6 +389,10 @@ object ReminderCommandRouter {
         DayOfWeek.SUNDAY -> "星期日"
     }
 
+    private fun parseDaysOfWeek(value: String): List<Int> = value.mapNotNull { char ->
+        parseDayOfWeek(char.toString())?.value
+    }.distinct().sorted()
+
     private fun nextMonthDay(
         month: Int,
         day: Int,
@@ -311,6 +414,9 @@ object ReminderCommandRouter {
 
     private fun formatClock(value: ZonedDateTime): String =
         "${value.hour}:${value.minute.toString().padStart(2, '0')}"
+
+    private fun formatClock(hour: Int, minute: Int): String =
+        "$hour:${minute.toString().padStart(2, '0')}"
 
     private fun parseNumber(value: String): Int? {
         value.toIntOrNull()?.let { return it }

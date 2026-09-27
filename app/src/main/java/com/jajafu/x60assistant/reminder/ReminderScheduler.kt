@@ -42,11 +42,23 @@ class ReminderScheduler(private val context: Context) {
 
     fun rescheduleAll(nowEpochMillis: Long = System.currentTimeMillis()) {
         val store = ReminderStore(context)
-        val reminders = store.all()
-        val expired = reminders.filter { it.triggerAtEpochMillis <= nowEpochMillis }.mapTo(mutableSetOf()) { it.id }
-        store.removeAll(expired)
-        reminders.filter { it.triggerAtEpochMillis > nowEpochMillis }.forEach {
-            runCatching { schedule(it, notifyWhenApproximate = false) }
+        store.all().forEach { reminder ->
+            val candidate = if (reminder.recurrence == null) {
+                reminder.takeIf { it.triggerAtEpochMillis > nowEpochMillis }
+            } else {
+                reminder.copy(
+                    triggerAtEpochMillis = ReminderRecurrenceCalculator.nextTriggerAtEpochMillis(
+                        recurrence = reminder.recurrence,
+                        afterEpochMillis = nowEpochMillis,
+                    ),
+                )
+            }
+            if (candidate == null) {
+                store.remove(reminder.id)
+            } else {
+                if (candidate != reminder) store.add(candidate)
+                runCatching { schedule(candidate, notifyWhenApproximate = false) }
+            }
         }
     }
 

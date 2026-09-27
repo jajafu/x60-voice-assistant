@@ -1,8 +1,8 @@
 package com.jajafu.x60assistant.reminder
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -166,6 +166,86 @@ class ReminderCommandRouterTest {
         val command = ReminderCommandRouter.parse("提醒我半小時後吃藥", now) as ReminderCommand.Schedule
 
         assertEquals(now.plusMinutes(30).toInstant().toEpochMilli(), command.request.triggerAtEpochMillis)
+    }
+
+    @Test
+    fun `parses daily recurring reminder`() {
+        val command = ReminderCommandRouter.parse("每天早上七點提醒我吃藥", now) as ReminderCommand.Schedule
+        val expected = now.withHour(7).withMinute(0).withSecond(0).plusDays(1)
+
+        assertEquals("吃藥", command.request.message)
+        assertEquals("每天 7:00", command.request.confirmationTime)
+        assertEquals(expected.toInstant().toEpochMilli(), command.request.triggerAtEpochMillis)
+        assertEquals(
+            ReminderRecurrence(ReminderFrequency.DAILY, hour = 7, minute = 0),
+            command.request.recurrence,
+        )
+    }
+
+    @Test
+    fun `daily recurrence without period chooses nearest future clock`() {
+        val evening = now.withHour(21)
+        val command = ReminderCommandRouter.parse("每天六點提醒我收衣服", evening) as ReminderCommand.Schedule
+
+        assertEquals(6, command.request.recurrence?.hour)
+        assertEquals(
+            evening.plusDays(1).withHour(6).withMinute(0).withSecond(0).toInstant().toEpochMilli(),
+            command.request.triggerAtEpochMillis,
+        )
+    }
+
+    @Test
+    fun `daily recurrence without period can choose pm later today`() {
+        val lateAfternoon = now.withHour(17)
+        val command = ReminderCommandRouter.parse("每天六點提醒我收衣服", lateAfternoon) as ReminderCommand.Schedule
+
+        assertEquals(18, command.request.recurrence?.hour)
+        assertEquals(
+            lateAfternoon.withHour(18).withMinute(0).withSecond(0).toInstant().toEpochMilli(),
+            command.request.triggerAtEpochMillis,
+        )
+    }
+
+    @Test
+    fun `parses weekly single-day recurring reminder`() {
+        val command = ReminderCommandRouter.parse("每週一晚上八點提醒我倒垃圾", now) as ReminderCommand.Schedule
+        val expected = ZonedDateTime.of(2026, 9, 28, 20, 0, 0, 0, zone)
+
+        assertEquals("倒垃圾", command.request.message)
+        assertEquals("每週一 20:00", command.request.confirmationTime)
+        assertEquals(expected.toInstant().toEpochMilli(), command.request.triggerAtEpochMillis)
+        assertEquals(
+            ReminderRecurrence(ReminderFrequency.WEEKLY, listOf(1), 20, 0),
+            command.request.recurrence,
+        )
+    }
+
+    @Test
+    fun `parses weekly multi-day recurring reminder`() {
+        val command = ReminderCommandRouter.parse("每週一、三、五下午六點提醒我運動", now) as ReminderCommand.Schedule
+        val expected = ZonedDateTime.of(2026, 9, 25, 18, 0, 0, 0, zone)
+
+        assertEquals("運動", command.request.message)
+        assertEquals("每週一、三、五 18:00", command.request.confirmationTime)
+        assertEquals(expected.toInstant().toEpochMilli(), command.request.triggerAtEpochMillis)
+        assertEquals(listOf(1, 3, 5), command.request.recurrence?.daysOfWeek)
+    }
+
+    @Test
+    fun `parses reminder-first recurring phrases`() {
+        val daily = ReminderCommandRouter.parse("提醒我每天晚上九點吃藥", now) as ReminderCommand.Schedule
+        val weekly = ReminderCommandRouter.parse("提醒我每週二和週四早上八點運動", now) as ReminderCommand.Schedule
+
+        assertEquals(ReminderFrequency.DAILY, daily.request.recurrence?.frequency)
+        assertEquals("吃藥", daily.request.message)
+        assertEquals(ReminderFrequency.WEEKLY, weekly.request.recurrence?.frequency)
+        assertEquals(listOf(2, 4), weekly.request.recurrence?.daysOfWeek)
+        assertEquals("運動", weekly.request.message)
+    }
+
+    @Test
+    fun `does not turn unrelated recurring phrase into a reminder`() {
+        assertNull(ReminderCommandRouter.parse("每天早上七點天氣如何", now))
     }
 
     @Test
