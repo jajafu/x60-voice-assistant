@@ -62,6 +62,7 @@ class VoiceStateMachine(initial: VoiceState = VoiceState.STOPPED) {
                 VoiceState.STOPPED,
             )
             VoiceState.THINKING -> setOf(
+                VoiceState.WAKE_ACK,
                 VoiceState.EXECUTING_ACTION,
                 VoiceState.SPEAKING,
                 VoiceState.FOLLOW_UP,
@@ -71,6 +72,7 @@ class VoiceStateMachine(initial: VoiceState = VoiceState.STOPPED) {
                 VoiceState.STOPPED,
             )
             VoiceState.SPEAKING -> setOf(
+                VoiceState.WAKE_ACK,
                 VoiceState.FOLLOW_UP,
                 VoiceState.IDLE_KWS,
                 VoiceState.PAUSED,
