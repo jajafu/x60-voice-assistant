@@ -34,4 +34,10 @@ class VoiceStateMachineTest {
         assertFalse(machine.canTransition(VoiceState.SPEAKING))
         assertTrue(runCatching { machine.transition(VoiceState.SPEAKING, TransitionReason.ANSWER_READY) }.isFailure)
     }
+
+    @Test
+    fun `wake word may interrupt thinking or speaking`() {
+        assertTrue(VoiceState.WAKE_ACK in VoiceStateMachine.allowedTargets(VoiceState.THINKING))
+        assertTrue(VoiceState.WAKE_ACK in VoiceStateMachine.allowedTargets(VoiceState.SPEAKING))
+    }
 }

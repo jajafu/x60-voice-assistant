@@ -83,6 +83,7 @@ class VoiceOrchestrator(
     private val closed = AtomicBoolean(false)
     private var generation = 0L
     private var stateJob: Job? = null
+    private var answerWakeJob: Job? = null
     private var audioSource = "—"
     private var sessionId = "—"
     private val history = ConversationHistory(settings.contextTurns)
@@ -194,23 +195,26 @@ class VoiceOrchestrator(
     }
 
     private suspend fun handleWakeDetected() {
-        if (machine.state != VoiceState.IDLE_KWS) return
-        keepMusicPausedAfterSession = false
+        val startingSession = machine.state == VoiceState.IDLE_KWS
+        if (!startingSession && machine.state !in setOf(VoiceState.THINKING, VoiceState.SPEAKING)) return
+        if (startingSession) keepMusicPausedAfterSession = false
         sessionId = UUID.randomUUID().toString().replace("-", "").take(8)
         M1DiagnosticsRepository.onWake(KwsModelPack.KEYWORDS_SCORE, settings.wakePhrase)
         transition(VoiceState.WAKE_ACK, TransitionReason.WAKE_DETECTED)
         stateJob = launchState { emit ->
             try {
-                withContext(NonCancellable) {
-                    resumeAlarmAfterSession = try {
-                        alarmExecutor?.pauseForVoice() == true
-                    } catch (_: Exception) {
-                        false
-                    }
-                    resumeMusicAfterSession = try {
-                        musicExecutor?.pauseForVoice() == true
-                    } catch (_: Exception) {
-                        false
+                if (startingSession) {
+                    withContext(NonCancellable) {
+                        resumeAlarmAfterSession = try {
+                            alarmExecutor?.pauseForVoice() == true
+                        } catch (_: Exception) {
+                            false
+                        }
+                        resumeMusicAfterSession = try {
+                            musicExecutor?.pauseForVoice() == true
+                        } catch (_: Exception) {
+                            false
+                        }
                     }
                 }
                 acknowledgementPlayer.playAndAwait(speechOutput, settings.wakeAcknowledgement)
@@ -332,6 +336,7 @@ class VoiceOrchestrator(
             return
         }
         transition(VoiceState.THINKING, TransitionReason.ROUTE_REMOTE)
+        startAnswerWakeMonitoring()
         stateJob = launchState { emit ->
             val started = clock.elapsedRealtimeMs()
             var firstTokenMs: Long? = null
@@ -549,6 +554,7 @@ class VoiceOrchestrator(
 
     private fun startSpeaking(text: String) {
         if (speechOutput == null) return
+        startAnswerWakeMonitoring()
         stateJob = launchState { emit ->
             try {
                 StreamingSpeechPlayer().collect(
@@ -591,6 +597,7 @@ class VoiceOrchestrator(
     }
 
     private suspend fun enterFollowUp() {
+        stopAnswerWakeMonitoring()
         delay(audioResumeDelayMs)
         try {
             if (musicExecutor?.pauseForVoice() == true && !keepMusicPausedAfterSession) {
@@ -603,7 +610,8 @@ class VoiceOrchestrator(
         }
         runCatching {
             vad.reset()
-            audioSource = audio.start()
+            audio.frameQueue.clear()
+            if (!audio.isRunning()) audioSource = audio.start()
         }.onFailure {
             dispatch(Command.AudioFailure(VoiceErrorCode.AUDIO_START_FAILED, it.javaClass.simpleName))
             return
@@ -758,14 +766,62 @@ class VoiceOrchestrator(
         }
     }
 
+    private fun startAnswerWakeMonitoring() {
+        if (answerWakeJob?.isActive == true) return
+        if (!audio.isRunning()) {
+            try {
+                audioSource = audio.start()
+            } catch (error: Throwable) {
+                dispatch(Command.AudioFailure(VoiceErrorCode.AUDIO_START_FAILED, error.javaClass.simpleName))
+                return
+            }
+        }
+        try {
+            kws.reset()
+        } catch (error: Throwable) {
+            dispatch(Command.SessionFailed(VoiceErrorCode.KWS_RUNTIME_FAILED, error.javaClass.simpleName))
+            return
+        }
+        val workerGeneration = generation
+        answerWakeJob = runtimeScope.launch {
+            try {
+                while (isActive && machine.state in setOf(VoiceState.THINKING, VoiceState.SPEAKING)) {
+                    val frame = audio.nextFrame(FRAME_POLL_MS) ?: continue
+                    if (kws.accept(frame)) {
+                        dispatch(Command.WakeDetected, workerGeneration)
+                        return@launch
+                    }
+                }
+            } catch (error: Throwable) {
+                if (isActive) {
+                    dispatch(
+                        Command.SessionFailed(VoiceErrorCode.KWS_RUNTIME_FAILED, error.javaClass.simpleName),
+                        workerGeneration,
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun stopAnswerWakeMonitoring() {
+        val job = answerWakeJob
+        answerWakeJob = null
+        job?.cancel()
+        job?.join()
+    }
+
     private suspend fun cancelStateWork() {
         generation++
         val job = stateJob
+        val wakeJob = answerWakeJob
         stateJob = null
+        answerWakeJob = null
         job?.cancel()
+        wakeJob?.cancel()
         runCatching { llm?.cancel() }
         runCatching { speechOutput?.stop() }
         job?.join() // Native decode is synchronous: cancellation alone does not finish it.
+        wakeJob?.join()
     }
 
     private suspend fun releaseSessionResources() {

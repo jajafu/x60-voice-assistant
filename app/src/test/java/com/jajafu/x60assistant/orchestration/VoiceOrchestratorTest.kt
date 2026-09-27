@@ -57,7 +57,7 @@ class VoiceOrchestratorTest {
             runCurrent()
             assertEquals(VoiceState.SPEAKING, f.voice.state.value)
             assertEquals(listOf(expected.first()), f.output.spoken)
-            assertFalse(f.audio.running)
+            assertTrue(f.audio.running)
             gate.complete(Unit)
             runCurrent()
             assertEquals(expected, f.output.spoken)
@@ -86,6 +86,82 @@ class VoiceOrchestratorTest {
             f.audio.feed(9, 3_000)
             runCurrent()
             assertEquals(VoiceState.LISTENING, f.voice.state.value)
+        } finally { dispose(f) }
+    }
+
+    @Test fun `wake word during answer cancels it acknowledges and listens again`() = runTest {
+        var upstreamCancelled = false
+        val music = FakeMusic(pauseResult = true)
+        val f = Fixture(backgroundScope, chunks = flow {
+            try {
+                emit(LlmChunk("第一句。"))
+                awaitCancellation()
+            } finally {
+                upstreamCancelled = true
+            }
+        }, music = music)
+        try {
+            startListening(f)
+            assertEquals(1, music.pauseCalls)
+            assertEquals(listOf("我在"), f.acknowledgements)
+
+            f.utterance()
+            runCurrent()
+            assertEquals(VoiceState.SPEAKING, f.voice.state.value)
+            assertTrue(f.audio.running)
+
+            f.audio.feed(9, 3_000)
+            runCurrent()
+
+            assertTrue(upstreamCancelled)
+            assertEquals(VoiceState.LISTENING, f.voice.state.value)
+            assertEquals(listOf("我在", "我在"), f.acknowledgements)
+            assertEquals(1, music.pauseCalls)
+            assertEquals(0, music.resumeCalls)
+
+            f.voice.cancelSession()
+            runCurrent()
+            assertEquals(VoiceState.IDLE_KWS, f.voice.state.value)
+            assertEquals(1, music.resumeCalls)
+        } finally { dispose(f) }
+    }
+
+    @Test fun `wake word while waiting for first token starts a new question`() = runTest {
+        var upstreamCancelled = false
+        val f = Fixture(backgroundScope, chunks = flow {
+            try {
+                awaitCancellation()
+            } finally {
+                upstreamCancelled = true
+            }
+        })
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(VoiceState.THINKING, f.voice.state.value)
+            assertTrue(f.audio.running)
+
+            f.audio.feed(9, 3_000)
+            runCurrent()
+
+            assertTrue(upstreamCancelled)
+            assertEquals(VoiceState.LISTENING, f.voice.state.value)
+            assertEquals(listOf("我在", "我在"), f.acknowledgements)
+            assertTrue(f.output.spoken.isEmpty())
+        } finally { dispose(f) }
+    }
+
+    @Test fun `completed answer reuses interrupt recorder for follow up`() = runTest {
+        val f = Fixture(backgroundScope, followUpSeconds = 10)
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+
+            assertEquals(VoiceState.FOLLOW_UP, f.voice.state.value)
+            assertTrue(f.audio.running)
+            assertEquals(2, f.audio.starts)
         } finally { dispose(f) }
     }
 
@@ -253,11 +329,13 @@ class VoiceOrchestratorTest {
         chunks: Flow<LlmChunk> = flowOf(LlmChunk("回答。")),
         val music: FakeMusic? = null,
         decode: () -> Unit = {},
+        followUpSeconds: Int = 0,
     ) {
         val audio = FakeAudio()
         val output = FakeOutput()
         val asr = FakeAsr(text, decode)
         val provider = FakeProvider(chunks)
+        val acknowledgements = mutableListOf<String>()
         val voice = VoiceOrchestrator(
             scope, audio,
             kws = object : WakeWordEngine {
@@ -272,12 +350,18 @@ class VoiceOrchestratorTest {
             },
             asr = asr,
             acknowledgementPlayer = object : WakeAcknowledgement {
-                override suspend fun playAndAwait(speechOutput: SpeechOutputEngine?, response: String) = Unit
+                override suspend fun playAndAwait(speechOutput: SpeechOutputEngine?, response: String) {
+                    acknowledgements += response
+                }
                 override fun release() = Unit
             },
             endpointDetector = SpeechEndpointDetector(SpeechEndpointConfig()),
             convertText = { it },
-            settings = AssistantSettings(baseUrl = "https://example.invalid", model = "test", followUpSeconds = 0),
+            settings = AssistantSettings(
+                baseUrl = "https://example.invalid",
+                model = "test",
+                followUpSeconds = followUpSeconds,
+            ),
             llm = provider,
             musicExecutor = music,
             speechOutput = output,
@@ -352,14 +436,22 @@ class VoiceOrchestratorTest {
         override fun close() = Unit
     }
 
-    private class FakeMusic : MusicActionExecutor {
+    private class FakeMusic(private val pauseResult: Boolean = false) : MusicActionExecutor {
         val commands = mutableListOf<MusicCommand>()
+        var pauseCalls = 0
+        var resumeCalls = 0
         override suspend fun execute(command: MusicCommand): MusicActionResult {
             commands += command
             return MusicActionResult("本機播放結果。")
         }
-        override suspend fun pauseForVoice() = false
-        override suspend fun resumeAfterVoice() = false
+        override suspend fun pauseForVoice(): Boolean {
+            pauseCalls++
+            return pauseResult
+        }
+        override suspend fun resumeAfterVoice(): Boolean {
+            resumeCalls++
+            return true
+        }
         override suspend fun stopForClose() = false
     }
 }
