@@ -85,10 +85,16 @@ class VoiceStateMachine(initial: VoiceState = VoiceState.STOPPED) {
                 VoiceState.ERROR,
                 VoiceState.STOPPED,
             )
-            VoiceState.PAUSED -> setOf(VoiceState.IDLE_KWS, VoiceState.ERROR, VoiceState.STOPPED)
+            VoiceState.PAUSED -> setOf(
+                VoiceState.IDLE_KWS,
+                VoiceState.RECOVERING,
+                VoiceState.ERROR,
+                VoiceState.STOPPED,
+            )
             VoiceState.RECOVERING -> setOf(
                 VoiceState.IDLE_KWS,
                 VoiceState.LISTENING,
+                VoiceState.PAUSED,
                 VoiceState.ERROR,
                 VoiceState.STOPPED,
             )
