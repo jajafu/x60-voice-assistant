@@ -32,6 +32,21 @@ object ReminderRecurrenceCalculator {
 }
 
 object ReminderOccurrencePlanner {
+    /** An overdue stored occurrence has not fired yet. Catch it up once before advancing the series. */
+    fun beforeRescheduling(
+        reminder: ScheduledReminder,
+        nowEpochMillis: Long,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+    ): ScheduledReminder {
+        val recurrence = reminder.recurrence ?: return reminder
+        if (reminder.triggerAtEpochMillis <= nowEpochMillis) return reminder
+        return reminder.copy(
+            triggerAtEpochMillis = ReminderRecurrenceCalculator.nextTriggerAtEpochMillis(
+                recurrence, nowEpochMillis, zoneId,
+            ),
+        )
+    }
+
     fun afterFiring(
         reminder: ScheduledReminder,
         firedAtEpochMillis: Long,

@@ -6,6 +6,15 @@ import org.junit.Test
 
 class SpeechSegmenterTest {
     @Test
+    fun `long buffered sentence is split within speech engine limits`() {
+        val text = "長".repeat(5_000) + "。"
+        val segmenter = SpeechSegmenter()
+        val segments = segmenter.accept(text) + segmenter.finish(success = true)
+        assertEquals(text, segments.joinToString(""))
+        assertTrue(segments.all { it.length <= 96 })
+    }
+
+    @Test
     fun `keeps token chunks until sentences are complete and preserves order`() {
         val segmenter = SpeechSegmenter()
         assertTrue(segmenter.accept("第一句還").isEmpty())

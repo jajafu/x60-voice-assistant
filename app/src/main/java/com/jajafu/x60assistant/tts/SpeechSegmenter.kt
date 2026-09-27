@@ -29,7 +29,7 @@ class SpeechSegmenter(
         while (pending.isNotEmpty()) {
             val sentenceEnd = pending.indexOfFirst { it in SENTENCE_ENDINGS }
             val cut = when {
-                sentenceEnd >= 0 -> sentenceEnd + 1
+                sentenceEnd in 0 until safeLength -> sentenceEnd + 1
                 pending.length >= safeLength -> safeCutIndex(pending.toString(), safeLength)
                 allowRemainder -> pending.length
                 else -> break
