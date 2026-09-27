@@ -27,7 +27,7 @@
 
 ## 限制與重要決定
 
-- Android 最低 SDK 26、target SDK 35，APK 限 `arm64-v8a`；主要實測裝置為 vivo X60／Android 13。
+- Android compile SDK 36、最低 SDK 26、target SDK 35，APK 限 `arm64-v8a`；主要實測裝置為 vivo X60／Android 13。
 - 麥克風前景服務只能由可見 Activity 的使用者操作啟動；開機廣播不直接啟動錄音。
 - PCM 不落盤或上傳，API Key 透過 Android Keystore 保護，Release 網路只允許 HTTPS；詳見 `docs/privacy.md`。
 - 模型 binary 不進 Git；授權及來源依 `docs/model-packs.md`、`THIRD_PARTY_NOTICES.md`，未確認授權不得推定可散布。

@@ -6,7 +6,7 @@
 
 Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，將本機 KWS → VAD → 固定內建 X-ASR 的文字優先送本機音樂／提醒指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給 Android TTS。設定與提醒留在裝置；APK 內的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
 
-主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，目標 Android SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。
+主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。目前產品候選版號為 `1.0.0-rc21`／`versionCode 25`，依 `app/build.gradle.kts` 查證。
 
 `VoiceForegroundService` 擁有語音服務生命週期與資源；`AudioCaptureEngine` 建立唯一 `AudioRecord`，以 16 kHz／mono／PCM16／20 ms frame 送入有界佇列。`VoiceOrchestrator` 是唯一狀態切換者，將喚醒後語音交給 VAD／ASR；本機 `MusicCommandRouter` 與 `ReminderCommandRouter` 優先處理明確指令，一般問答才走 `OpenAiCompatibleLlmProvider` 的 SSE，完整句送 TTS，結束後可進 Follow Up。實際分支、失敗與恢復策略依程式碼及 `docs/decision-log.md`。
 
@@ -20,6 +20,10 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - `data/`、`security/`、`diagnostics/`：DataStore 設定、Keystore 密鑰、有限且遮罩的診斷。
 - `app/src/test/`、`app/src/androidTest/`、`docs/test-reports/`：單元測試、裝置測試與真機紀錄。
 - `scripts/`、`docs/model-packs.md`：模型資產準備及來源／授權資訊。
+
+## PR 驗收產物識別
+
+人工驗收的來源是 Draft PR 目前 HEAD。Android 可安裝驗收產物以完整 commit 和 APK SHA-256 對應，並記錄 package、`versionName`／`versionCode` 及測試裝置；X60 功能證據依 `docs/testing.md` 記錄模型識別、裝置狀態與執行結果。此 Repository 沒有 Preview 網站、套件發布或部署 revision。`assembleDebug` 是既有必要驗證，可在 PR 前建置；建立 Draft PR 後要確認來源 commit 與建置輸入仍符合 HEAD，受測內容未變則沿用該產物。
 
 ## 資料與外部整合
 

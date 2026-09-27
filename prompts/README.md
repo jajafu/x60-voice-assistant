@@ -20,7 +20,7 @@
 2. 只把 `- 目標專案目錄：[[目標專案完整路徑]]` 換成要升級的專案完整路徑。新版來源已寫在新版提示詞中；舊版來源若仍存在，Agent 會嘗試查找並做三方比對。
 3. 在要更新的專案工作目錄開啟 OpenChamber／OpenCode 或 Codex，複製**整份更新提示詞**貼入對話。
 
-三份提示詞都已填來源 `F:\DevelopWorkFlow\ai-development-template-v1.2`；搬動範本或正式發行新版時由範本維護者同步更新。其他資料可讓 Agent 從目標專案查證或標為待決；你不用手填 `TEMPLATE_GUIDE.md` 的 24 個專案參數。
+三份提示詞都已填來源 `F:\DevelopWorkFlow\ai-development-template-v1.4`；搬動範本或正式發行新版時由範本維護者同步更新。其他資料可讓 Agent 從目標專案查證或標為待決；你不用手填 `TEMPLATE_GUIDE.md` 的 24 個專案參數。
 
 三份提示詞各只有一個 `[[目標專案完整路徑]]`，是你貼入前唯一要替換的位置。`TEMPLATE_VERSION.md` 是 Agent 自行讀取的版本檔，不是輸入欄位。`{{大寫名稱}}` 是由 Agent 在目標專案文件中處理的專案參數。
 
