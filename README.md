@@ -4,6 +4,8 @@ Android 13／vivo X60 的本機喚醒語音助理 release candidate。使用者�
 
 `小助手 → 喚醒回覆 → VAD → 本機 ASR → OpenAI-compatible SSE → 完整句 TTS → Follow Up`
 
+一般回答收到完整句就開始朗讀，最多暫存 12 段，朗讀較慢時等待佇列空間。可能需要音樂播放補救的問句會先收完整回答再決定本機操作，避免朗讀拒絕內容。取消／停止會結束串流及朗讀；停止服務時會在背景等待本機辨識完成後釋放模型。
+
 ## 範圍與安全
 
 - 單一 `AudioCaptureEngine` 擁有唯一 `AudioRecord`：16000 Hz、mono、PCM16、20 ms。
@@ -69,6 +71,8 @@ MusicCabin 可說「收藏」或「取消收藏」，操作目前播放的歌曲
 
 ## 本機排程提醒
 
+尚未送達的逾期提醒在重新開啟 App 或補排程時保留並補響一次；重複提醒補響後才推進下一次，不會逐次補播所有錯過的日期。喚醒助理時，鬧鐘鈴聲與提醒語音會一起暫停，語音互動結束後恢復。
+
 啟動語音服務後，可說「9:00 提醒我倒垃圾」、「明天下午三點半提醒我開會」或「50 分鐘後提醒我吃藥」。也支援「每天早上七點提醒我吃藥」、「每週一晚上八點提醒我倒垃圾」及「每週一、三、五下午六點提醒我運動」等每天或每週重複排程。指令在本機解析與保存，不依賴 LLM；語音服務或 App 關閉後，已排程提醒仍會到點觸發。提醒會播放系統鬧鐘鈴聲，間隔朗讀提醒內容，並在通知提供「停止鬧鐘」按鈕；無人操作時最多響 10 分鐘。重複提醒響完會自動排定下一次；重新開機、系統時間或時區變更後也會依當地時間重新補排程。
 
 「提醒」頁會集中顯示語音與手動建立的單次、每天及每週提醒，可新增、修改、刪除排程，並選擇所有提醒共用的系統鬧鐘鈴聲。
@@ -85,7 +89,7 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 ## AI 開發流程
 
-Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.0-rc21` 候選版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.0-rc22` 候選版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
 
 從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 

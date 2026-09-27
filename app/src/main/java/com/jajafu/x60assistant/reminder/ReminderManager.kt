@@ -7,9 +7,8 @@ class ReminderManager(context: Context) {
     private val store = ReminderStore(context.applicationContext)
     private val scheduler = ReminderScheduler(context.applicationContext)
 
-    fun pending(nowEpochMillis: Long = System.currentTimeMillis()): List<ScheduledReminder> =
-        store.all().filter { it.recurrence != null || it.triggerAtEpochMillis > nowEpochMillis }
-            .sortedBy(ScheduledReminder::triggerAtEpochMillis)
+    fun pending(): List<ScheduledReminder> =
+        store.all().sortedBy(ScheduledReminder::triggerAtEpochMillis)
 
     fun create(
         message: String,

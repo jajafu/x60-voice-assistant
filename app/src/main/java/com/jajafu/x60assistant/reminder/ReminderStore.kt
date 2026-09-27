@@ -45,6 +45,17 @@ class ReminderStore(context: Context) {
         readState().reminders.firstOrNull { it.id == id }
     }
 
+    /** Atomically claim a due occurrence so a delayed duplicate broadcast cannot fire the next one. */
+    fun consumeDue(id: String, nowEpochMillis: Long): ScheduledReminder? = synchronized(lock) {
+        val state = readState()
+        val reminder = state.reminders.firstOrNull { it.id == id } ?: return@synchronized null
+        if (reminder.triggerAtEpochMillis > nowEpochMillis) return@synchronized null
+        val next = ReminderOccurrencePlanner.afterFiring(reminder, nowEpochMillis)
+        val remaining = state.reminders.filterNot { it.id == id } + listOfNotNull(next)
+        writeState(ReminderState(remaining.sortedBy(ScheduledReminder::triggerAtEpochMillis)))
+        reminder
+    }
+
     fun add(reminder: ScheduledReminder) = synchronized(lock) {
         val reminders = readState().reminders.filterNot { it.id == reminder.id } + reminder
         writeState(ReminderState(reminders.sortedBy(ScheduledReminder::triggerAtEpochMillis)))
