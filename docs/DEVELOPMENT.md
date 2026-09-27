@@ -39,7 +39,7 @@ PR 在遠端合併後，執行 `git fetch origin`，以 PR 狀態及遠端 `main
 
 ## 產品版本與範本版本
 
-`TEMPLATE_VERSION.md` 只記錄 AI 流程範本版本，不是 Android App 版本。專案目前由 `app/build.gradle.kts` 設定 `versionName = "1.0.0-rc22"`、`versionCode = 26`；診斷頁從已安裝套件讀版本。Release variant 未配置 production signing，不能把候選 APK 寫成正式發布。
+`TEMPLATE_VERSION.md` 只記錄 AI 流程範本版本，不是 Android App 版本。專案目前由 `app/build.gradle.kts` 設定 `versionName = "1.0.0-rc23"`、`versionCode = 27`；診斷頁從已安裝套件讀版本。Release variant 未配置 production signing，不能把候選 APK 寫成正式發布。
 
 - 從下一個 Issue 起，Plan 記錄「產品版本需更新／不需更新／待決」及原因，PR 寫實際版本與建置號。改變 App 行為、並交付新可安裝候選 APK 的 Issue，預設將既有 `1.0.0-rcN` 候選版號與遞增的 `versionCode` 更新一次；同一 Issue 的反覆修正不重複加版。
 - 多個 Issue 合併同批候選版，或先實作而尚未交付 APK 時，在各 Plan／PR 記錄預計納入的版本與實際發版安排，由使用者決定。保留現有 release candidate 命名；不自動套用泛用的 patch／minor／major 規則。未來正式版本與相容性破壞的版號、遷移方式須先由使用者決定。
