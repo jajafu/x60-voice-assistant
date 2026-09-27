@@ -10,16 +10,9 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         if (intent?.action != ACTION_FIRE) return
         val id = intent.getStringExtra(EXTRA_REMINDER_ID) ?: return
         val store = ReminderStore(context)
-        val reminder = store.find(id) ?: return
-        val nextOccurrence = ReminderOccurrencePlanner.afterFiring(
-            reminder = reminder,
-            firedAtEpochMillis = System.currentTimeMillis(),
-        )
-        if (nextOccurrence == null) {
-            store.remove(id)
-        } else {
-            // Persist the next occurrence before starting playback so a process death cannot lose the series.
-            store.add(nextOccurrence)
+        val reminder = store.consumeDue(id, System.currentTimeMillis()) ?: return
+        val nextOccurrence = store.find(id)
+        if (nextOccurrence != null) {
             runCatching { ReminderScheduler(context).schedule(nextOccurrence, notifyWhenApproximate = false) }
         }
         val serviceIntent = Intent(context, ReminderAlarmService::class.java).apply {

@@ -13,15 +13,17 @@ import com.jajafu.x60assistant.diagnostics.VoiceErrorCode
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class AudioCaptureEngine(
     private val context: Context,
-    val frameQueue: BoundedAudioFrameQueue = BoundedAudioFrameQueue(FRAME_QUEUE_CAPACITY),
+    override val frameQueue: BoundedAudioFrameQueue = BoundedAudioFrameQueue(FRAME_QUEUE_CAPACITY),
     private val onFrame: () -> Unit,
     private val onDroppedFrame: () -> Unit,
     private val onReadError: (VoiceErrorCode, String) -> Unit,
     private val onFatalError: (VoiceErrorCode, String) -> Unit,
-) {
+) : AudioInputEngine {
     private val running = AtomicBoolean(false)
     private val resourceLock = Any()
     private val lastFrameElapsedMs = AtomicLong(0)
@@ -32,7 +34,7 @@ class AudioCaptureEngine(
     @Volatile
     private var readThread: Thread? = null
 
-    fun start(): String {
+    override fun start(): String {
         check(!running.get()) { "AudioCaptureEngine is already running" }
         check(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -53,7 +55,7 @@ class AudioCaptureEngine(
         return sourceName
     }
 
-    fun stop() {
+    override fun stop() {
         if (!running.getAndSet(false) && audioRecord == null) {
             frameQueue.clear()
             return
@@ -196,7 +198,11 @@ class AudioCaptureEngine(
         onFatalError(code, detail)
     }
 
-    fun isRunning(): Boolean = running.get()
+    override fun isRunning(): Boolean = running.get()
+
+    override suspend fun nextFrame(timeoutMs: Long): AudioFrame? = withContext(Dispatchers.IO) {
+        frameQueue.poll(timeoutMs)
+    }
 
     fun isStalled(nowElapsedMs: Long, thresholdMs: Long = 3_000): Boolean =
         running.get() && nowElapsedMs - lastFrameElapsedMs.get() >= thresholdMs

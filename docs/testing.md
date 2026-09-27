@@ -4,13 +4,23 @@
 
 ```powershell
 .\scripts\prepare-m1-kws-assets.ps1
-.\scripts\prepare-m2-model-packs.ps1 -Pack standard
+.\scripts\prepare-bundled-xasr.ps1
 .\gradlew.bat test
 .\gradlew.bat lint
 .\gradlew.bat assembleDebug
 ```
 
 Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD endpoint/timeout、模型 ID/SHA、URL 正規化、SSE/`[DONE]`、HTTP retry、MockWebServer、AES-GCM round trip、secret redaction、Markdown/SpeechSegmenter、Follow Up monotonic timeout、Audio recovery threshold、Boot reminder policy 與安全診斷匯出。
+
+rc22 另包含 Orchestrator 跨元件回歸測試：重複取消、暫停後取消、過期回答事件、辨識未完成時關閉／取消父 scope、第一句在串流結束前朗讀、長回答及音樂拒絕補救。JVM 以可控制的 engine、音訊來源及同步阻塞辨識替身驗證生命週期，診斷使用測試 clock shim，不能替代 native 或 Android 實機結果。另測試 12 段背壓、取消清空、網路失敗不補讀半句、逾期一次性／每日／每週提醒，以及鬧鐘 TTS 靜音／恢復。
+
+## rc22 五項修正的 X60 回歸（待真機驗收）
+
+1. 在 X-ASR 辨識中反覆停止服務及重新啟動，確認沒有 native crash、殘留錄音或舊回答；記錄釋放完成時間。
+2. 快速連按通知「取消／閉嘴」，以及暫停後送出舊取消操作；不應崩潰或自行恢復錄音。
+3. 用超過 12 段的 Provider 回答確認首句提早朗讀、順序完整、朗讀中取消會中止 HTTP 與後續語音；點歌的拒絕回覆仍不朗讀。
+4. 對一次性與重複提醒，讓系統延遲送達後先回到 App，再確認補響一次且重複提醒保留下一次；重開機／時區變動亦需測試。
+5. 鬧鐘朗讀中喚醒助理，以及喚醒後等待超過 30 秒，確認鈴聲與提醒語音均暫停；互動結束恢復，關閉鬧鐘後不再播報。
 
 ## X60 測試前記錄
 

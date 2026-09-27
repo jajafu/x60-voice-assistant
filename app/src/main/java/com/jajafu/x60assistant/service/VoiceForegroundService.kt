@@ -213,7 +213,7 @@ class VoiceForegroundService : Service() {
                     )
                 },
                 acknowledgementPlayer = WakeAcknowledgementPlayer(applicationContext),
-                converter = TraditionalChineseConverter(),
+                convertText = TraditionalChineseConverter()::convert,
                 settings = settings,
                 llm = llmProvider,
                 musicExecutor = if (

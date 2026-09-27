@@ -15,7 +15,7 @@ import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 class SherpaWakeWordEngine(
     assetManager: AssetManager,
     private val wakePhrase: String = KwsModelPack.KEYWORD,
-) : AutoCloseable {
+) : WakeWordEngine {
     private var spotter: KeywordSpotter? = null
     private var stream: OnlineStream? = null
     private var lastWakeElapsedMs = Long.MIN_VALUE
@@ -57,7 +57,7 @@ class SherpaWakeWordEngine(
         }
     }
 
-    fun accept(frame: AudioFrame): Boolean {
+    override fun accept(frame: AudioFrame): Boolean {
         val activeSpotter = checkNotNull(spotter) { "KWS is closed" }
         val activeStream = checkNotNull(stream) { "KWS is closed" }
         val samples = FloatArray(frame.samples.size) { frame.samples[it] / 32768.0f }
@@ -76,7 +76,7 @@ class SherpaWakeWordEngine(
         return false
     }
 
-    fun reset() {
+    override fun reset() {
         val activeSpotter = spotter ?: return
         val activeStream = stream ?: return
         activeSpotter.reset(activeStream)

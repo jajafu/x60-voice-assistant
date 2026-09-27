@@ -11,7 +11,7 @@ import java.util.concurrent.Executors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
-class WakeAcknowledgementPlayer(context: Context) {
+class WakeAcknowledgementPlayer(context: Context) : WakeAcknowledgement {
     private val audioManager = context.applicationContext.getSystemService(AudioManager::class.java)
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
         if (change <= AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) synchronized(toneLock) { toneGenerator.stopTone() }
@@ -35,7 +35,7 @@ class WakeAcknowledgementPlayer(context: Context) {
         }
     }
 
-    suspend fun playAndAwait(speechOutput: SpeechOutputEngine?, response: String) {
+    override suspend fun playAndAwait(speechOutput: SpeechOutputEngine?, response: String) {
         if (speechOutput != null && response.isNotBlank()) {
             try {
                 speechOutput.speak(response)
@@ -52,7 +52,7 @@ class WakeAcknowledgementPlayer(context: Context) {
         abandonFocus()
     }
 
-    fun release() {
+    override fun release() {
         released = true
         executor.shutdownNow()
         synchronized(toneLock) { toneGenerator.release() }

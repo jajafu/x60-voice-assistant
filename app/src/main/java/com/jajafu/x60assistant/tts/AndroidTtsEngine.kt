@@ -30,7 +30,8 @@ class AndroidTtsEngine(
         .setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
         .build()
-    private val activeUtterance = AtomicReference<CancellableContinuation<Unit>?>(null)
+    private data class ActiveUtterance(val id: String, val continuation: CancellableContinuation<Unit>)
+    private val activeUtterance = AtomicReference<ActiveUtterance?>(null)
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
         if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) stop()
     }
@@ -118,13 +119,16 @@ class AndroidTtsEngine(
         val utteranceId = "answer-${UUID.randomUUID()}"
         try {
             suspendCancellableCoroutine { continuation ->
-                activeUtterance.set(continuation)
-                continuation.invokeOnCancellation { engine.stop() }
+                val active = ActiveUtterance(utteranceId, continuation)
+                activeUtterance.set(active)
+                continuation.invokeOnCancellation {
+                    if (activeUtterance.compareAndSet(active, null)) engine.stop()
+                }
                 val params = Bundle().apply {
                     putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC)
                 }
                 val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
-                if (result != TextToSpeech.SUCCESS && activeUtterance.compareAndSet(continuation, null)) {
+                if (result != TextToSpeech.SUCCESS && activeUtterance.compareAndSet(active, null)) {
                     continuation.resumeWithException(TtsException("TTS 播放要求失敗"))
                 }
             }
@@ -136,18 +140,21 @@ class AndroidTtsEngine(
     private fun configureListener(engine: TextToSpeech) {
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) = Unit
-            override fun onDone(utteranceId: String?) = finishActive(null)
+            override fun onDone(utteranceId: String?) = finishActive(null, utteranceId)
             @Deprecated("Deprecated by Android")
-            override fun onError(utteranceId: String?) = finishActive(TtsException("TTS 播放失敗"))
+            override fun onError(utteranceId: String?) = finishActive(TtsException("TTS 播放失敗"), utteranceId)
             override fun onError(utteranceId: String?, errorCode: Int) =
-                finishActive(TtsException("TTS 播放失敗：$errorCode"))
+                finishActive(TtsException("TTS 播放失敗：$errorCode"), utteranceId)
             override fun onStop(utteranceId: String?, interrupted: Boolean) =
-                finishActive(if (interrupted) TtsException("TTS 已中止") else null)
+                finishActive(if (interrupted) TtsException("TTS 已中止") else null, utteranceId)
         })
     }
 
-    private fun finishActive(error: Throwable?) {
-        val continuation = activeUtterance.getAndSet(null) ?: return
+    private fun finishActive(error: Throwable?, utteranceId: String? = null) {
+        val active = activeUtterance.get() ?: return
+        if (utteranceId != null && utteranceId != active.id) return
+        if (!activeUtterance.compareAndSet(active, null)) return
+        val continuation = active.continuation
         if (!continuation.isActive) return
         if (error == null) continuation.resume(Unit) else continuation.resumeWithException(error)
     }

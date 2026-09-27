@@ -24,12 +24,12 @@ import com.jajafu.x60assistant.R
 import com.jajafu.x60assistant.data.SettingsRepository
 import com.jajafu.x60assistant.tts.AndroidTtsEngine
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class ReminderAlarmService : Service() {
@@ -40,7 +40,7 @@ class ReminderAlarmService : Service() {
     private var autoStopJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var tts: AndroidTtsEngine? = null
-    private var mutedForVoice = false
+    private val announcer = AlarmAnnouncer(::pauseAlarmSound, ::resumeAlarmSound) { tts?.stop() }
 
     override fun onCreate() {
         super.onCreate()
@@ -53,19 +53,16 @@ class ReminderAlarmService : Service() {
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_PAUSE_FOR_VOICE) {
-            mutedForVoice = true
-            pauseAlarmSound()
+            announcer.pauseForVoice()
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_RESUME_AFTER_VOICE) {
-            mutedForVoice = false
-            resumeAlarmSound()
+            announcer.resumeAfterVoice()
             return START_NOT_STICKY
         }
         if (intent?.action != ACTION_START) return START_NOT_STICKY
         val message = intent.getStringExtra(EXTRA_MESSAGE)?.trim().orEmpty().ifBlank { "提醒時間到了" }
         ReminderAlarmState.isRinging = true
-        mutedForVoice = false
         startAsForeground(message)
         restartAlarm(message)
         return START_NOT_STICKY
@@ -83,6 +80,7 @@ class ReminderAlarmService : Service() {
     @SuppressLint("WakelockTimeout")
     private fun restartAlarm(message: String) {
         releaseResources()
+        announcer.reset()
         wakeLock = getSystemService(PowerManager::class.java).newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "$packageName:ReminderAlarm",
@@ -96,17 +94,25 @@ class ReminderAlarmService : Service() {
         }
         announcementJob = scope.launch {
             delay(FIRST_ANNOUNCEMENT_DELAY_MS)
-            val settings = runCatching { SettingsRepository(applicationContext).current() }
-                .getOrDefault(com.jajafu.x60assistant.data.AssistantSettings())
+            val settings = try {
+                SettingsRepository(applicationContext).current()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                com.jajafu.x60assistant.data.AssistantSettings()
+            }
             val engine = AndroidTtsEngine(applicationContext, settings)
             tts = engine
-            val available = runCatching { engine.initialize().available }.getOrDefault(false)
+            val available = try {
+                engine.initialize().available
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
             if (!available) return@launch
-            while (isActive) {
-                pauseAlarmSound()
-                runCatching { engine.speak("提醒時間到了。$message。") }
-                if (!mutedForVoice) resumeAlarmSound()
-                delay(ANNOUNCEMENT_INTERVAL_MS)
+            announcer.run(ANNOUNCEMENT_INTERVAL_MS) {
+                engine.speak("提醒時間到了。$message。")
             }
         }
         autoStopJob = scope.launch {
@@ -190,7 +196,6 @@ class ReminderAlarmService : Service() {
 
     private fun stopAlarm() {
         ReminderAlarmState.isRinging = false
-        mutedForVoice = false
         releaseResources()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
