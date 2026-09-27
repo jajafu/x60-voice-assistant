@@ -136,6 +136,69 @@ class VoiceOrchestratorTest {
         verifyDecodeShutdown(cancelParent = true)
     }
 
+    @Test fun `audio reopen failure schedules another recovery attempt`() = runTest {
+        val f = Fixture(backgroundScope)
+        try {
+            f.voice.start()
+            runCurrent()
+            assertEquals(VoiceState.IDLE_KWS, f.voice.state.value)
+            f.audio.failStarts = 1
+
+            f.voice.onAudioFailure(com.jajafu.x60assistant.diagnostics.VoiceErrorCode.AUDIO_READ_FAILED, "test")
+            runCurrent()
+
+            assertEquals(VoiceState.RECOVERING, f.voice.state.value)
+            advanceTimeBy(1_000)
+            runCurrent()
+            assertEquals(VoiceState.IDLE_KWS, f.voice.state.value)
+            assertTrue(f.audio.running)
+        } finally { dispose(f) }
+    }
+
+    @Test fun `pause during recovery is safe and resume restarts listening`() = runTest {
+        val f = Fixture(backgroundScope)
+        try {
+            f.voice.start()
+            runCurrent()
+            f.voice.onAudioFailure(com.jajafu.x60assistant.diagnostics.VoiceErrorCode.AUDIO_READ_FAILED, "first")
+            runCurrent()
+            assertEquals(VoiceState.IDLE_KWS, f.voice.state.value)
+
+            f.voice.onAudioFailure(com.jajafu.x60assistant.diagnostics.VoiceErrorCode.AUDIO_READ_FAILED, "second")
+            runCurrent()
+            assertEquals(VoiceState.RECOVERING, f.voice.state.value)
+
+            f.voice.pause()
+            runCurrent()
+            assertEquals(VoiceState.PAUSED, f.voice.state.value)
+            assertFalse(f.audio.running)
+
+            f.voice.resume()
+            runCurrent()
+            assertEquals(VoiceState.IDLE_KWS, f.voice.state.value)
+            assertTrue(f.audio.running)
+        } finally { dispose(f) }
+    }
+
+    @Test fun `audio start failure while resuming from pause enters recovery`() = runTest {
+        val f = Fixture(backgroundScope)
+        try {
+            f.voice.start()
+            runCurrent()
+            f.voice.pause()
+            runCurrent()
+            assertEquals(VoiceState.PAUSED, f.voice.state.value)
+            f.audio.failStarts = 1
+
+            f.voice.resume()
+            runCurrent()
+
+            assertEquals(VoiceState.IDLE_KWS, f.voice.state.value)
+            assertTrue(f.audio.running)
+            assertEquals(2, f.audio.starts)
+        } finally { dispose(f) }
+    }
+
     private suspend fun verifyDecodeShutdown(cancelParent: Boolean) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val entered = CountDownLatch(1)
@@ -235,7 +298,17 @@ class VoiceOrchestratorTest {
         @Volatile var now = 0L
         @Volatile var running = false
         var starts = 0
-        override fun start(): String { check(!running); running = true; starts++; return "fake" }
+        var failStarts = 0
+        override fun start(): String {
+            if (failStarts > 0) {
+                failStarts--
+                error("injected audio start failure")
+            }
+            check(!running)
+            running = true
+            starts++
+            return "fake"
+        }
         override fun stop() { running = false; while (frames.tryReceive().isSuccess) Unit }
         override fun isRunning() = running
         override suspend fun nextFrame(timeoutMs: Long): AudioFrame? = withTimeoutOrNull(timeoutMs) {

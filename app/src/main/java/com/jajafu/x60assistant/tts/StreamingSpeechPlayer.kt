@@ -1,6 +1,7 @@
 package com.jajafu.x60assistant.tts
 
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -16,6 +17,7 @@ class StreamingSpeechPlayer(private val capacity: Int = 12) {
         speak: (suspend (String) -> Unit)?,
         onText: (String) -> Unit = {},
         onQueue: (Int, Int) -> Unit = { _, _ -> },
+        onSpeechFailure: (Throwable) -> Unit = {},
     ): String = coroutineScope {
         // Permits bound pending sentences and let the producer suspend without dropping text.
         val slots = Semaphore(capacity)
@@ -27,7 +29,14 @@ class StreamingSpeechPlayer(private val capacity: Int = 12) {
                 val remaining = depth.decrementAndGet()
                 slots.release()
                 onQueue(remaining, highWater.get())
-                speak(sentence)
+                try {
+                    speak(sentence)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    runCatching { onSpeechFailure(error) }
+                    throw error
+                }
             }
         }
         suspend fun enqueue(sentence: String) {

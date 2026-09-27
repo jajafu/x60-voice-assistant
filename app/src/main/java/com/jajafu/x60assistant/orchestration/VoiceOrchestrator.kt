@@ -171,7 +171,7 @@ class VoiceOrchestrator(
     private suspend fun enterIdle(reason: TransitionReason, audioAlreadyRunning: Boolean) {
         if (!audioAlreadyRunning) {
             audioSource = runCatching { audio.start() }.getOrElse {
-                handleAudioFailure(VoiceErrorCode.AUDIO_INIT_FAILED, it.javaClass.simpleName)
+                handleAudioStartFailure(VoiceErrorCode.AUDIO_INIT_FAILED, it.javaClass.simpleName)
                 return
             }
         }
@@ -365,6 +365,7 @@ class VoiceOrchestrator(
                     speak = speak,
                     onText = { if (!holdPreview) M1DiagnosticsRepository.setAnswerPreview(it) },
                     onQueue = M1DiagnosticsRepository::setTtsQueue,
+                    onSpeechFailure = { provider.cancel() },
                 )
                 emit(Command.AnswerReady(userText, answer, firstTokenMs, providerTotalMs, spoken))
             } catch (cancelled: CancellationException) {
@@ -693,16 +694,27 @@ class VoiceOrchestrator(
 
     private suspend fun handleAudioFailure(code: VoiceErrorCode, detail: String) {
         if (machine.state in setOf(VoiceState.STOPPED, VoiceState.ERROR, VoiceState.PAUSED, VoiceState.RECOVERING)) return
+        beginAudioRecovery(code, detail)
+    }
+
+    /** A synchronous start failure belongs to the current transition, even while paused or recovering. */
+    private suspend fun handleAudioStartFailure(code: VoiceErrorCode, detail: String) {
+        if (machine.state in setOf(VoiceState.STOPPED, VoiceState.ERROR)) return
+        beginAudioRecovery(code, detail)
+    }
+
+    private suspend fun beginAudioRecovery(code: VoiceErrorCode, detail: String) {
         M1DiagnosticsRepository.onAudioError(code, detail)
         resumeHeldAlarm()
         resumeHeldMusic()
         val decision = recoveryPolicy.recordFailure(clock.elapsedRealtimeMs())
-        if (!decision.recover || !machine.canTransition(VoiceState.RECOVERING)) {
+        val alreadyRecovering = machine.state == VoiceState.RECOVERING
+        if (!decision.recover || (!alreadyRecovering && !machine.canTransition(VoiceState.RECOVERING))) {
             transition(VoiceState.ERROR, TransitionReason.FATAL_ERROR)
             releaseSessionResources()
             return
         }
-        transition(VoiceState.RECOVERING, TransitionReason.RESOURCE_FAILURE)
+        if (!alreadyRecovering) transition(VoiceState.RECOVERING, TransitionReason.RESOURCE_FAILURE)
         releaseSessionResources()
         stateJob = launchState { emit ->
             delay(decision.delayMs)
