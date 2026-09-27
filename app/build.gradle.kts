@@ -16,8 +16,8 @@ android {
         applicationId = "com.jajafu.x60assistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "1.0.0-rc22"
+        versionCode = 27
+        versionName = "1.0.0-rc23"
 
         ndk {
             abiFilters += "arm64-v8a"

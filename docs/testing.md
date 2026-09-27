@@ -14,6 +14,16 @@ Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD 
 
 rc22 另包含 Orchestrator 跨元件回歸測試：重複取消、暫停後取消、過期回答事件、辨識未完成時關閉／取消父 scope、第一句在串流結束前朗讀、長回答及音樂拒絕補救。JVM 以可控制的 engine、音訊來源及同步阻塞辨識替身驗證生命週期，診斷使用測試 clock shim，不能替代 native 或 Android 實機結果。另測試 12 段背壓、取消清空、網路失敗不補讀半句、逾期一次性／每日／每週提醒，以及鬧鐘 TTS 靜音／恢復。
 
+rc23 新增回答期間 KWS 插話測試：再次收到喚醒詞會取消舊串流及 TTS、播放「我在」並回到 `LISTENING`，且不重複暫停或遺失原本應恢復的音樂狀態。回答自身包含或近似喚醒詞造成誤觸是已接受風險，實際喇叭音量下的喚醒率仍須以 X60 真人語音驗收。
+
+## rc23 回答中喚醒的 X60 驗收（待真機驗收）
+
+1. 讓 Provider 產生至少 30 秒的回答；朗讀中正常音量說「小助手」，確認舊回答立即停止、播放一次「我在」，接著可說出並辨識新問題。
+2. 在第一個 token 尚未送達的 `THINKING` 階段說「小助手」，確認舊請求取消且同樣進入新一輪聆聽。
+3. MusicCabin 播放中開始對話，再於回答中說「小助手」；第二次喚醒不得重複送出暫停，整段互動結束後音樂仍依第一次喚醒記錄恢復。
+4. 連續插話 10 次，確認只有一個 AudioRecord，沒有舊回答續播、重複「我在」、殘留 HTTP 或 TTS queue。
+5. 讓回答文字包含「小助手」，記錄是否自行觸發；此風險已接受，不以 AEC 或抑制窗阻止。
+
 ## rc22 五項修正的 X60 回歸（待真機驗收）
 
 1. 在 X-ASR 辨識中反覆停止服務及重新啟動，確認沒有 native crash、殘留錄音或舊回答；記錄釋放完成時間。
@@ -61,7 +71,7 @@ $serial = "9654983303001DD"
 1. 啟動前確認沒有錄音；在 Activity 按啟動後確認唯一 mono/16 kHz/PCM16 recorder。
 2. 說「小助手」，提示音後說一整句，確認 `LISTENING → TRANSCRIBING → ROUTING`、VAD endpoint、ASR partial/final、RTF 與 final latency。
 3. 在 App 內填私人 Provider 設定並主動測試連線；401/403、404、429、5xx、timeout、SSE 中斷以 MockWebServer 自動化，真實服務只記實際結果。
-4. 驗證回答按完整句朗讀、Markdown 不朗讀、TTS 期間沒有 AudioRecord、取消／閉嘴會取消 HTTP 並清 queue。
+4. 驗證回答按完整句朗讀、Markdown 不朗讀、TTS 期間維持唯一 AudioRecord 並只執行 KWS；再次說「小助手」會取消 HTTP／TTS、播放「我在」、清 queue 後進入 `LISTENING`，通知取消／閉嘴仍會取消 HTTP 並清 queue。
 5. TTS 後確認 `FOLLOW_UP` 10 秒可直接追問，逾時回 `IDLE_KWS`，前後 session 不重疊。
 6. 從 App 與鎖屏通知測暫停、恢復、取消、閉嘴、停止；每次停止確認 recorder、WakeLock、HTTP、TTS 與通知釋放。
 7. Reboot 後只應出現提醒，Service/recorder 不存在；開啟 Activity 後仍不能自動錄音。
