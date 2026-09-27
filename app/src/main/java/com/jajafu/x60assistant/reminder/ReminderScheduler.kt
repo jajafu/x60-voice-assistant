@@ -43,22 +43,10 @@ class ReminderScheduler(private val context: Context) {
     fun rescheduleAll(nowEpochMillis: Long = System.currentTimeMillis()) {
         val store = ReminderStore(context)
         store.all().forEach { reminder ->
-            val candidate = if (reminder.recurrence == null) {
-                reminder.takeIf { it.triggerAtEpochMillis > nowEpochMillis }
-            } else {
-                reminder.copy(
-                    triggerAtEpochMillis = ReminderRecurrenceCalculator.nextTriggerAtEpochMillis(
-                        recurrence = reminder.recurrence,
-                        afterEpochMillis = nowEpochMillis,
-                    ),
-                )
-            }
-            if (candidate == null) {
-                store.remove(reminder.id)
-            } else {
-                if (candidate != reminder) store.add(candidate)
-                runCatching { schedule(candidate, notifyWhenApproximate = false) }
-            }
+            val candidate = ReminderOccurrencePlanner.beforeRescheduling(reminder, nowEpochMillis)
+            if (candidate != reminder) store.add(candidate)
+            // AlarmManager delivers past-due alarms as soon as allowed; the receiver consumes them.
+            runCatching { schedule(candidate, notifyWhenApproximate = false) }
         }
     }
 
