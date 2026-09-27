@@ -467,9 +467,19 @@ private fun ModelsPage(
     onTestConnection: (AssistantSettings, String) -> Unit,
     onDeleteApiKey: () -> Unit,
 ) {
-    var draft by remember(saved) { mutableStateOf(saved) }
+    // 不以 saved 為 remember key：設定流每次發布都是新物件，否則外部更新會清掉整份草稿。
+    var draft by remember { mutableStateOf(saved) }
+    var lastLoaded by remember { mutableStateOf(saved) }
+    // API Key 只寫不讀，刻意不隨設定流重載，避免蓋掉使用者正在輸入的新 Key。
     var apiKey by remember { mutableStateOf("") }
     var revealKey by remember { mutableStateOf(false) }
+    LaunchedEffect(saved) {
+        // 只有在使用者尚未改動時才重新載入，避免編輯到一半被外部更新還原。
+        if (saved != lastLoaded && draft == lastLoaded) {
+            draft = saved
+            lastLoaded = saved
+        }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
