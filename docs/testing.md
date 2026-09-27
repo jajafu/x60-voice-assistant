@@ -36,6 +36,12 @@ rc23 新增回答期間 KWS 插話測試：再次收到喚醒詞會取消舊串�
 
 每輪都記錄 App version、Git commit、APK SHA256、model ID／archive SHA256、Android、OriginOS Build、充電狀態、電量、電池溫度、thermal status、Wi-Fi、開始／結束時間、Audio Error、Dropped Frame 與 Service Uptime。
 
+App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再隨裝置旋轉；`docs/test-reports/m0-2026-09-22-vivo-x60.md` 的橫向結果屬變更前的歷史紀錄，不重測、不改寫。新一輪手動驗收不需再執行橫向項目，僅確認旋轉裝置時畫面維持直式。
+
+## 設定頁數字欄位（rc24）
+
+設定 → 進階設定與語音與追問，10 個數字欄位（Temperature、Max Output Tokens、Connect Timeout、Read Timeout、Context Turns、等待說話、最短語音、結尾靜音、最長單句、Follow Up）逐欄位確認：可清空後逐字重新輸入、可輸入範圍內任意值含上下限、Context Turns 可設 0 且重開 App 後仍為 0、輸入空白或超界時欄位標紅且「儲存設定」不可按、輸入過程不被還原成預設值。
+
 ## 手動步驟
 
 1. 強制停止 App，確認 Service、AudioRecord 與 WakeLock 不存在。
