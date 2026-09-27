@@ -6,7 +6,7 @@
 
 ## 前置確認
 
-1. 從專案建置設定或 APK 查證 package ID、版本與 APK 絕對路徑；確認是要測的 build variant。不得只靠檔名猜 package 或環境。
+1. 確認來源為 Draft PR 目前 HEAD 並記錄完整 commit；從專案建置設定或 APK 查證 package ID、版本與 APK 絕對路徑，確認是要測的 build variant。不得只靠檔名猜 package 或環境。
 2. 確認 Windows 上已安裝 MuMuPlayer 且可找到 `mumu-cli.exe`。使用 `mumu-cli info --vmindex all` 盤點執行個體，選擇允許覆蓋安裝的**專用測試機**並記下 vmindex。對不明用途或有重要資料的執行個體先停止。
 3. 先確認 APK 的最低 Android 版本、CPU ABI 與 MuMu 執行個體相容。沿用專案現有建置與測試工具；不要為了此步驟下載 SDK、重建執行個體、解除安裝 App 或清除資料。
 
@@ -34,4 +34,4 @@ $package = '<已查證的 package ID>'
 
 安裝與啟動命令須成功；稍待啟動畫面穩定後，確認目標 package 仍在前景、畫面可見，且沒有該次啟動的致命錯誤。必要時透過 MuMu CLI ADB 截圖並人工檢視；截圖、logcat 若含帳號或個資，不要提交到 Git。若首次啟動停在 Android 權限或登入畫面，應如實回報可見狀態；若無法判斷是否正常開啟，標為未驗證，不推論通過。
 
-PR 記錄 APK 路徑或可重建方式、package、產品版本與建置號、MuMu vmindex／Android 版本、安裝結果、啟動結果及失敗原因。此 smoke test 不代表功能驗收完成。
+PR 記錄受測 commit、APK 路徑或可重建方式、SHA256、package、產品版本與建置號、MuMu vmindex／Android 版本、安裝結果、啟動結果及失敗原因。若影響 APK 的 PR 內容或建置輸入改變，舊結果失效；若受測 commit 與輸入未變，不因 PR 狀態切換而重建。此 smoke test 不代表功能驗收完成。

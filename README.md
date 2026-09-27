@@ -89,4 +89,4 @@ Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-as
 
 從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 
-產品候選版號與流程範本版本分開管理；Issue 的產品版本決定及可選工作日誌見 [開發流程](docs/DEVELOPMENT.md)。Android 行為變更時，MuMu 安裝與啟動檢查依 [smoke test](docs/ANDROID_MUMU_SMOKE.md) 記錄，不能替代 X60 真機驗收。單純升級流程範本不改 App 版號或建立 APK。
+產品候選版號與流程範本版本分開管理；Issue 的產品版本決定及可選工作日誌見 [開發流程](docs/DEVELOPMENT.md)。開始修改前先檢查工作樹與全部 worktree、`git fetch origin`，新 Issue 從最新 `origin/main` 開始；遠端 PR 合併後再安全同步本機 `main`。Android 行為變更透過 Draft PR 的目前 HEAD 對應 APK commit 與 SHA-256 做人工驗收；MuMu 安裝與啟動檢查依 [smoke test](docs/ANDROID_MUMU_SMOKE.md) 記錄，不能替代 X60 真機驗收。單純升級流程範本不改 App 版號或建立 APK。

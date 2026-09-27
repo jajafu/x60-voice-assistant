@@ -9,6 +9,7 @@
 - 做法：<預計修改哪些部分>
 - 驗收：<完成後如何判斷正確>
 - 測試：<要執行的命令或人工步驟>
+- 驗收交付：<從 Draft PR 目前 HEAD 取得並識別 APK；記錄 commit 與 SHA-256。Preview／部署不適用時寫「不適用：Android App 以 APK 驗收」>
 - 產品版本：<需更新／不需更新／待決；依 `docs/DEVELOPMENT.md` 說明原因、預計的 `versionName`／`versionCode`，以及 Android APK／MuMu smoke 是否適用>
 - 風險／回退：<主要風險與恢復方式；沒有寫「無」>
 - 待決問題：<需要我決定的事；沒有寫「無」>

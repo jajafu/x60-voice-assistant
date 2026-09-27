@@ -2,7 +2,7 @@
 
 ## 資料
 
-- 範本來源：`F:\DevelopWorkFlow\ai-development-template-v1.2`
+- 範本來源：`F:\DevelopWorkFlow\ai-development-template-v1.4`
 - 目標目錄：[[目標專案完整路徑]]
 
 ## 既有內容與同名衝突
@@ -17,10 +17,10 @@
 
 ## 執行
 
-1. 我只需替換「目標目錄」這一處占位文字，填入既有專案的完整路徑；沒有其他必填欄位。若該處仍是占位文字或路徑不存在，先請我提供正確路徑。其餘專案資訊由你查證或標待決，不要要求我預填：從 README 與程式碼查證用途，從 `git remote` 查證 GitHub Repository（沒有時寫「尚未建立」），並保留既有分支、部署、資料格式與權限設定。閱讀範本來源的 `TEMPLATE_VERSION.md`、`TEMPLATE_GUIDE.md`、`AGENTS.md`、`docs/OPENCODE_OPENCHAMBER.md`；這些是你要讀的檔案，不是我要填的欄位。盤點目標的 README、AGENTS、現有全部 `SKILL.md`（包含 `.agents/`、`.opencode/` 或其他現有位置）、`.opencode/` 設定、主要程式、測試、CI、Issue／PR 範本、Git 未提交修改及 GitHub 設定。若目標已有本範本的 `TEMPLATE_VERSION.md` 或明確舊版套用紀錄，停止首次導入流程，改依 `prompts/UPDATE_TEMPLATE_PROMPT.md` 升級；其他同名檔案本身不表示已套用。
-2. 簡要列出可新增、需合併、可安全改名與待決衝突的內容。按上面的規則逐檔整合範本的 README、AGENTS、TEMPLATE_GUIDE、docs、prompts、GitHub 表單、三項 Skill 能力、三個 OpenCode 命令與兩個子 Agent；不要整檔或整目錄覆蓋，不要啟用自動 AI Workflow。既有 `AGENTS.md` 保留已生效的專案規則，只補上不衝突的單人核准、Issue／PR 與工具協作規則。查證目標既有的產品版本、work-log 與 Android 測試規則，保留更具體的專案規定；首次套用本身不改產品版本或強制建置 APK。
+1. 我只需替換「目標目錄」這一處占位文字，填入既有專案的完整路徑；沒有其他必填欄位。若該處仍是占位文字或路徑不存在，先請我提供正確路徑。其餘專案資訊由你查證或標待決，不要要求我預填：從 README 與程式碼查證用途，從 `git remote` 查證 GitHub Repository（沒有時寫「尚未建立」），並保留既有分支、部署、資料格式與權限設定。閱讀範本來源的 `TEMPLATE_VERSION.md`、`TEMPLATE_GUIDE.md`、`AGENTS.md`、`docs/OPENCODE_OPENCHAMBER.md`；這些是你要讀的檔案，不是我要填的欄位。盤點目標的 README、AGENTS、現有全部 `SKILL.md`（包含 `.agents/`、`.opencode/` 或其他現有位置）、`.opencode/` 設定、主要程式、測試、CI、Issue／PR 範本、Git 未提交修改及 GitHub 設定；另查主要分支、所有 worktree、分支保護、PR 合併設定及修改前同步規則。若目標已有本範本的 `TEMPLATE_VERSION.md` 或明確舊版套用紀錄，停止首次導入流程，改依 `prompts/UPDATE_TEMPLATE_PROMPT.md` 升級；其他同名檔案本身不表示已套用。
+2. 簡要列出可新增、需合併、可安全改名與待決衝突的內容。按上面的規則逐檔整合範本的 README、AGENTS、TEMPLATE_GUIDE、docs、prompts、GitHub 表單、三項 Skill 能力、三個 OpenCode 命令與兩個子 Agent；不要整檔或整目錄覆蓋，不要啟用自動 AI Workflow。既有 `AGENTS.md` 保留已生效的專案規則，只補上不衝突的單人核准、Issue／PR 與工具協作規則。查證目標既有的產品版本、work-log 與適用平台測試規則，保留更具體的專案規定。將人工驗收綁定 Draft PR 目前 HEAD 及對應產物識別資料；首次套用本身不改產品版本、不建立產品產物、預覽或部署。
 3. **整合後先做相容性檢查**：確認根目錄 `AGENTS.md`，討論 Issue、實作 Issue、審查 PR 三項能力各有可用的 Skill，且其路徑、`name`、`description` 與所有引用一致；OpenCode 三個命令、兩個子 Agent 的 frontmatter 與命令名稱不衝突，並保留既有 Provider／模型設定。若能在目標專案實際啟動 OpenChamber／OpenCode，檢查執行中的 OpenCode 是否為 2.x、斜線選單、Agent 清單與 Skill 載入；1.x 不可宣稱支援此處的 V2 權限。若能啟動 Codex，請它讀 `AGENTS.md` 與一個 Skill，確認能正確說出「只有我核准與合併」。工具不可用時標「未驗證」，只回報靜態檢查，不得宣稱執行載入成功。缺檔或格式錯誤先修正；待決衝突不可用覆蓋方式修正。
-4. **由你直接修改目標專案檔案，完成全部參數替換，不要把欄位留給我手動填。** 以 `TEMPLATE_GUIDE.md` 參數表的全部項目（目前 24 個）為清單，從 README、程式碼、套件設定、測試／CI、Git 分支與遠端等證據查值；查不到的填「待決定：原因」或「規劃中：原因」，不適用填「不適用：原因」，清單欄位保持有效的 Markdown 清單。特別分析實際技術與架構，把簡短摘要寫進 `AGENTS.md`，模組、資料流與相容性細節寫進 `docs/ARCHITECTURE.md`，兩處內容須與查證結果一致。相同參數在各檔案使用相同內容；不要把推測寫成既有現況。現有 Issue／PR 不必追溯重寫，從下一個 Issue 開始採用。
+4. **由你直接修改目標專案檔案，完成全部參數替換，不要把欄位留給我手動填。** 以 `TEMPLATE_GUIDE.md` 參數表的全部項目（目前 24 個）為清單，從 README、程式碼、套件設定、測試／CI、Git 分支與遠端等證據查值；查不到的填「待決定：原因」或「規劃中：原因」，不適用填「不適用：原因」，清單欄位保持有效的 Markdown 清單。特別分析實際技術與架構，把簡短摘要寫進 `AGENTS.md`，模組、資料流與相容性細節寫進 `docs/ARCHITECTURE.md`，兩處內容須與查證結果一致。相同參數在各檔案使用相同內容；不要把推測寫成既有現況。從下一個 Issue 開始採用 Draft PR、HEAD 對應驗收及產品版本／平台檢查；現有 Issue／PR 不必追溯重寫。
 5. 若能存取 GitHub，只補缺少的 `type:feature`、`type:bug` 標籤；檢查主要分支保護，避免設定需要另一人 Approve 的門檻。任何權限或合併政策衝突先列出，不擅自改動。
 6. 依 `TEMPLATE_GUIDE.md` 的命令掃描**目標專案中本次整合的範本檔案**，確認參數表列出的 `{{大寫名稱}}` **零殘留**；不能只列出待填清單。目標專案其他檔案若有自己的模板語法，不要擅自替換。再檢查 Markdown 連結、Issue YAML、OpenCode frontmatter 與本次可執行的驗證。全部可完成的整合與驗證完成且沒有待決衝突後，才把來源 `TEMPLATE_VERSION.md` 複製到目標專案；若仍有衝突，不寫入完整套用版本。回報修改前後差異、填值的證據、標為「待決定／規劃中」的值、保留的既有規則與未決衝突，並將 **參數零殘留、範本版本、OpenCode 靜態／實際載入、Codex 靜態／實際載入、GitHub 設定** 分別列為通過、失敗或未驗證，附上證據與下一步。
 
