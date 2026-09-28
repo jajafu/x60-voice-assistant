@@ -18,7 +18,7 @@ data class AssistantSettings(
     val minSpeechMs: Long = 250,
     val trailingSilenceMs: Long = 800,
     val maxUtteranceMs: Long = 20_000,
-    val followUpSeconds: Int = 10,
+    val followUpSeconds: Int = DEFAULT_FOLLOW_UP_SECONDS,
     val audioResumeDelayMs: Long = 300,
     val asrModelId: String = DEFAULT_ASR_MODEL_ID,
     val musicAppName: String = DEFAULT_MUSIC_APP_NAME,
@@ -64,6 +64,12 @@ data class AssistantSettings(
         const val DEFAULT_MUSIC_APP_NAME = "MusicCabin"
         const val DEFAULT_MUSIC_PACKAGE_NAME = "com.jajafu.musiccabin"
         const val DEFAULT_MUSIC_SERVICE_NAME = "com.metrolist.music.playback.MusicService"
+
+        /**
+         * 喚醒詞開啟新一輪時會清除對話歷史，只有這個視窗內的追問才帶著上一輪。
+         * 預設 3 秒：只足夠接一句「那還有呢」，不會把無關話題拖進下一輪提問。
+         */
+        const val DEFAULT_FOLLOW_UP_SECONDS = 3
         const val DEFAULT_SYSTEM_INSTRUCTION = """使用繁體中文口語回答。先回答重點，50字以內，有必要我會再補充請你說明。
 回答將由語音朗讀，避免 Markdown格式碼、emoji、表格、過多符號、網址與太長的清單。記得移除所有引用標記或引用來源。
 若答案很長，先提供簡短版本，再詢問是否要繼續。

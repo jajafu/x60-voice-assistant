@@ -50,3 +50,10 @@
 
 - 回答思考與 TTS 朗讀期間重新啟動既有單一 AudioRecord，只執行現有 KWS；再次聽到喚醒詞時取消舊 LLM 串流與 TTS，保留音樂／鬧鐘的暫停狀態，播放既有「我在」後清除音訊 queue，再進入完整 VAD／ASR。
 - 沿用音樂外放時的喚醒取捨，不新增 AcousticEchoCanceler 或短暫抑制窗。回答自身說出或近似喚醒詞可能觸發新一輪聆聽，使用者已接受此風險；X60 實際音量下的召回與誤觸仍須真機驗收。
+
+## rc25（2026-09-28，Issue #11）
+
+- 喚醒詞是新話題的邊界：由 `IDLE_KWS` 進入的 `WakeDetected` 會先清空 `ConversationHistory`，只有同一輪 Follow Up 視窗內的追問才延續上下文。修正實測「問完一個話題後，後續問題仍持續回答舊話題」——原因是 `ConversationHistory.clear()` 從未被呼叫，歷史會累積整個服務生命週期。已由使用者在真機把 `Context Turns` 設為 0 確認症狀消失，據此定位為上下文殘留而非 Provider 品質。
+- `contextTurns` 語意不變（同一個連續話題內最多保留幾輪），預設仍為 6，只是不再跨喚醒詞保留；使用者已決定不變更預設值。
+- `followUpSeconds` 預設由 10 秒改為 3 秒，讓「只保留 Follow Up 視窗內那一輪」的邊界與實際口語對話節奏相符。既有安裝若已存過此設定則維持原值，不做資料遷移。
+- 不在 `DEFAULT_SYSTEM_INSTRUCTION` 加「不要延續舊話題」一句：使用者決定不修改預設 system instruction，後續若仍有黏話題再評估。

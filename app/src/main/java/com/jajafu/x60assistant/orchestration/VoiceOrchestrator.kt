@@ -197,7 +197,11 @@ class VoiceOrchestrator(
     private suspend fun handleWakeDetected() {
         val startingSession = machine.state == VoiceState.IDLE_KWS
         if (!startingSession && machine.state !in setOf(VoiceState.THINKING, VoiceState.SPEAKING)) return
-        if (startingSession) keepMusicPausedAfterSession = false
+        if (startingSession) {
+            keepMusicPausedAfterSession = false
+            // 喚醒詞是新話題的邊界：只有同一輪的 Follow Up 視窗才延續上下文，避免舊話題殘留。
+            history.clear()
+        }
         sessionId = UUID.randomUUID().toString().replace("-", "").take(8)
         M1DiagnosticsRepository.onWake(KwsModelPack.KEYWORDS_SCORE, settings.wakePhrase)
         transition(VoiceState.WAKE_ACK, TransitionReason.WAKE_DETECTED)
