@@ -184,6 +184,53 @@ class VoiceOrchestratorTest {
         } finally { dispose(f) }
     }
 
+    @Test fun `a new wake word starts a new topic but a follow up keeps the last turn`() = runTest {
+        val f = Fixture(backgroundScope, followUpSeconds = 10)
+        try {
+            // 第一輪由喚醒詞開啟。
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(VoiceState.FOLLOW_UP, f.voice.state.value)
+            assertEquals(listOf("system", "user"), f.provider.requests[0].messages.map { it.role })
+
+            // 同一輪的 Follow Up 視窗內直接追問，帶著上一輪的上下文。
+            f.audio.feed(1, 3_000)
+            runCurrent()
+            assertEquals(VoiceState.LISTENING, f.voice.state.value)
+            f.asr.text = "那第二首呢"
+            f.utterance(3_500)
+            runCurrent()
+
+            assertEquals(2, f.provider.requests.size)
+            assertEquals(
+                listOf("system", "user", "assistant", "user"),
+                f.provider.requests[1].messages.map { it.role },
+            )
+            assertEquals(
+                listOf("解釋天空的顏色", "回答。", "那第二首呢"),
+                f.provider.requests[1].messages.drop(1).map { it.content },
+            )
+
+            // 新的喚醒詞是新話題的邊界，不帶入任何舊輪次。
+            f.voice.cancelSession()
+            runCurrent()
+            assertEquals(VoiceState.IDLE_KWS, f.voice.state.value)
+            f.audio.feed(9, 10_000)
+            runCurrent()
+            f.asr.text = "明天台北天氣如何"
+            f.utterance(11_000)
+            runCurrent()
+
+            assertEquals(3, f.provider.requests.size)
+            assertEquals(listOf("system", "user"), f.provider.requests[2].messages.map { it.role })
+            assertEquals(
+                listOf("明天台北天氣如何"),
+                f.provider.requests[2].messages.drop(1).map { it.content },
+            )
+        } finally { dispose(f) }
+    }
+
     @Test fun `music refusal is buffered and only local recovery result is spoken`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val f = Fixture(backgroundScope, text = "搜尋周杰倫的歌曲", chunks = flow {
@@ -403,7 +450,9 @@ class VoiceOrchestratorTest {
         }
     }
 
-    private class FakeAsr(private val text: String, private val decode: () -> Unit) : SpeechRecognizerEngine {
+    private class FakeAsr(text: String, private val decode: () -> Unit) : SpeechRecognizerEngine {
+        /** 可改寫，讓連續兩輪的逐字稿不同，用來驗證歷史有沒有被帶進下一次請求。 */
+        var text = text
         override val modelId = "fake"
         @Volatile private var decoding = false
         @Volatile var closes = 0

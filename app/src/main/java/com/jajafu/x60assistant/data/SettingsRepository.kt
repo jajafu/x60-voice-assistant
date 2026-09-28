@@ -80,7 +80,7 @@ class SettingsRepository(private val context: Context) {
         minSpeechMs = prefs[Keys.MIN_SPEECH] ?: 250,
         trailingSilenceMs = prefs[Keys.TRAILING_SILENCE] ?: 800,
         maxUtteranceMs = prefs[Keys.MAX_UTTERANCE] ?: 20_000,
-        followUpSeconds = prefs[Keys.FOLLOW_UP] ?: 10,
+        followUpSeconds = prefs[Keys.FOLLOW_UP] ?: AssistantSettings.DEFAULT_FOLLOW_UP_SECONDS,
         audioResumeDelayMs = prefs[Keys.AUDIO_RESUME_DELAY] ?: 300,
         asrModelId = prefs[Keys.ASR_MODEL_ID] ?: AssistantSettings.DEFAULT_ASR_MODEL_ID,
         musicAppName = prefs[Keys.MUSIC_APP_NAME] ?: AssistantSettings.DEFAULT_MUSIC_APP_NAME,
