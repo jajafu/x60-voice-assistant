@@ -42,7 +42,7 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 
 設定 → 進階設定與語音與追問，10 個數字欄位（Temperature、Max Output Tokens、Connect Timeout、Read Timeout、Context Turns、等待說話、最短語音、結尾靜音、最長單句、Follow Up）逐欄位確認：可清空後逐字重新輸入、可輸入範圍內任意值含上下限、Context Turns 可設 0 且重開 App 後仍為 0、輸入空白或超界時欄位標紅且「儲存設定」不可按、輸入過程不被還原成預設值。
 
-## 話題邊界與 Follow Up 視窗（rc25）
+## 話題邊界與 Follow Up 視窗（rc25，待真機驗收）
 
 喚醒詞開啟新一輪時清空對話歷史，只有同一輪 Follow Up 視窗（預設 3 秒，可調 0–30）內的追問才帶著上一輪。需在 vivo X60 搭配真實 Provider 驗收：
 
