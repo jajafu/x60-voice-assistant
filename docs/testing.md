@@ -42,6 +42,18 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 
 設定 → 進階設定與語音與追問，10 個數字欄位（Temperature、Max Output Tokens、Connect Timeout、Read Timeout、Context Turns、等待說話、最短語音、結尾靜音、最長單句、Follow Up）逐欄位確認：可清空後逐字重新輸入、可輸入範圍內任意值含上下限、Context Turns 可設 0 且重開 App 後仍為 0、輸入空白或超界時欄位標紅且「儲存設定」不可按、輸入過程不被還原成預設值。
 
+## 話題邊界與 Follow Up 視窗（rc25，待真機驗收）
+
+喚醒詞開啟新一輪時清空對話歷史，只有同一輪 Follow Up 視窗（預設 3 秒，可調 0–30）內的追問才帶著上一輪。需在 vivo X60 搭配真實 Provider 驗收：
+
+1. 喚醒問一個話題 A（例：「BLACKPINK 是哪一年出道的」），等回答完畢，**不要**在 3 秒內追問，確認診斷頁狀態回到 `IDLE_KWS`。
+2. 重新說喚醒詞問不相關的 B（例：「明天台北天氣如何」），確認回答針對 B，且診斷頁 LLM 完成記錄的 `length`／`hash` 對應的是 B 的回答而非 A 的續篇。若診斷頁允許查看，逐字稿應只有 B。
+3. 重複步驟 1–2 共 10 次，確認不再出現沿用舊話題的情況。
+4. 喚醒問 A，等回答完畢後在 3 秒內直接說「那第二首呢」（不說喚醒詞），確認追問成立且回答與 A 相關。
+5. 設定 → Follow Up 設為 0，確認回答結束後直接回到 `IDLE_KWS`、不接受無喚醒詞的追問。
+6. 設定 → Follow Up 設為 10，確認步驟 4 在 10 秒內仍成立。
+7. 回答朗讀中說喚醒詞插話改問 B，確認舊回答停止、B 的請求不帶入 A 的上下文。
+
 ## 手動步驟
 
 1. 強制停止 App，確認 Service、AudioRecord 與 WakeLock 不存在。
