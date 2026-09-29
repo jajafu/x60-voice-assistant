@@ -715,19 +715,26 @@ class VoiceOrchestrator(
         beginAudioRecovery(code, detail)
     }
 
+    /**
+     * 結束這輪時必須先 releaseSessionResources()（取消 LLM 串流並停止 TTS），再恢復被暫停的
+     * 鬧鐘與音樂。順序相反會讓音樂先播出、舊回答的最後一句才補上，與 returnToIdle、
+     * handlePause、handleStop、handleSessionFailed 的既有順序不一致。
+     */
     private suspend fun beginAudioRecovery(code: VoiceErrorCode, detail: String) {
         M1DiagnosticsRepository.onAudioError(code, detail)
-        resumeHeldAlarm()
-        resumeHeldMusic()
         val decision = recoveryPolicy.recordFailure(clock.elapsedRealtimeMs())
         val alreadyRecovering = machine.state == VoiceState.RECOVERING
         if (!decision.recover || (!alreadyRecovering && !machine.canTransition(VoiceState.RECOVERING))) {
             transition(VoiceState.ERROR, TransitionReason.FATAL_ERROR)
             releaseSessionResources()
+            resumeHeldAlarm()
+            resumeHeldMusic()
             return
         }
         if (!alreadyRecovering) transition(VoiceState.RECOVERING, TransitionReason.RESOURCE_FAILURE)
         releaseSessionResources()
+        resumeHeldAlarm()
+        resumeHeldMusic()
         stateJob = launchState { emit ->
             delay(decision.delayMs)
             emit(Command.RecoveryReady)
