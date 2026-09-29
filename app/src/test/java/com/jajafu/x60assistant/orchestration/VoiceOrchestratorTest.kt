@@ -231,6 +231,44 @@ class VoiceOrchestratorTest {
         } finally { dispose(f) }
     }
 
+    /**
+     * 朗讀到一半時發生音訊失敗，恢復被暫停的音樂必須排在停掉 TTS 之後，
+     * 否則會先傳出音樂、才補上舊回答的最後一句。
+     */
+    @Test fun `audio failure stops speech before held music resumes`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val music = FakeMusic(pauseResult = true)
+        val f = Fixture(backgroundScope, chunks = flow {
+            emit(LlmChunk("第一句。"))
+            gate.await()
+        }, music = music)
+        var ttsStopsWhenMusicResumed = -1
+        var stopsBeforeSpeaking = -1
+        music.onResume = { ttsStopsWhenMusicResumed = f.output.stops }
+        f.output.onSpeak = { stopsBeforeSpeaking = f.output.stops }
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(VoiceState.SPEAKING, f.voice.state.value)
+            assertEquals(listOf("第一句。"), f.output.spoken)
+            assertEquals(1, music.pauseCalls)
+            assertTrue(stopsBeforeSpeaking >= 0)
+
+            f.voice.onAudioFailure(com.jajafu.x60assistant.diagnostics.VoiceErrorCode.AUDIO_READ_STALLED, "test")
+            runCurrent()
+
+            assertEquals(1, music.resumeCalls)
+            assertTrue(
+                "恢復音樂時 TTS 尚未停止（朗讀前=$stopsBeforeSpeaking，恢復時=$ttsStopsWhenMusicResumed）",
+                ttsStopsWhenMusicResumed > stopsBeforeSpeaking,
+            )
+        } finally {
+            gate.complete(Unit)
+            dispose(f)
+        }
+    }
+
     @Test fun `music refusal is buffered and only local recovery result is spoken`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val f = Fixture(backgroundScope, text = "搜尋周杰倫的歌曲", chunks = flow {
@@ -470,10 +508,17 @@ class VoiceOrchestratorTest {
 
     private class FakeOutput : SpeechOutputEngine {
         val spoken = mutableListOf<String>()
+        var stops = 0
         var onSpeak: () -> Unit = {}
+        /** 讓 speak 停在朗讀中，用來觀察音樂恢復與 TTS 停止的先後。 */
+        var speakGate: CompletableDeferred<Unit>? = null
         override suspend fun initialize() = TtsStatus(true)
-        override suspend fun speak(text: String) { spoken += text; onSpeak() }
-        override fun stop() = Unit
+        override suspend fun speak(text: String) {
+            spoken += text
+            onSpeak()
+            speakGate?.await()
+        }
+        override fun stop() { stops++ }
         override fun close() = Unit
     }
 
@@ -489,6 +534,8 @@ class VoiceOrchestratorTest {
         val commands = mutableListOf<MusicCommand>()
         var pauseCalls = 0
         var resumeCalls = 0
+        /** 在恢復音樂的當下取樣，用來檢查 TTS 是否已經先被停止。 */
+        var onResume: () -> Unit = {}
         override suspend fun execute(command: MusicCommand): MusicActionResult {
             commands += command
             return MusicActionResult("本機播放結果。")
@@ -498,6 +545,7 @@ class VoiceOrchestratorTest {
             return pauseResult
         }
         override suspend fun resumeAfterVoice(): Boolean {
+            onResume()
             resumeCalls++
             return true
         }

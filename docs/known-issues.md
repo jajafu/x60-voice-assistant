@@ -32,6 +32,8 @@
 - rc24 修正設定頁 10 個數字欄位無法輸入上下限內任意值的問題（欄位無法清空、前導數字被吃掉、超界值靜默夾限），並修正設定頁與模型頁草稿被設定流清空、App 固定直式顯示。`test`、`lint`、`assembleDebug` 與 MuMu vmindex 0 安裝開啟 smoke 已通過；此類問題依賴真機 IME，MuMu 結果不能替代，開發者已自行以 debug APK 在 vivo X60 手工確認可正常輸入，未另建測試紀錄。逐欄位確認清單見 `docs/testing.md`「設定頁數字欄位（rc24）」，供日後回歸時重複使用。
 - App 自 rc24 起固定直式；`docs/test-reports/m0-2026-09-22-vivo-x60.md` 的橫向測試屬變更前紀錄，不重測、不改寫。
 - rc25 修正「問完一個話題後後續提問仍持續回答舊話題」：喚醒詞開啟新一輪時清空 `ConversationHistory`，只有同一輪 Follow Up 視窗（預設由 10 秒改為 3 秒）內的追問才延續上下文。`test`、`lint`、`assembleDebug` 與 MuMu vmindex 0（Android 15）安裝開啟 smoke 已通過。**vivo X60 真機驗收尚未執行**：合併時開發者無法讓手機連上 USB，選擇先合併。此症狀是真人語音下的對話行為，JVM 測試與 MuMu 都不能替代；`docs/testing.md`「話題邊界與 Follow Up 視窗（rc25，待真機驗收）」7 個步驟仍待補做，包含搭配真實 Provider 的完整問答。
+- rc26 修正音訊失敗時的結束順序：`beginAudioRecovery` 先恢復暫停的音樂再停止 TTS，會讓音樂先恢復、正在朗讀的舊回答才補完。已改為先取消串流與 TTS 再恢復音樂，並加回歸測試（修正前該測試失敗）。**vivo X60 真機驗收尚未執行**，`docs/testing.md`「音訊失敗時的結束順序（rc26，待真機驗收）」5 個步驟仍待補做。
+- 使用者在 rc26 回報的「播放音樂中喚醒小助手，等候一段時間沒回應」目前只有靜態分析、尚無實測證據：喚醒回應「我在」排在暫停鬧鐘與暫停音樂之後，而兩者都是跨行程媒體往返，最壞約 4–5 秒靜默，且該期間說的話會被 `frameQueue.clear()` 丟棄。需先取得 vivo X60 診斷頁的 Ring Log 與 `Last Error` 才能判斷是否為同一個主因，再決定是否另開 Issue。
 
 ## 排程提醒
 
