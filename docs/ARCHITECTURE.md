@@ -6,7 +6,7 @@
 
 Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，將本機 KWS → VAD → 固定內建 X-ASR 的文字優先送本機音樂／提醒指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給 Android TTS。設定與提醒留在裝置；APK 內的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
 
-主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。目前產品候選版號為 `1.0.0-rc28`／`versionCode 32`，依 `app/build.gradle.kts` 查證。
+主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。目前產品候選版號為 `1.0.0-rc29`／`versionCode 33`，依 `app/build.gradle.kts` 查證。
 
 `VoiceForegroundService` 擁有語音服務生命週期與資源；`AudioCaptureEngine` 建立唯一 `AudioRecord`，以 16 kHz／mono／PCM16／20 ms frame 送入有界佇列。`VoiceOrchestrator` 是唯一狀態切換者，將喚醒後語音交給 VAD／ASR；本機 `MusicCommandRouter`、`NavigationCommandRouter` 與 `ReminderCommandRouter` 優先處理明確指令，一般問答才走 `OpenAiCompatibleLlmProvider` 的 SSE，完整句送 TTS，結束後可進 Follow Up。實際分支、失敗與恢復策略依程式碼及 `docs/decision-log.md`。
 
@@ -19,6 +19,8 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 `StreamingSpeechPlayer` 同時接收回覆與按句朗讀，以 12 個 permit 限制待讀句數，滿時暫停生產者。需要音樂拒絕補救的回覆先緩衝完整文字，決定路由後才朗讀。每次回答獨立持有佇列，取消不會殘留到下一次。
 
 `ConversationHistory` 只保存在 process 記憶體，容量由 `contextTurns` 決定。喚醒詞開啟新一輪（由 `IDLE_KWS` 進入的 `WakeDetected`）時先清空歷史，因此只有同一輪 Follow Up 視窗（`followUpSeconds`，預設 3 秒）內、不必再說喚醒詞的追問才帶著上一輪上下文。回答期間插話的喚醒詞不清空，但該輪回答已被取消、不會寫入歷史。`contextTurns` 因此只影響同一個連續話題內的輪數，跨喚醒詞不保留。
+
+`TtsEngineCatalog` 讀取裝置上的 TTS 引擎與 voice。設定頁只顯示中文 voice（引擎若無中文則顯示全部），排序為繁中優先、離線優先、名稱，並與 `AndroidTtsEngine` 的自動選擇共用同一套規則。繁中判斷同時支援以書寫系統（`zh-Hant`）與以地區（`zh-TW`／`zh-HK`／`zh-MO`）標記的 locale，因為 vivo 引擎回報的是前者。引擎本身仍保有全部 voice，App 不會要求引擎刪除。
 
 - `app/src/main/java/com/jajafu/x60assistant/`：Activity、UI 與 Android 應用入口。
 - `service/`、`audio/`、`orchestration/`：前景服務、單一音訊來源、狀態機與恢復策略。
