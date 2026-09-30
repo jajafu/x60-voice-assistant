@@ -49,6 +49,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.MUSIC_SERVICE_NAME] = settings.musicServiceName
             prefs[Keys.TTS_ENGINE] = settings.ttsEngine
             prefs[Keys.TTS_VOICE] = settings.ttsVoice
+            prefs[Keys.TTS_VOLUME] = settings.ttsVolume
             prefs[Keys.SPEECH_RATE] = settings.speechRate
             prefs[Keys.PITCH] = settings.pitch
             prefs[Keys.CONNECTION_VERIFIED] = settings.connectionVerified
@@ -88,6 +89,7 @@ class SettingsRepository(private val context: Context) {
         musicServiceName = prefs[Keys.MUSIC_SERVICE_NAME] ?: AssistantSettings.DEFAULT_MUSIC_SERVICE_NAME,
         ttsEngine = prefs[Keys.TTS_ENGINE].orEmpty(),
         ttsVoice = prefs[Keys.TTS_VOICE].orEmpty(),
+        ttsVolume = prefs[Keys.TTS_VOLUME] ?: AssistantSettings.DEFAULT_TTS_VOLUME,
         speechRate = prefs[Keys.SPEECH_RATE] ?: 1.0f,
         pitch = prefs[Keys.PITCH] ?: 1.0f,
         connectionVerified = prefs[Keys.CONNECTION_VERIFIED] ?: false,
@@ -119,6 +121,7 @@ class SettingsRepository(private val context: Context) {
         val MUSIC_SERVICE_NAME = stringPreferencesKey("music_service_name")
         val TTS_ENGINE = stringPreferencesKey("tts_engine")
         val TTS_VOICE = stringPreferencesKey("tts_voice")
+        val TTS_VOLUME = floatPreferencesKey("tts_volume")
         val SPEECH_RATE = floatPreferencesKey("tts_speech_rate")
         val PITCH = floatPreferencesKey("tts_pitch")
         val CONNECTION_VERIFIED = booleanPreferencesKey("llm_connection_verified")

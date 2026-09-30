@@ -46,8 +46,12 @@ import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
 import com.jajafu.x60assistant.kws.WakePhraseCompiler
 import com.jajafu.x60assistant.security.AndroidKeystoreSecretStore
 import com.jajafu.x60assistant.tts.AndroidTtsEngine
+import com.jajafu.x60assistant.tts.TtsEngineCatalog
+import com.jajafu.x60assistant.tts.TtsEngineOption
+import com.jajafu.x60assistant.tts.TtsVoiceOption
 import com.jajafu.x60assistant.ui.diagnostics.DeviceDiagnosticsScreen
 import com.jajafu.x60assistant.ui.theme.X60AssistantTheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -68,6 +72,11 @@ class MainActivity : ComponentActivity() {
     private var scheduledReminders by mutableStateOf<List<ScheduledReminder>>(emptyList())
     private var reminderSoundName by mutableStateOf("系統預設鬧鐘")
     private var reminderMessage by mutableStateOf<String?>(null)
+    private var ttsEngines by mutableStateOf<List<TtsEngineOption>>(emptyList())
+    private var ttsVoices by mutableStateOf<List<TtsVoiceOption>>(emptyList())
+    private var ttsVoicesLoading by mutableStateOf(false)
+    private var ttsCatalog: TtsEngineCatalog? = null
+    private var ttsVoicesJob: Job? = null
 
     private val diagnosticsExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain"),
@@ -143,6 +152,7 @@ class MainActivity : ComponentActivity() {
         reminderManager = ReminderManager(applicationContext)
         refreshDiagnostics()
         refreshMusicApps()
+        refreshTtsEngines()
         refreshReminders()
         refreshReminderSound()
         lifecycleScope.launch {
@@ -196,6 +206,10 @@ class MainActivity : ComponentActivity() {
                     onOpenMusicApp = ::openMusicAppForSetup,
                     musicCabinFavoriteAccessGranted = musicCabinFavoriteAccessGranted,
                     onOpenMusicCabinFavoriteAccess = ::openMusicCabinFavoriteAccessSettings,
+                    ttsEngines = ttsEngines,
+                    ttsVoices = ttsVoices,
+                    ttsVoicesLoading = ttsVoicesLoading,
+                    onLoadTtsVoices = ::loadTtsVoices,
                     scheduledReminders = scheduledReminders,
                     reminderSoundName = reminderSoundName,
                     reminderMessage = reminderMessage,
@@ -301,6 +315,28 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshMusicApps() {
         compatibleMusicApps = MusicAppCatalog(applicationContext).compatibleApps()
+    }
+
+    /**
+     * 引擎清單讀取成本低，在 onCreate 取得一次；voice 清單要綁定引擎才拿得到，
+     * 交給設定頁在選項改變時呼叫 [loadTtsVoices]。
+     */
+    private fun refreshTtsEngines() {
+        val catalog = ttsCatalog ?: TtsEngineCatalog(applicationContext).also { ttsCatalog = it }
+        // 系統預設引擎存在 tts_default_synth；只讀取，用來在清單上標示「系統預設」。
+        val defaultEngine = Settings.Secure.getString(contentResolver, "tts_default_synth")
+        ttsEngines = catalog.engines(defaultEngine)
+    }
+
+    private fun loadTtsVoices(enginePackage: String?) {
+        val catalog = ttsCatalog ?: TtsEngineCatalog(applicationContext).also { ttsCatalog = it }
+        ttsVoicesJob?.cancel()
+        ttsVoicesLoading = true
+        ttsVoices = emptyList()
+        ttsVoicesJob = lifecycleScope.launch {
+            ttsVoices = TtsEngineCatalog.preferredOrder(catalog.voices(enginePackage))
+            ttsVoicesLoading = false
+        }
     }
 
     private fun openMusicAppForSetup(packageName: String, appName: String) {
