@@ -73,6 +73,7 @@ import com.jajafu.x60assistant.diagnostics.DeviceDiagnostics
 import com.jajafu.x60assistant.diagnostics.M1DiagnosticsSnapshot
 import com.jajafu.x60assistant.orchestration.VoiceState
 import com.jajafu.x60assistant.music.MusicAppOption
+import com.jajafu.x60assistant.navigation.NavigationAppOption
 import com.jajafu.x60assistant.reminder.ScheduledReminder
 import com.jajafu.x60assistant.reminder.ReminderFrequency
 import com.jajafu.x60assistant.reminder.ReminderRecurrence
@@ -111,6 +112,8 @@ fun DeviceDiagnosticsScreen(
     onDismissExactAlarmOnboarding: () -> Unit,
     compatibleMusicApps: List<MusicAppOption>,
     onOpenMusicApp: (String, String) -> Unit,
+    compatibleNavApps: List<NavigationAppOption>,
+    onOpenNavApp: (String, String) -> Unit,
     musicCabinFavoriteAccessGranted: Boolean,
     onOpenMusicCabinFavoriteAccess: () -> Unit,
     scheduledReminders: List<ScheduledReminder>,
@@ -192,6 +195,8 @@ fun DeviceDiagnosticsScreen(
                 onTestTts = onTestTts,
                 compatibleMusicApps = compatibleMusicApps,
                 onOpenMusicApp = onOpenMusicApp,
+                compatibleNavApps = compatibleNavApps,
+                onOpenNavApp = onOpenNavApp,
                 musicCabinFavoriteAccessGranted = musicCabinFavoriteAccessGranted,
                 onOpenMusicCabinFavoriteAccess = onOpenMusicCabinFavoriteAccess,
                 onOpenDiagnostics = { showDiagnostics = true },
@@ -550,6 +555,8 @@ private fun SettingsPage(
     onTestTts: (AssistantSettings) -> Unit,
     compatibleMusicApps: List<MusicAppOption>,
     onOpenMusicApp: (String, String) -> Unit,
+    compatibleNavApps: List<NavigationAppOption>,
+    onOpenNavApp: (String, String) -> Unit,
     musicCabinFavoriteAccessGranted: Boolean,
     onOpenMusicCabinFavoriteAccess: () -> Unit,
     onOpenDiagnostics: () -> Unit,
@@ -559,7 +566,6 @@ private fun SettingsPage(
     var lastLoaded by remember { mutableStateOf(saved) }
     val numberFields = remember { NumberSettingsFields(saved) }
     var advancedExpanded by rememberSaveable { mutableStateOf(false) }
-    var musicMenuExpanded by remember { mutableStateOf(false) }
     val wakeError = wakePhraseError(draft.wakePhrase)
     val wakeAcknowledgementError = wakeAcknowledgementError(draft.wakeAcknowledgement)
     LaunchedEffect(saved) {
@@ -639,75 +645,48 @@ private fun SettingsPage(
                     it.packageName == draft.musicPackageName && it.serviceName == draft.musicServiceName
                 }
                 val selectedLabel = when {
-                    draft.musicPackageName.isBlank() -> "未啟用音樂控制"
+                    draft.musicPackageName.isBlank() -> ""
                     selected != null -> selected.appName
-                    else -> "${draft.musicAppName.ifBlank { draft.musicPackageName }}（目前未偵測到）"
+                    else -> draft.musicAppName.ifBlank { draft.musicPackageName }
                 }
-                Text("目前選用：$selectedLabel", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "只列出有公開媒體控制服務的 App；畫面顯示名稱，實際以套件與服務 ID 連線。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-                Box(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                    OutlinedButton(
-                        onClick = { musicMenuExpanded = true },
-                        enabled = enabled,
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                    ) {
-                        Text("選擇音樂 App")
-                    }
-                    DropdownMenu(
-                        expanded = musicMenuExpanded,
-                        onDismissRequest = { musicMenuExpanded = false },
-                        modifier = Modifier.fillMaxWidth(.9f),
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("不啟用音樂控制") },
-                            onClick = {
-                                draft = draft.copy(musicAppName = "", musicPackageName = "", musicServiceName = "")
-                                musicMenuExpanded = false
-                            },
-                        )
-                        compatibleMusicApps.forEach { app ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(app.appName)
-                                        Text(
-                                            app.packageName,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    draft = draft.copy(
-                                        musicAppName = app.appName,
-                                        musicPackageName = app.packageName,
-                                        musicServiceName = app.serviceName,
-                                    )
-                                    musicMenuExpanded = false
-                                },
+                val musicOptions = compatibleMusicApps.map {
+                    AppChoice(appName = it.appName, packageName = it.packageName, detail = it.packageName)
+                }
+                AppPickerField(
+                    label = "目前選用",
+                    placeholder = "未啟用音樂控制",
+                    selectedLabel = selectedLabel,
+                    options = musicOptions,
+                    enabled = enabled,
+                    supportingText = "只列出有公開媒體控制服務的 App；畫面顯示名稱，實際以套件與服務 ID 連線。" +
+                        if (draft.musicPackageName.isNotBlank() && selected == null) {
+                            "「${draft.musicAppName.ifBlank { draft.musicPackageName }}」目前未偵測到，請重新選擇。"
+                        } else {
+                            ""
+                        },
+                    errorText = if (compatibleMusicApps.isEmpty()) {
+                        "目前沒有偵測到相容的音樂 App。安裝或更新播放器後回到此頁重試。"
+                    } else {
+                        null
+                    },
+                    onSelect = { choice ->
+                        draft = if (choice == null) {
+                            draft.copy(musicAppName = "", musicPackageName = "", musicServiceName = "")
+                        } else {
+                            val app = compatibleMusicApps.first {
+                                it.packageName == choice.packageName
+                            }
+                            draft.copy(
+                                musicAppName = app.appName,
+                                musicPackageName = app.packageName,
+                                musicServiceName = app.serviceName,
                             )
                         }
-                    }
-                }
-                if (compatibleMusicApps.isEmpty()) {
-                    Text(
-                        "目前沒有偵測到相容的音樂 App。安裝或更新播放器後回到此頁重試。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
+                    },
+                )
                 if (draft.musicPackageName.isNotBlank()) {
-                    Text(
+                    AppDetailText(
                         "首次使用請開啟音樂 App，依畫面完成它需要的授權，並手動播放一首歌。一般播放控制不需要通知存取權。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 12.dp),
                     )
                     OutlinedButton(
                         onClick = { onOpenMusicApp(draft.musicPackageName, draft.musicAppName) },
@@ -729,6 +708,59 @@ private fun SettingsPage(
                                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
                             ) { Text("開啟 MusicCabin 控制所需的通知存取權") }
                         }
+                    }
+                }
+            }
+        }
+
+        item {
+            SectionCard("導航 App") {
+                val selectedNav = compatibleNavApps.firstOrNull { it.packageName == draft.navPackageName }
+                val selectedNavLabel = when {
+                    draft.navPackageName.isBlank() -> ""
+                    selectedNav != null -> selectedNav.appName
+                    else -> draft.navAppName.ifBlank { draft.navPackageName }
+                }
+                val navOptions = compatibleNavApps.map {
+                    AppChoice(appName = it.appName, packageName = it.packageName, detail = it.packageName)
+                }
+                AppPickerField(
+                    label = "目前選用",
+                    placeholder = "未啟用語音導航",
+                    selectedLabel = selectedNavLabel,
+                    options = navOptions,
+                    enabled = enabled,
+                    supportingText = "說「導航到台北101」時，小助手會開啟此 App 的路線預覽頁，" +
+                        "最後的開始導航仍需要你點一下。" +
+                        if (draft.navPackageName.isNotBlank() && selectedNav == null) {
+                            "「${draft.navAppName.ifBlank { draft.navPackageName }}」目前未偵測到，請重新選擇。"
+                        } else {
+                            ""
+                        },
+                    errorText = if (compatibleNavApps.isEmpty()) {
+                        "目前沒有偵測到可用的導航 App。安裝後回到此頁重試。"
+                    } else {
+                        null
+                    },
+                    onSelect = { choice ->
+                        draft = if (choice == null) {
+                            draft.copy(navAppName = "", navPackageName = "")
+                        } else {
+                            val app = compatibleNavApps.first { it.packageName == choice.packageName }
+                            draft.copy(navAppName = app.appName, navPackageName = app.packageName)
+                        }
+                    },
+                )
+                if (draft.navPackageName.isNotBlank()) {
+                    AppDetailText(
+                        "第一次使用請先開啟地圖 App 完成歡迎畫面與位置授權，" +
+                            "之後語音才能直接帶入路線。",
+                    )
+                    OutlinedButton(
+                        onClick = { onOpenNavApp(draft.navPackageName, draft.navAppName) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
+                    ) {
+                        Text("開啟${draft.navAppName.ifBlank { "導航 App" }}完成首次設定")
                     }
                 }
             }
