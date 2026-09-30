@@ -34,6 +34,7 @@
 - rc25 修正「問完一個話題後後續提問仍持續回答舊話題」：喚醒詞開啟新一輪時清空 `ConversationHistory`，只有同一輪 Follow Up 視窗（預設由 10 秒改為 3 秒）內的追問才延續上下文。`test`、`lint`、`assembleDebug` 與 MuMu vmindex 0（Android 15）安裝開啟 smoke 已通過。**vivo X60 真機驗收尚未執行**：合併時開發者無法讓手機連上 USB，選擇先合併。此症狀是真人語音下的對話行為，JVM 測試與 MuMu 都不能替代；`docs/testing.md`「話題邊界與 Follow Up 視窗（rc25，待真機驗收）」7 個步驟仍待補做，包含搭配真實 Provider 的完整問答。
 - rc26 修正音訊失敗時的結束順序：`beginAudioRecovery` 先恢復暫停的音樂再停止 TTS，會讓音樂先恢復、正在朗讀的舊回答才補完。已改為先取消串流與 TTS 再恢復音樂，並加回歸測試（修正前該測試失敗）。**vivo X60 真機驗收尚未執行**，`docs/testing.md`「音訊失敗時的結束順序（rc26，待真機驗收）」5 個步驟仍待補做。
 - 使用者在 rc26 回報的「播放音樂中喚醒小助手，等候一段時間沒回應」目前只有靜態分析、尚無實測證據：喚醒回應「我在」排在暫停鬧鐘與暫停音樂之後，而兩者都是跨行程媒體往返，最壞約 4–5 秒靜默，且該期間說的話會被 `frameQueue.clear()` 丟棄。需先取得 vivo X60 診斷頁的 Ring Log 與 `Last Error` 才能判斷是否為同一個主因，再決定是否另開 Issue。
+- rc27 新增 TTS 音量設定與引擎／音調選擇器。`test`、`lint`、`assembleDebug` 與 MuMu vmindex 0（Android 15）安裝開啟 smoke 已通過，並以截圖確認新 UI 渲染與空狀態提示。**核心假設尚未在 vivo X60 驗證：`TextToSpeech.Engine.KEY_PARAM_VOLUME` 在該機的 `com.vivo.aiservice` 引擎上是否真的改變輸出音量。** Android 標示此參數範圍為 0.0–1.0，超過 1.0 由引擎自行決定，可能破音或被忽略；`TextToSpeech.setVolume()` 不是公開 API 因此無法採用。若調整音量後聲音沒有變化，必須記為未生效而非通過，並另尋管道（例如改走 `STREAM_TTS`，但那需要 `MODIFY_AUDIO_SETTINGS` 權限）。`docs/testing.md`「TTS 音量與引擎／音調選擇（rc27，待真機驗收）」7 個步驟仍待補做。
 
 ## 排程提醒
 
