@@ -51,6 +51,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.NAV_PACKAGE_NAME] = settings.navPackageName
             prefs[Keys.TTS_ENGINE] = settings.ttsEngine
             prefs[Keys.TTS_VOICE] = settings.ttsVoice
+            prefs[Keys.TTS_VOLUME] = settings.ttsVolume
             prefs[Keys.SPEECH_RATE] = settings.speechRate
             prefs[Keys.PITCH] = settings.pitch
             prefs[Keys.CONNECTION_VERIFIED] = settings.connectionVerified
@@ -92,6 +93,7 @@ class SettingsRepository(private val context: Context) {
         navPackageName = prefs[Keys.NAV_PACKAGE_NAME] ?: AssistantSettings.DEFAULT_NAV_PACKAGE_NAME,
         ttsEngine = prefs[Keys.TTS_ENGINE].orEmpty(),
         ttsVoice = prefs[Keys.TTS_VOICE].orEmpty(),
+        ttsVolume = prefs[Keys.TTS_VOLUME] ?: AssistantSettings.DEFAULT_TTS_VOLUME,
         speechRate = prefs[Keys.SPEECH_RATE] ?: 1.0f,
         pitch = prefs[Keys.PITCH] ?: 1.0f,
         connectionVerified = prefs[Keys.CONNECTION_VERIFIED] ?: false,
@@ -125,6 +127,7 @@ class SettingsRepository(private val context: Context) {
         val NAV_PACKAGE_NAME = stringPreferencesKey("nav_package_name")
         val TTS_ENGINE = stringPreferencesKey("tts_engine")
         val TTS_VOICE = stringPreferencesKey("tts_voice")
+        val TTS_VOLUME = floatPreferencesKey("tts_volume")
         val SPEECH_RATE = floatPreferencesKey("tts_speech_rate")
         val PITCH = floatPreferencesKey("tts_pitch")
         val CONNECTION_VERIFIED = booleanPreferencesKey("llm_connection_verified")

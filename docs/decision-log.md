@@ -64,3 +64,18 @@
 - 已用測試證實：修正前在 TTS 朗讀中注入音訊失敗，恢復音樂的當下 TTS 尚未被停止（`朗讀前=7，恢復時=7`）；修正後該測試通過。
 - 本次只處理順序，不改喚醒流程、暫停／恢復音樂的策略、TTS 重試或音訊失敗的復原策略。
 - 尚未處理、需另行決定：`handleWakeDetected` 把喚醒回應「我在」排在暫停鬧鐘與暫停音樂之後，而這兩者都是跨行程媒體往返（最壞約 4–5 秒靜默），且期間說的話會被 `frameQueue.clear()` 丟棄；`MusicCabinController.pauseForVoice` 在未確認暫停成功時仍回傳 `true`。這兩項需先取得 vivo X60 的診斷 Ring Log 才能確認是否為使用者當次的主因。
+
+## rc27（2026-09-30，Issue #14）
+
+- 使用者回報 TTS 聲音比音樂小聲。以 vivo X60 實測釐清：`dumpsys audio` 的播放器紀錄顯示 TTS 的 AudioTrack 是 `usage=USAGE_MEDIA content=CONTENT_TYPE_SPEECH`，uid 10064（`com.vivo.aiservice`），也就是 TTS 與音樂共用 STREAM_MUSIC 同一個音量級別（該機為 10/15）。**不是音量路由問題，是引擎輸出增益較低。**
+- **開發者決定（rc27）**：`AndroidTtsEngine` 從未設定輸出音量，改為每個語句帶 `TextToSpeech.Engine.KEY_PARAM_VOLUME`；`TextToSpeech.setVolume()` 並非公開 API，因此不採用。Android 標示此參數範圍為 0.0–1.0，超過 1.0 是否放大取決於引擎，設定預設維持 1.0 以維持既有行為。
+- 同時補上設定頁一直缺少的 TTS 引擎與 voice 選擇器：`ttsEngine` 與 `ttsVoice` 兩個欄位自 M3 起就存在於 `AssistantSettings` 與 `SettingsRepository`，但設定頁沒有任何 UI 可以編輯，使用者只能靠系統「文字轉語音輸出」頁面變更。新增 `TtsEngineCatalog` 讀取引擎清單（PackageManager）與 voice 清單（需綁定引擎，帶 4 秒逾時），排序與 `selectVoice` 的自動選擇一致。
+- **不變更**：`USAGE_MEDIA` 不改成 `USAGE_ASSISTANT`（會連帶影響 requestAudioFocus 與喚醒回應、鬧鐘朗讀的混音行為，範圍過大）；不自動下載第三方語音包（沿用 `docs/known-issues.md` 既定設計）；未新增任何權限。
+- 引擎清單讀不到語音資料時維持原行為：記 `TTS_ENGINE_MISSING` 並只顯示文字。
+
+## rc28（2026-09-30，Issue #14 + Issue #15 整合）
+
+- **開發者決定**：rc27（TTS 音量／音調選擇，PR #13）與 rc27（語音導航 Google 地圖，PR #15 / PR #16）原本各自獨立開發、互相不知情，兩邊都把版本設成 `rc27` / `versionCode 31`。整合時由本合併PR 統一升為 `1.0.0-rc28` / `versionCode 32`，避免 Android 因 versionCode 相同拒絕覆蓋安裝。
+- 兩條分支都從 `main` 開出，重疊 6 個檔案；實際只有 `AssistantSettings.kt` 產生內容衝突，且是雙方各自新增不同欄位，保留兩邊即可。合併時另發現自動合併在該檔留下重複的 `/**`，造成巢狀註解破壞解析並產生一整串假的「Unresolved reference」錯誤；移除重複行後即恢復。其餘 5 個檔案自動合併結果正確（DataStore key 無撞名、兩邊 UI 都在、所有新欄位都有對應的 `normalized()` 夾限）。
+- 路由順序為 關閉 → 提醒 → 音樂 → 導航 → LLM，導航插在音樂之後、LLM 之前，兩者沒有觸及同一組詞彙。
+- 本次只做整合與版號統一，**未修改兩個功能的任何行為**。rc27 的 TTS 音量假設仍未在真機驗證，見 `docs/known-issues.md`。
