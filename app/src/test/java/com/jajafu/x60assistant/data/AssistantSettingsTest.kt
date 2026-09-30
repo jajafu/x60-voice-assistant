@@ -27,6 +27,30 @@ class AssistantSettingsTest {
      * issue #9：設定頁顯示的上下限改用 [AssistantSettings] 的共用常數，這裡確認常數與
      * `normalized()` 的夾限一致，避免畫面驗證通過但存檔時被改掉。
      */
+    /**
+     * issue #14：TTS 音量預設 1.0（維持引擎預設值），範圍 0.0–2.0。
+     * 0 是靜音，超過 1.0 是否放大由引擎決定，因此夾限必須兩端都成立。
+     */
+    @Test
+    fun `tts volume defaults to the engine default and clamps both bounds`() {
+        assertEquals(1.0f, AssistantSettings().ttsVolume, 0.0f)
+        assertEquals(0.0f, AssistantSettings(ttsVolume = 0.0f).normalized().ttsVolume, 0.0f)
+        assertEquals(2.0f, AssistantSettings(ttsVolume = 2.0f).normalized().ttsVolume, 0.0f)
+        assertEquals(AssistantSettings.TTS_VOLUME_RANGE.start, AssistantSettings(ttsVolume = -1f).normalized().ttsVolume, 0.0f)
+        assertEquals(
+            AssistantSettings.TTS_VOLUME_RANGE.endInclusive,
+            AssistantSettings(ttsVolume = 9f).normalized().ttsVolume,
+            0.0f,
+        )
+    }
+
+    @Test
+    fun `tts engine and voice identifiers are length limited before persistence`() {
+        val settings = AssistantSettings(ttsEngine = "a".repeat(500), ttsVoice = "b".repeat(500)).normalized()
+        assertEquals(AssistantSettings.MAX_TTS_IDENTIFIER_LENGTH, settings.ttsEngine.length)
+        assertEquals(AssistantSettings.MAX_TTS_IDENTIFIER_LENGTH, settings.ttsVoice.length)
+    }
+
     @Test
     fun `declared ranges match normalized clamping at both bounds`() {
         AssistantSettings(

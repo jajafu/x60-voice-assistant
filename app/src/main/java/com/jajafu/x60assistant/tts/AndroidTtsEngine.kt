@@ -126,6 +126,9 @@ class AndroidTtsEngine(
                 }
                 val params = Bundle().apply {
                     putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC)
+                    // 每個語句都帶音量，取代沒有公開 API 的 engine.setVolume()。
+                    // 文件標示範圍是 0.0–1.0，超過 1.0 是否放大由引擎決定，可能破音或被忽略。
+                    putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, outputVolume())
                 }
                 val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
                 if (result != TextToSpeech.SUCCESS && activeUtterance.compareAndSet(active, null)) {
@@ -136,6 +139,11 @@ class AndroidTtsEngine(
             abandonAudioFocus()
         }
     }
+
+    /**
+     * 輸出增益；設定值是使用者意圖，這裡只做安全夾限。0 會靜音，因此保留最小值。
+     */
+    private fun outputVolume(): Float = settings.ttsVolume.coerceIn(MIN_OUTPUT_VOLUME, MAX_OUTPUT_VOLUME)
 
     private fun configureListener(engine: TextToSpeech) {
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -213,4 +221,10 @@ class AndroidTtsEngine(
     }
 
     override fun close() = closeTtsOnly()
+
+    private companion object {
+        /** 低於 0.1 的音量等同靜音，設定頁仍可拉到 0 讓使用者確認效果。 */
+        const val MIN_OUTPUT_VOLUME = 0.0f
+        const val MAX_OUTPUT_VOLUME = 2.0f
+    }
 }
