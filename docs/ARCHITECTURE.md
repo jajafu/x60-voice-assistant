@@ -6,9 +6,9 @@
 
 Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，將本機 KWS → VAD → 固定內建 X-ASR 的文字優先送本機音樂／提醒指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給 Android TTS。設定與提醒留在裝置；APK 內的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
 
-主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。目前產品候選版號為 `1.0.0-rc27`／`versionCode 31`，依 `app/build.gradle.kts` 查證。
+主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。目前產品候選版號為 `1.0.0-rc28`／`versionCode 32`，依 `app/build.gradle.kts` 查證。
 
-`VoiceForegroundService` 擁有語音服務生命週期與資源；`AudioCaptureEngine` 建立唯一 `AudioRecord`，以 16 kHz／mono／PCM16／20 ms frame 送入有界佇列。`VoiceOrchestrator` 是唯一狀態切換者，將喚醒後語音交給 VAD／ASR；本機 `MusicCommandRouter` 與 `ReminderCommandRouter` 優先處理明確指令，一般問答才走 `OpenAiCompatibleLlmProvider` 的 SSE，完整句送 TTS，結束後可進 Follow Up。實際分支、失敗與恢復策略依程式碼及 `docs/decision-log.md`。
+`VoiceForegroundService` 擁有語音服務生命週期與資源；`AudioCaptureEngine` 建立唯一 `AudioRecord`，以 16 kHz／mono／PCM16／20 ms frame 送入有界佇列。`VoiceOrchestrator` 是唯一狀態切換者，將喚醒後語音交給 VAD／ASR；本機 `MusicCommandRouter`、`NavigationCommandRouter` 與 `ReminderCommandRouter` 優先處理明確指令，一般問答才走 `OpenAiCompatibleLlmProvider` 的 SSE，完整句送 TTS，結束後可進 Follow Up。實際分支、失敗與恢復策略依程式碼及 `docs/decision-log.md`。
 
 ## 重要目錄與模組
 
@@ -24,6 +24,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - `service/`、`audio/`、`orchestration/`：前景服務、單一音訊來源、狀態機與恢復策略。
 - `kws/`、`vad/`、`asr/`、`model/`：本機語音偵測／固定 X-ASR 辨識、APK 內建模型安裝與 SHA256 驗證；舊版下載工作保留升級相容處理。
 - `music/`、`reminder/`：媒體操作與本機提醒路由、執行與排程。
+- `navigation/`：語音導航的本機指令解析、地圖 App 目錄與路線預覽啟動。只開啟使用者選定的地圖 App 到路線預覽頁，最後的開始導航由使用者點擊。
 - `llm/`、`tts/`：可設定的 OpenAI 相容 SSE 用戶端與 Android 語音輸出。
 - `data/`、`security/`、`diagnostics/`：DataStore 設定、Keystore 密鑰、有限且遮罩的診斷。
 - `app/src/test/`、`app/src/androidTest/`、`docs/test-reports/`：單元測試、裝置測試與真機紀錄。
@@ -40,6 +41,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - KWS／VAD／ASR 模型本機執行；X-ASR 壓縮檔由 `scripts/prepare-bundled-xasr.ps1` 放進被 Git 忽略的 APK assets，建置與首次啟動時依現有程式校驗 SHA256，解壓至 App 私有空間。App 不再提供 ASR 模型下載／選擇；舊設定改用 X-ASR，既有模型檔不自動刪除。模型 binary 不進 Git。
 - 一般問答由使用者在 App 設定的 OpenAI 相容 HTTPS endpoint 處理；未提供 API Key 時不能宣稱真實 Provider 已驗收。
 - 選定的播放器以 Android 媒體服務／MediaSession 控制；MusicCabin 收藏與循環另需使用者授予通知存取。裝置提醒使用系統鬧鐘與通知。
+- 語音導航以 Intent 開啟使用者選定的地圖 App 到路線預覽頁，不查詢任何雲端地理編碼服務。
 
 ## 需保持相容的介面／資料
 

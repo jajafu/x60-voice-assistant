@@ -24,6 +24,8 @@ data class AssistantSettings(
     val musicAppName: String = DEFAULT_MUSIC_APP_NAME,
     val musicPackageName: String = DEFAULT_MUSIC_PACKAGE_NAME,
     val musicServiceName: String = DEFAULT_MUSIC_SERVICE_NAME,
+    val navAppName: String = DEFAULT_NAV_APP_NAME,
+    val navPackageName: String = DEFAULT_NAV_PACKAGE_NAME,
     val ttsEngine: String = "",
     val ttsVoice: String = "",
     val ttsVolume: Float = DEFAULT_TTS_VOLUME,
@@ -51,6 +53,8 @@ data class AssistantSettings(
         musicAppName = musicAppName.trim().take(100),
         musicPackageName = musicPackageName.trim().take(200),
         musicServiceName = musicServiceName.trim().take(300),
+        navAppName = navAppName.trim().take(100),
+        navPackageName = navPackageName.trim().take(200),
         ttsEngine = ttsEngine.trim().take(MAX_TTS_IDENTIFIER_LENGTH),
         ttsVoice = ttsVoice.trim().take(MAX_TTS_IDENTIFIER_LENGTH),
         ttsVolume = ttsVolume.coerceIn(TTS_VOLUME_RANGE),
@@ -68,6 +72,14 @@ data class AssistantSettings(
         const val DEFAULT_MUSIC_APP_NAME = "MusicCabin"
         const val DEFAULT_MUSIC_PACKAGE_NAME = "com.jajafu.musiccabin"
         const val DEFAULT_MUSIC_SERVICE_NAME = "com.metrolist.music.playback.MusicService"
+
+        /**
+         * 導航 App 預設為 Google 地圖。已於 2026-09-30 於 vivo X60（Android 13）確認
+         * `https://www.google.com/maps/dir/?api=1&destination=<地點>` 可直達路線預覽頁。
+         * 高德地圖（`androidamap://route/plan/?dname=`）已實測可用但需多一次選點，尚未納入本輪。
+         */
+        const val DEFAULT_NAV_APP_NAME = "Google 地圖"
+        const val DEFAULT_NAV_PACKAGE_NAME = "com.google.android.apps.maps"
 
         /**
          * TTS 輸出的增益，套用到 TextToSpeech.Engine.KEY_PARAM_VOLUME。

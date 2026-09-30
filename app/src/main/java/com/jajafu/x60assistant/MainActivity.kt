@@ -39,6 +39,8 @@ import com.jajafu.x60assistant.reminder.ReminderRecurrence
 import com.jajafu.x60assistant.reminder.ScheduledReminder
 import com.jajafu.x60assistant.reminder.ReminderStore
 import com.jajafu.x60assistant.music.MusicAppCatalog
+import com.jajafu.x60assistant.navigation.NavigationAppCatalog
+import com.jajafu.x60assistant.navigation.NavigationAppOption
 import com.jajafu.x60assistant.music.MusicAppOption
 import com.jajafu.x60assistant.music.MusicCabinFavoriteAccess
 import com.jajafu.x60assistant.music.AssistantUiVisibility
@@ -68,6 +70,7 @@ class MainActivity : ComponentActivity() {
     private var pendingDiagnosticsExport: String? = null
     private var showExactAlarmOnboarding by mutableStateOf(false)
     private var compatibleMusicApps by mutableStateOf<List<MusicAppOption>>(emptyList())
+    private var compatibleNavApps by mutableStateOf<List<NavigationAppOption>>(emptyList())
     private var musicCabinFavoriteAccessGranted by mutableStateOf(false)
     private var scheduledReminders by mutableStateOf<List<ScheduledReminder>>(emptyList())
     private var reminderSoundName by mutableStateOf("系統預設鬧鐘")
@@ -204,6 +207,8 @@ class MainActivity : ComponentActivity() {
                     onDismissExactAlarmOnboarding = ::finishExactAlarmOnboarding,
                     compatibleMusicApps = compatibleMusicApps,
                     onOpenMusicApp = ::openMusicAppForSetup,
+                    compatibleNavApps = compatibleNavApps,
+                    onOpenNavApp = ::openNavAppForSetup,
                     musicCabinFavoriteAccessGranted = musicCabinFavoriteAccessGranted,
                     onOpenMusicCabinFavoriteAccess = ::openMusicCabinFavoriteAccessSettings,
                     ttsEngines = ttsEngines,
@@ -315,6 +320,7 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshMusicApps() {
         compatibleMusicApps = MusicAppCatalog(applicationContext).compatibleApps()
+        compatibleNavApps = NavigationAppCatalog(applicationContext).availableApps()
     }
 
     /**
@@ -352,6 +358,22 @@ class MainActivity : ComponentActivity() {
             settingsMessage = "請依音樂 App 畫面完成必要授權，並先手動播放一首歌。"
         }.onFailure {
             settingsMessage = "無法開啟${appName.ifBlank { "音樂 App" }}：${it.javaClass.simpleName}"
+        }
+    }
+
+    private fun openNavAppForSetup(packageName: String, appName: String) {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        if (launchIntent == null) {
+            settingsMessage = "找不到${appName.ifBlank { "導航 App" }}，請重新選擇。"
+            refreshMusicApps()
+            return
+        }
+        runCatching {
+            startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
+        }.onSuccess {
+            settingsMessage = "請依地圖 App 畫面完成歡迎畫面與位置授權，之後語音才能直接帶入路線。"
+        }.onFailure {
+            settingsMessage = "無法開啟${appName.ifBlank { "導航 App" }}：${it.javaClass.simpleName}"
         }
     }
 

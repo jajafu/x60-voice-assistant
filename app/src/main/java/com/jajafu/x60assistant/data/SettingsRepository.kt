@@ -47,6 +47,8 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.MUSIC_APP_NAME] = settings.musicAppName
             prefs[Keys.MUSIC_PACKAGE_NAME] = settings.musicPackageName
             prefs[Keys.MUSIC_SERVICE_NAME] = settings.musicServiceName
+            prefs[Keys.NAV_APP_NAME] = settings.navAppName
+            prefs[Keys.NAV_PACKAGE_NAME] = settings.navPackageName
             prefs[Keys.TTS_ENGINE] = settings.ttsEngine
             prefs[Keys.TTS_VOICE] = settings.ttsVoice
             prefs[Keys.TTS_VOLUME] = settings.ttsVolume
@@ -87,6 +89,8 @@ class SettingsRepository(private val context: Context) {
         musicAppName = prefs[Keys.MUSIC_APP_NAME] ?: AssistantSettings.DEFAULT_MUSIC_APP_NAME,
         musicPackageName = prefs[Keys.MUSIC_PACKAGE_NAME] ?: AssistantSettings.DEFAULT_MUSIC_PACKAGE_NAME,
         musicServiceName = prefs[Keys.MUSIC_SERVICE_NAME] ?: AssistantSettings.DEFAULT_MUSIC_SERVICE_NAME,
+        navAppName = prefs[Keys.NAV_APP_NAME] ?: AssistantSettings.DEFAULT_NAV_APP_NAME,
+        navPackageName = prefs[Keys.NAV_PACKAGE_NAME] ?: AssistantSettings.DEFAULT_NAV_PACKAGE_NAME,
         ttsEngine = prefs[Keys.TTS_ENGINE].orEmpty(),
         ttsVoice = prefs[Keys.TTS_VOICE].orEmpty(),
         ttsVolume = prefs[Keys.TTS_VOLUME] ?: AssistantSettings.DEFAULT_TTS_VOLUME,
@@ -119,6 +123,8 @@ class SettingsRepository(private val context: Context) {
         val MUSIC_APP_NAME = stringPreferencesKey("music_app_name")
         val MUSIC_PACKAGE_NAME = stringPreferencesKey("music_package_name")
         val MUSIC_SERVICE_NAME = stringPreferencesKey("music_service_name")
+        val NAV_APP_NAME = stringPreferencesKey("nav_app_name")
+        val NAV_PACKAGE_NAME = stringPreferencesKey("nav_package_name")
         val TTS_ENGINE = stringPreferencesKey("tts_engine")
         val TTS_VOICE = stringPreferencesKey("tts_voice")
         val TTS_VOLUME = floatPreferencesKey("tts_volume")
