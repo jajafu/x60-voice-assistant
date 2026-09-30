@@ -2,6 +2,7 @@ package com.jajafu.x60assistant.music
 
 import android.content.ComponentName
 import android.content.Context
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.browse.MediaBrowser
 import android.media.session.MediaController
@@ -52,8 +53,11 @@ class MusicCabinController(
 ) : MusicActionExecutor {
     private val appContext = context.applicationContext
     private val appLauncher = MusicAppLauncher(appContext, musicPackageName, musicAppName)
+    private val audioManager = appContext.getSystemService(AudioManager::class.java)
 
     override suspend fun pauseForVoice(): Boolean = withContext(Dispatchers.Main.immediate) {
+        // 沒播音樂就不綁 MusicCabin 服務：connect() 冷啟動最久會吃掉 2 秒，擋住喚醒回應。
+        if (audioManager?.isMusicActive == false) return@withContext false
         try {
             withTimeoutOrNull(VOICE_CONTROL_TIMEOUT_MS) {
                 val browser = connect()
