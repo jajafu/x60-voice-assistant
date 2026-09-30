@@ -175,10 +175,12 @@ class AndroidTtsEngine(
             ?: engine.defaultEngine.orEmpty()
         val voices = engine.voices.orEmpty()
         val requested = voices.firstOrNull { it.name == settings.ttsVoice }
+        // 與設定頁清單共用同一套繁中／離線優先排序；這裡只做選擇，不改變「沒有中文就不可用」
+        // 的既有行為。
+        val chinese = TtsEngineCatalog.chineseVoices(voices)
         val selected = requested
-            ?: voices.filter { !it.isNetworkConnectionRequired }.firstOrNull { it.locale.matchesLanguage("zh", "TW") }
-            ?: voices.filter { !it.isNetworkConnectionRequired }.firstOrNull { it.locale.matchesLanguage("zh", "CN") }
-            ?: voices.firstOrNull { it.locale.language.equals("zh", ignoreCase = true) }
+            ?: chinese.firstOrNull { !it.isNetworkConnectionRequired }
+            ?: chinese.firstOrNull()
         if (selected == null || engine.setVoice(selected) != TextToSpeech.SUCCESS) {
             return TtsStatus(false, activeEngine, message = "沒有可用的中文 Voice")
         }
@@ -191,8 +193,6 @@ class AndroidTtsEngine(
         )
     }
 
-    private fun Locale.matchesLanguage(language: String, country: String): Boolean =
-        this.language.equals(language, ignoreCase = true) && this.country.equals(country, ignoreCase = true)
 
     private fun requestAudioFocus(): Boolean {
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
