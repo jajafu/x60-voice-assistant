@@ -26,6 +26,7 @@ data class AssistantSettings(
     val musicServiceName: String = DEFAULT_MUSIC_SERVICE_NAME,
     val ttsEngine: String = "",
     val ttsVoice: String = "",
+    val ttsVolume: Float = DEFAULT_TTS_VOLUME,
     val speechRate: Float = 1.0f,
     val pitch: Float = 1.0f,
     val connectionVerified: Boolean = false,
@@ -50,6 +51,9 @@ data class AssistantSettings(
         musicAppName = musicAppName.trim().take(100),
         musicPackageName = musicPackageName.trim().take(200),
         musicServiceName = musicServiceName.trim().take(300),
+        ttsEngine = ttsEngine.trim().take(MAX_TTS_IDENTIFIER_LENGTH),
+        ttsVoice = ttsVoice.trim().take(MAX_TTS_IDENTIFIER_LENGTH),
+        ttsVolume = ttsVolume.coerceIn(TTS_VOLUME_RANGE),
         speechRate = speechRate.coerceIn(SPEECH_RATE_RANGE),
         pitch = pitch.coerceIn(PITCH_RANGE),
     )
@@ -64,6 +68,14 @@ data class AssistantSettings(
         const val DEFAULT_MUSIC_APP_NAME = "MusicCabin"
         const val DEFAULT_MUSIC_PACKAGE_NAME = "com.jajafu.musiccabin"
         const val DEFAULT_MUSIC_SERVICE_NAME = "com.metrolist.music.playback.MusicService"
+
+        /**
+         * TTS 輸出的增益，套用到 TextToSpeech.Engine.KEY_PARAM_VOLUME。
+         * 1.0 是引擎預設值；Android 標示範圍為 0.0–1.0，超過 1.0 是否放大取決於引擎，
+         * 可能破音或被忽略，因此預設維持 1.0 以維持既有行為。
+         */
+        const val DEFAULT_TTS_VOLUME = 1.0f
+        const val MAX_TTS_IDENTIFIER_LENGTH = 200
 
         /**
          * 喚醒詞開啟新一輪時會清除對話歷史，只有這個視窗內的追問才帶著上一輪。
@@ -87,6 +99,7 @@ data class AssistantSettings(
         val TRAILING_SILENCE_MS_RANGE = 500L..1_500L
         val MAX_UTTERANCE_MS_RANGE = 10_000L..60_000L
         val AUDIO_RESUME_DELAY_MS_RANGE = 250L..500L
+        val TTS_VOLUME_RANGE = 0.0f..2.0f
         val SPEECH_RATE_RANGE = 0.5f..2.0f
         val PITCH_RANGE = 0.5f..2.0f
         val WAIT_FOR_SPEECH_SECONDS_RANGE =
