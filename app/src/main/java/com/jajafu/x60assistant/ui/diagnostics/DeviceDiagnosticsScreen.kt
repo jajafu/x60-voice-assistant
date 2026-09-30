@@ -78,6 +78,9 @@ import com.jajafu.x60assistant.reminder.ScheduledReminder
 import com.jajafu.x60assistant.reminder.ReminderFrequency
 import com.jajafu.x60assistant.reminder.ReminderRecurrence
 import com.jajafu.x60assistant.reminder.label
+import com.jajafu.x60assistant.tts.TtsEngineOption
+import com.jajafu.x60assistant.tts.TtsVoiceOption
+import com.jajafu.x60assistant.tts.displayLabel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -116,6 +119,10 @@ fun DeviceDiagnosticsScreen(
     onOpenNavApp: (String, String) -> Unit,
     musicCabinFavoriteAccessGranted: Boolean,
     onOpenMusicCabinFavoriteAccess: () -> Unit,
+    ttsEngines: List<TtsEngineOption>,
+    ttsVoices: List<TtsVoiceOption>,
+    ttsVoicesLoading: Boolean,
+    onLoadTtsVoices: (String?) -> Unit,
     scheduledReminders: List<ScheduledReminder>,
     reminderSoundName: String,
     reminderMessage: String?,
@@ -194,6 +201,10 @@ fun DeviceDiagnosticsScreen(
                 onSave = onSaveSettings,
                 onTestTts = onTestTts,
                 compatibleMusicApps = compatibleMusicApps,
+                ttsEngines = ttsEngines,
+                ttsVoices = ttsVoices,
+                ttsVoicesLoading = ttsVoicesLoading,
+                onLoadTtsVoices = onLoadTtsVoices,
                 onOpenMusicApp = onOpenMusicApp,
                 compatibleNavApps = compatibleNavApps,
                 onOpenNavApp = onOpenNavApp,
@@ -560,6 +571,10 @@ private fun SettingsPage(
     musicCabinFavoriteAccessGranted: Boolean,
     onOpenMusicCabinFavoriteAccess: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    ttsEngines: List<TtsEngineOption>,
+    ttsVoices: List<TtsVoiceOption>,
+    ttsVoicesLoading: Boolean,
+    onLoadTtsVoices: (String?) -> Unit,
 ) {
     // 不以 saved 為 remember key：設定流每次發布都是新物件，否則外部更新會清掉整份草稿。
     var draft by remember { mutableStateOf(saved) }
@@ -768,13 +783,31 @@ private fun SettingsPage(
 
         item {
             SectionCard("語音與追問") {
-                NumberSetting(
-                    label = "Follow Up（${numberFields.followUpSeconds.rangeLabel}）",
-                    state = numberFields.followUpSeconds,
+                TtsPicker(
+                    draft = draft,
+                    engines = ttsEngines,
+                    voices = ttsVoices,
+                    voicesLoading = ttsVoicesLoading,
                     enabled = enabled,
-                    hint = "設為 0 可關閉回答後的追問等待。",
+                    onSelectEngine = { engine ->
+                        draft = draft.copy(ttsEngine = engine, ttsVoice = "")
+                    },
+                    onSelectVoice = { voice -> draft = draft.copy(ttsVoice = voice) },
+                    onLoadVoices = onLoadTtsVoices,
                 )
-                Text("語速 ${String.format(Locale.ROOT, "%.1f", draft.speechRate)}", modifier = Modifier.padding(top = 12.dp))
+                Text("TTS 音量 ${String.format(Locale.ROOT, "%.2f", draft.ttsVolume)}", modifier = Modifier.padding(top = 16.dp))
+                Slider(
+                    draft.ttsVolume,
+                    { draft = draft.copy(ttsVolume = it) },
+                    valueRange = AssistantSettings.TTS_VOLUME_RANGE,
+                    enabled = enabled,
+                )
+                Text(
+                    "音量套用到 TTS 引擎，部分引擎可能忽略。1.00 是引擎預設值，超過會放大且可能破音。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text("語速 ${String.format(Locale.ROOT, "%.1f", draft.speechRate)}", modifier = Modifier.padding(top = 16.dp))
                 Slider(draft.speechRate, { draft = draft.copy(speechRate = it) }, valueRange = 0.5f..2.0f, enabled = enabled)
                 Text("音高 ${String.format(Locale.ROOT, "%.1f", draft.pitch)}")
                 Slider(draft.pitch, { draft = draft.copy(pitch = it) }, valueRange = 0.5f..2.0f, enabled = enabled)
@@ -783,6 +816,18 @@ private fun SettingsPage(
                     enabled = enabled,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
                 ) { Text("測試語音") }
+                Text(
+                    "引擎、音調與音量在啟動語音服務時套用，修改後請停止再重新啟動語音服務。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                NumberSetting(
+                    label = "Follow Up（${numberFields.followUpSeconds.rangeLabel}）",
+                    state = numberFields.followUpSeconds,
+                    enabled = enabled,
+                    hint = "設為 0 可關閉回答後的追問等待。",
+                )
             }
         }
 
@@ -1368,6 +1413,119 @@ private fun DiagnosticsPage(
                 Text("重新整理診斷")
             }
         }
+    }
+}
+
+/**
+ * TTS 引擎與 voice 選擇器。引擎清單來自裝置；voice 清單需要綁定引擎才能取得，
+ * 因此在選到的引擎改變時才重新載入，避免一進入設定頁就啟動 TTS。
+ */
+@Composable
+private fun TtsPicker(
+    draft: AssistantSettings,
+    engines: List<TtsEngineOption>,
+    voices: List<TtsVoiceOption>,
+    voicesLoading: Boolean,
+    enabled: Boolean,
+    onSelectEngine: (String) -> Unit,
+    onSelectVoice: (String) -> Unit,
+    onLoadVoices: (String?) -> Unit,
+) {
+    var engineMenuExpanded by remember { mutableStateOf(false) }
+    var voiceMenuExpanded by remember { mutableStateOf(false) }
+    LaunchedEffect(draft.ttsEngine) { onLoadVoices(draft.ttsEngine) }
+
+    val selectedEngine = engines.firstOrNull { it.packageName == draft.ttsEngine }
+    val engineLabel = when {
+        draft.ttsEngine.isBlank() -> "系統預設（${selectedEngine?.label ?: "自動選擇"}）"
+        selectedEngine != null -> selectedEngine.label
+        else -> "${draft.ttsEngine}（目前未偵測到）"
+    }
+    val selectedVoice = voices.firstOrNull { it.name == draft.ttsVoice }
+    val voiceLabel = when {
+        voicesLoading -> "讀取中…"
+        draft.ttsVoice.isBlank() -> "自動選擇"
+        selectedVoice != null -> selectedVoice.displayLabel()
+        else -> draft.ttsVoice
+    }
+
+    Text("TTS 引擎", style = MaterialTheme.typography.labelLarge)
+    Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        OutlinedButton(
+            onClick = { engineMenuExpanded = true },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) { Text(engineLabel) }
+        DropdownMenu(
+            expanded = engineMenuExpanded,
+            onDismissRequest = { engineMenuExpanded = false },
+            modifier = Modifier.fillMaxWidth(.9f),
+        ) {
+            DropdownMenuItem(
+                text = { Text("系統預設（自動選擇）") },
+                onClick = {
+                    onSelectEngine("")
+                    engineMenuExpanded = false
+                },
+            )
+            engines.forEach { engine ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(engine.label)
+                            Text(
+                                engine.packageName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSelectEngine(engine.packageName)
+                        engineMenuExpanded = false
+                    },
+                )
+            }
+        }
+    }
+
+    Text("TTS 音調", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 16.dp))
+    Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        OutlinedButton(
+            onClick = { voiceMenuExpanded = true },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) { Text(voiceLabel) }
+        DropdownMenu(
+            expanded = voiceMenuExpanded,
+            onDismissRequest = { voiceMenuExpanded = false },
+            modifier = Modifier.fillMaxWidth(.9f),
+        ) {
+            DropdownMenuItem(
+                text = { Text("自動選擇（優先離線中文）") },
+                onClick = {
+                    onSelectVoice("")
+                    voiceMenuExpanded = false
+                },
+            )
+            voices.forEach { voice ->
+                DropdownMenuItem(
+                    text = { Text(voice.displayLabel()) },
+                    onClick = {
+                        onSelectVoice(voice.name)
+                        voiceMenuExpanded = false
+                    },
+                )
+            }
+        }
+    }
+    if (!voicesLoading && voices.isEmpty()) {
+        Text(
+            "這個引擎沒有回報可用音調。可到系統「文字轉語音輸出」下載語音，或改用其他引擎。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
+        )
     }
 }
 
