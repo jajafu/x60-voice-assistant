@@ -20,6 +20,11 @@ import com.jajafu.x60assistant.music.MusicActionExecutor
 import com.jajafu.x60assistant.music.MusicActionResult
 import com.jajafu.x60assistant.music.MusicCommand
 import com.jajafu.x60assistant.music.MusicCommandRouter
+import com.jajafu.x60assistant.navigation.NavigationActionExecutor
+import com.jajafu.x60assistant.navigation.NavigationActionResult
+import com.jajafu.x60assistant.navigation.NavigationCommand
+import com.jajafu.x60assistant.navigation.NavigationCommandRouter
+import com.jajafu.x60assistant.navigation.NavigationLaunchMode
 import com.jajafu.x60assistant.music.MusicRefusalRecovery
 import com.jajafu.x60assistant.music.MusicRefusalRecoveryRouter
 import com.jajafu.x60assistant.reminder.ReminderActionExecutor
@@ -69,6 +74,7 @@ class VoiceOrchestrator(
     private val musicExecutor: MusicActionExecutor? = null,
     private val reminderExecutor: ReminderActionExecutor? = null,
     private val alarmExecutor: AlarmActionExecutor? = null,
+    private val navigationExecutor: NavigationActionExecutor? = null,
     speechOutput: SpeechOutputEngine? = null,
     private val speechOutputFactory: (suspend () -> SpeechOutputEngine?)? = null,
     private val clock: MonotonicClock = AndroidMonotonicClock,
@@ -126,6 +132,7 @@ class VoiceOrchestrator(
                 is Command.TranscriptReady -> handleTranscriptReady(command.result)
                 is Command.AnswerReady -> handleAnswerReady(command)
                 is Command.MusicActionReady -> handleMusicActionReady(command)
+                is Command.NavigationActionReady -> handleNavigationActionReady(command)
                 is Command.ReminderActionReady -> handleReminderActionReady(command.result)
                 is Command.ContextualCloseFinished -> handleContextualCloseFinished(command.message)
                 Command.SpeechFinished -> handleSpeechFinished()
@@ -333,6 +340,12 @@ class VoiceOrchestrator(
             executeMusic(musicCommand)
             return
         }
+        val navigationCommand = NavigationCommandRouter.parse(userText, settings.wakePhrase)
+        if (navigationCommand != null && navigationExecutor != null) {
+            transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
+            executeNavigation(navigationCommand)
+            return
+        }
         val provider = llm
         if (provider == null || settings.baseUrl.isBlank() || settings.model.isBlank()) {
             M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.LLM_CONFIG_INVALID, "session=$sessionId")
@@ -417,6 +430,35 @@ class VoiceOrchestrator(
             }
             if (isActive) emit(Command.MusicActionReady(response, recoveredFromLlm))
         }
+    }
+
+    private fun executeNavigation(command: NavigationCommand) {
+        val executor = requireNotNull(navigationExecutor)
+        stateJob = launchState { emit ->
+            val response = try {
+                executor.execute(command)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                NavigationActionResult("導航操作失敗，請再試一次。", NavigationLaunchMode.FAILED)
+            }
+            if (isActive) emit(Command.NavigationActionReady(response))
+        }
+    }
+
+    private suspend fun handleNavigationActionReady(command: Command.NavigationActionReady) {
+        if (machine.state != VoiceState.EXECUTING_ACTION) return
+        val message = command.result.message
+        M1DiagnosticsRepository.setAnswerPreview(message)
+        val output = speechOutput
+        if (output == null) {
+            M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.TTS_ENGINE_MISSING, "nav-action-no-output")
+            returnToIdle(TransitionReason.USER_CANCEL)
+            return
+        }
+        transition(VoiceState.SPEAKING, TransitionReason.ANSWER_READY)
+        ttsRecoveryAttempted = false
+        startSpeaking(message)
     }
 
     private suspend fun handleContextualClose() {
@@ -889,6 +931,7 @@ class VoiceOrchestrator(
             val result: MusicActionResult,
             val recoveredFromLlm: Boolean = false,
         ) : Command
+        data class NavigationActionReady(val result: NavigationActionResult) : Command
         data class ReminderActionReady(val result: ReminderActionResult) : Command
         data class ContextualCloseFinished(val message: String?) : Command
         data object SpeechFinished : Command

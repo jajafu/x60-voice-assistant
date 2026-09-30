@@ -29,6 +29,8 @@ import com.jajafu.x60assistant.diagnostics.VoiceErrorCode
 import com.jajafu.x60assistant.data.SettingsRepository
 import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
 import com.jajafu.x60assistant.music.MusicCabinController
+import com.jajafu.x60assistant.navigation.NavigationActionExecutor
+import com.jajafu.x60assistant.navigation.NavigationAppCatalog
 import com.jajafu.x60assistant.reminder.AndroidReminderActionExecutor
 import com.jajafu.x60assistant.reminder.AndroidAlarmActionExecutor
 import com.jajafu.x60assistant.kws.KwsModelPack
@@ -229,6 +231,16 @@ class VoiceForegroundService : Service() {
                     null
                 },
                 reminderExecutor = AndroidReminderActionExecutor(applicationContext),
+                navigationExecutor = if (settings.navPackageName.isNotBlank()) {
+                    NavigationActionExecutor(
+                        context = applicationContext,
+                        catalog = NavigationAppCatalog(applicationContext),
+                        selectedPackageName = settings.navPackageName,
+                        selectedAppName = settings.navAppName.ifBlank { "地圖 App" },
+                    )
+                } else {
+                    null
+                },
                 alarmExecutor = AndroidAlarmActionExecutor(applicationContext),
                 speechOutput = if (ttsStatus.available) ttsEngine else null,
                 speechOutputFactory = { createTtsEngine(settings) },

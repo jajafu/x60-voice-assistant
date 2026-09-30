@@ -1,6 +1,7 @@
 # 小助手 X60：語音操作手機擴充規劃書
 
 日期：2026-09-23　狀態：MusicCabin 基本控制已接入；真人語音／鎖屏驗收待完成
+更新：2026-09-30　狀態：語音導航（Google 地圖）已實作並通過 test／lint／assembleDebug；真機語音驗收待完成
 
 ## 1. 目標與產品邊界
 
@@ -88,7 +89,45 @@
 
 MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並解鎖；既有媒體工作階段的控制及搜尋播放則以不開畫面為目標。P0 真機結果決定 P3 能否做到真正免手動指定歌曲播放；若實際播放無法完成，就將「開啟搜尋結果頁」與「自動播放」分開交付，不宣稱具備後者。
 
-## 8. 參考依據
+## 8. 語音導航（2026-09-30 實測後納入）
+
+### 8.1 各 URI 策略的實測結果
+
+2026-09-30 於 X60（Android 13）先後完成 Google 地圖 `26.39.04` 與高德地圖 `10.25.0.3203` 的首次設定，再實測各 URI 落點。結果顯示**不能用同一套 Intent 對待兩家地圖**：
+
+| App | URI | 實測落點 | 尚需點擊 |
+| --- | --- | --- | --- |
+| Google 地圖 | `https://www.google.com/maps/dir/?api=1&destination=<地點>` | 直達路線預覽頁（起點、終點、時間距離、交通分頁齊全） | 1 次「開始」 |
+| Google 地圖 | `geo:0,0?q=<地點>` | 停在搜尋結果頁 | 2 次 |
+| Google 地圖 | `google.navigation:q=<lat>,<lon>` | 首次啟動頁印出 `Activity not started, its current task has been brought to the front`，目的地是否帶入無法確認 | — |
+| 高德地圖 | `androidamap://route/plan/?dname=<地點>` | 「確定終點」頁（已排序 POI 清單） | 1 次選點 |
+| 高德地圖 | `geo:0,0?q=<地點>` | 停在搜尋結果頁 | 2 次 |
+| 高德地圖 | `https://uri.amap.com/navigation?...` | `Activity not started, unable to resolve` | — |
+
+`geo:` 看似通用，實測反而是兩家中落點最差的，只能當降級備援。另一項必須注意的事實：兩家共存時未指定套件的 `geo:` 會開系統 `ResolverActivity` 選擇器，因此 `NavigationAppLauncher` 一律 `setPackage()`。
+
+### 8.2 本期範圍
+
+只納入 Google 地圖。指令為 `NavigationCommand.Navigate(destination)`，由 `NavigationCommandRouter` 在本機解析，必須帶目的地，純「導航」不觸發；喚醒詞與客套話一併剝除。目的地字串交給地圖自行搜尋，小助手不做地理編碼、不呼叫任何雲端地理 API。TTS 只說已開啟路線預覽並請使用者確認地點後點開始導航，**不宣稱已在導航**；Google 地圖會把「台北101」自行解析成「台北101購物中心」，回話不得宣稱目的地已正確選定。
+
+### 8.3 不做 Android Auto 的依據
+
+2026-09-30 查證後決定不整合 Android Auto：
+
+1. AA 投影時手機端 UI mode 不會變成 `UI_MODE_TYPE_CAR`，投影服務獨立於 dock 模式，用 `UiModeManager` 判斷會誤判。
+2. 沒有公開 API 查詢投影狀態；反射隱藏 API 會被 Google 斷除且違反 Play 政策。
+3. 即便不判斷而直接啟動，背景啟動限制擋著：AA 連接時手機是暗的／鎖定的，§4.2 為音樂設計的「發通知請使用者點擊」在車上無效。
+4. 結構性不對稱：地圖的本質是開畫面，Android 10+ 限制背景開畫面；MediaSession 那套在鎖屏與車機都管用的機制，地圖沒有對應物。
+5. 功能重疊：AA 下「導航到台北101」本就是 Google 助理的職責。
+6. 唯一合法的車機全自動路徑是成為 Google 認證的 AA 導航應用（`NavigationActivity`、`CarAppService` 與 Google 認證審核），工作量遠超本專案規模且需等待審核。
+
+### 8.4 已知限制
+
+- **首次設定死路**：兩家地圖首次啟動都需同意條款，語音觸發會撞到條款頁而非路線圖。沒有公開 API 可偵測首次設定狀態，緩解方式是回話措辭納入提醒，並在設定頁提供「開啟導航 App 完成首次設定」按鈕。
+- **高德延後**：實測可用但需多一次選點（「台北101」會展開成 10 個以上 POI，含購物店等子項）。已與使用者確認接受，TTS 須說明請在終點清單選擇要去的地方。
+- 「回家／去公司」等常用目的地簡稱、導航中的語音控制（暫停／繼續／重新規劃）未納入本輪。
+
+## 9. 參考依據
 
 - 現有程式：`app/src/main/java/com/jajafu/x60assistant/orchestration/VoiceOrchestrator.kt`、`app/src/main/AndroidManifest.xml`、`docs/test-reports/m5-2026-09-22-vivo-x60.md`。
 - Android 官方：[Package visibility](https://developer.android.com/training/package-visibility/use-cases)、[MediaSessionManager](https://developer.android.com/reference/android/media/session/MediaSessionManager)、[媒體控制](https://developer.android.com/reference/android/media/session/MediaController.TransportControls)、[常見 Intent](https://developer.android.com/guide/components/intents-common)、[背景 Activity 啟動限制](https://developer.android.com/guide/components/activities/secure-bal)、[Accessibility Service](https://developer.android.com/guide/topics/ui/accessibility/views/service)。

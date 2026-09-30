@@ -1,5 +1,20 @@
 # Design System Master File
 
+> **⚠️ 本檔不適用於本專案，請勿依此實作 UI。**
+>
+> 這是一份自動產生的**網頁**設計稿：內含 CSS variables、`cursor:pointer`、gsap ScrollTrigger、
+> `clamp(3rem, 10vw, 12rem)` 字級、375/768/1024/1440 breakpoints 與 `prefers-reduced-motion`，
+> 分類寫的是 Construction/Architecture、風格寫的是 Exaggerated Minimalism。
+> 這些都與本專案的實際實作無關。
+>
+> 本專案是 **Android Jetpack Compose + Material 3 單一模組 App**（`Theme.kt` 的 Material 配色、
+> `DeviceDiagnosticsScreen.kt` 的 `SectionCard` / `MessageCard` / `ToggleRow`、
+> `AppPickerField.kt` 的共用選擇器），沒有游標、沒有滾動動畫、也不是單頁網站。
+>
+> 依 `AGENTS.md`，文件與已驗證現況不一致時以現況為準。要改設定頁外觀請比照
+> `ui/diagnostics/` 既有的 Compose 版型，維持 `SectionCard` 的卡片結構、`MaterialTheme.typography`
+> 字級與 16.dp 間距，不要套用下列網頁規則。
+
 > **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.
 > If that file exists, its rules **override** this Master file.
 > If not, strictly follow the rules below.
