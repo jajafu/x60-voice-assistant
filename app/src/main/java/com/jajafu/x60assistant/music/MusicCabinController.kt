@@ -56,7 +56,7 @@ class MusicCabinController(
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
 
     override suspend fun pauseForVoice(): Boolean = withContext(Dispatchers.Main.immediate) {
-        // 沒播音樂就不綁 MusicCabin 服務：connect() 冷啟動最久會吃掉 2 秒，擋住喚醒回應。
+        // 沒播音樂就不綁 MusicCabin 服務，省掉一次無用的 MediaBrowser 連線。
         if (audioManager?.isMusicActive == false) return@withContext false
         try {
             withTimeoutOrNull(VOICE_CONTROL_TIMEOUT_MS) {

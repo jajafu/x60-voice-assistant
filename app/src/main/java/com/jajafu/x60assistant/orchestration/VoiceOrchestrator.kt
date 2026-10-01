@@ -214,21 +214,28 @@ class VoiceOrchestrator(
         transition(VoiceState.WAKE_ACK, TransitionReason.WAKE_DETECTED)
         stateJob = launchState { emit ->
             try {
-                if (startingSession) {
-                    withContext(NonCancellable) {
-                        resumeAlarmAfterSession = try {
-                            alarmExecutor?.pauseForVoice() == true
-                        } catch (_: Exception) {
-                            false
-                        }
-                        resumeMusicAfterSession = try {
-                            musicExecutor?.pauseForVoice() == true
-                        } catch (_: Exception) {
-                            false
+                // 暫停鬧鐘／音樂與喚醒回應同時進行：pauseForVoice() 最久要等 2 秒確認，
+                // 順序執行會把「我在」整個擋住。仍要等兩者都完成才開始聆聽，維持 ASR 不受音樂干擾。
+                val holdJob = if (startingSession) {
+                    launch {
+                        withContext(NonCancellable) {
+                            resumeAlarmAfterSession = try {
+                                alarmExecutor?.pauseForVoice() == true
+                            } catch (_: Exception) {
+                                false
+                            }
+                            resumeMusicAfterSession = try {
+                                musicExecutor?.pauseForVoice() == true
+                            } catch (_: Exception) {
+                                false
+                            }
                         }
                     }
+                } else {
+                    null
                 }
                 acknowledgementPlayer.playAndAwait(speechOutput, settings.wakeAcknowledgement)
+                holdJob?.join()
                 emit(Command.AcknowledgementFinished)
             } catch (cancelled: CancellationException) {
                 throw cancelled
