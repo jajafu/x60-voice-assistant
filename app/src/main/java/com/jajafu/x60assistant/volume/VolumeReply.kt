@@ -11,19 +11,11 @@ object VolumeReply {
 
     fun unchanged(index: Int, maxIndex: Int): String = "音量已經是 $index 格，共 $maxIndex 格。"
 
-    fun atFloor(minIndex: Int): String = "音量已經是最低的 $minIndex 格，說「靜音」可以完全關掉聲音。"
+    fun atFloor(minIndex: Int): String = "音量已經是最低的 $minIndex 格。"
 
     fun atCeiling(maxIndex: Int): String = "音量已經是最大的 $maxIndex 格。"
 
-    fun belowFloor(minIndex: Int): String = "音量最低只到 $minIndex 格，還沒調低，說「靜音」可以完全關掉聲音。"
-
-    fun muted(): String = "已靜音。"
-
-    fun alreadyMuted(): String = "已經是靜音狀態了。"
-
-    fun unmuted(index: Int, maxIndex: Int): String = "已解除靜音，音量 $index，共 $maxIndex 格。"
-
-    fun notMuted(index: Int, maxIndex: Int): String = "目前沒有靜音，音量 $index，共 $maxIndex 格。"
+    fun belowFloor(minIndex: Int): String = "音量最低只到 $minIndex 格，還沒調低。"
 
     fun unavailable(): String = "這個裝置無法調整音量。"
 

@@ -27,13 +27,6 @@ object VolumeCommandRouter {
     /** 必須出現其中一個名詞才算在談音量，避免「大一點」之類的半句誤觸。 */
     private val volumeNouns = listOf("音量", "声量", "聲量", "聲音", "声音")
 
-    private val unmuteMarkers = listOf(
-        "取消靜音", "取消静音", "解除靜音", "解除静音", "恢復聲音", "恢复声音",
-        "恢復音量", "恢复音量", "開聲音", "开声音",
-    )
-
-    private val muteMarkers = listOf("靜音", "静音", "安靜", "安静", "閉嘴", "闭嘴")
-
     private val maxRequests = listOf(
         "最大聲", "最大声", "最大音量", "音量最大", "聲音最大", "声音最大", "調到最大", "调到最大",
     )
@@ -96,8 +89,6 @@ object VolumeCommandRouter {
         if (questionMarkers.any { stripped.contains(it) }) return null
         if (negativeMarkers.any { stripped.contains(it) }) return null
 
-        if (unmuteMarkers.any { stripped.contains(it) }) return VolumeCommand.Unmute
-        if (muteMarkers.any { stripped.contains(it) }) return VolumeCommand.Mute
         if (maxRequests.any { stripped.contains(it) }) return VolumeCommand.SetTo(100)
         if (minRequests.any { stripped.contains(it) }) return VolumeCommand.SetTo(0)
 

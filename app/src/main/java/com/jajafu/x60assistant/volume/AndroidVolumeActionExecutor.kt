@@ -31,8 +31,6 @@ class AndroidVolumeActionExecutor(
             when (command) {
                 VolumeCommand.Up -> change(manager, raise = true)
                 VolumeCommand.Down -> change(manager, raise = false)
-                VolumeCommand.Mute -> mute(manager, mute = true)
-                VolumeCommand.Unmute -> mute(manager, mute = false)
                 is VolumeCommand.SetTo -> setTo(manager, command.percent)
             }
         }
@@ -63,28 +61,6 @@ class AndroidVolumeActionExecutor(
         }
         applySteps(manager, VolumeTargetPolicy.stepsTo(target.index, currentIndex))
         return VolumeActionResult(VolumeReply.setTo(target.index, maxIndex), applied = true)
-    }
-
-    private fun mute(manager: AudioManager, mute: Boolean): VolumeActionResult {
-        val maxIndex = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val currentIndex = manager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        // 靜音狀態與音量級別是兩件事：isStreamMute 才是目前是否靜音。
-        if (manager.isStreamMute(AudioManager.STREAM_MUSIC) == mute) {
-            return VolumeActionResult(
-                message = if (mute) VolumeReply.alreadyMuted() else VolumeReply.notMuted(currentIndex, maxIndex),
-                applied = false,
-            )
-        }
-        // setStreamMute 在 API 35 已棄用，改用未棄用的 ADJUST_MUTE／ADJUST_UNMUTE。
-        manager.adjustStreamVolume(
-            AudioManager.STREAM_MUSIC,
-            if (mute) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE,
-            0,
-        )
-        return VolumeActionResult(
-            message = if (mute) VolumeReply.muted() else VolumeReply.unmuted(currentIndex, maxIndex),
-            applied = true,
-        )
     }
 
     /** 逐格前進；每一格都可能讓系統播一次音量提示音，所以路徑交給 [VolumeTargetPolicy] 產生。 */
