@@ -26,6 +26,7 @@ data class AssistantSettings(
     val musicServiceName: String = DEFAULT_MUSIC_SERVICE_NAME,
     val navAppName: String = DEFAULT_NAV_APP_NAME,
     val navPackageName: String = DEFAULT_NAV_PACKAGE_NAME,
+    val voiceVolumeControl: Boolean = DEFAULT_VOICE_VOLUME_CONTROL,
     val ttsEngine: String = "",
     val ttsVoice: String = "",
     val ttsVolume: Float = DEFAULT_TTS_VOLUME,
@@ -80,6 +81,12 @@ data class AssistantSettings(
          */
         const val DEFAULT_NAV_APP_NAME = "Google 地圖"
         const val DEFAULT_NAV_PACKAGE_NAME = "com.google.android.apps.maps"
+
+        /**
+         * 語音調整手機音量的總開關，依 `docs/phone-control-plan.md` §5 要求可隨時關閉手機操作。
+         * 關閉時 `VoiceForegroundService` 不建立音量執行器，指令會落到一般問答流程。
+         */
+        const val DEFAULT_VOICE_VOLUME_CONTROL = true
 
         /**
          * TTS 輸出的增益，套用到 TextToSpeech.Engine.KEY_PARAM_VOLUME。

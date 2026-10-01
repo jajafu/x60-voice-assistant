@@ -35,6 +35,12 @@
 - rc26 修正音訊失敗時的結束順序：`beginAudioRecovery` 先恢復暫停的音樂再停止 TTS，會讓音樂先恢復、正在朗讀的舊回答才補完。已改為先取消串流與 TTS 再恢復音樂，並加回歸測試（修正前該測試失敗）。**vivo X60 真機驗收尚未執行**，`docs/testing.md`「音訊失敗時的結束順序（rc26，待真機驗收）」5 個步驟仍待補做。
 - 使用者在 rc26 回報的「播放音樂中喚醒小助手，等候一段時間沒回應」目前只有靜態分析、尚無實測證據：喚醒回應「我在」排在暫停鬧鐘與暫停音樂之後，而兩者都是跨行程媒體往返，最壞約 4–5 秒靜默，且該期間說的話會被 `frameQueue.clear()` 丟棄。需先取得 vivo X60 診斷頁的 Ring Log 與 `Last Error` 才能判斷是否為同一個主因，再決定是否另開 Issue。
 - rc27 新增 TTS 音量設定與引擎／音調選擇器。`test`、`lint`、`assembleDebug` 與 MuMu vmindex 0（Android 15）安裝開啟 smoke 已通過，並以截圖確認新 UI 渲染與空狀態提示。**核心假設尚未在 vivo X60 驗證：`TextToSpeech.Engine.KEY_PARAM_VOLUME` 在該機的 `com.vivo.aiservice` 引擎上是否真的改變輸出音量。** Android 標示此參數範圍為 0.0–1.0，超過 1.0 由引擎自行決定，可能破音或被忽略；`TextToSpeech.setVolume()` 不是公開 API 因此無法採用。若調整音量後聲音沒有變化，必須記為未生效而非通過，並另尋管道（例如改走 `STREAM_TTS`，但那需要 `MODIFY_AUDIO_SETTINGS` 權限）。`docs/testing.md`「TTS 音量與引擎／音調選擇（rc27，待真機驗收）」7 個步驟仍待補做。
+- rc30 新增語音調整手機音量（Issue #20）。`test`、`lint`、`assembleDebug` 已通過，但**vivo X60 真機驗收本輪完全未執行**，依開發者指示先做 code review。`docs/testing.md`「語音調整手機音量（rc30，待真機驗收）」10 個步驟全數待補做，包含最關鍵的喚醒率項目。
+- **rc30 已知且接受的取捨：TTS 與音樂共用 `STREAM_MUSIC`。** rc27 已在該機實測確認 TTS 的 AudioTrack 是 `USAGE_MEDIA`、與音樂同一音量級別，因此使用者說「聲音小一點」時，小助手自己的回話也會一起變小；語音下限設為 2 格緩解，但**下限 2 格時回話是否仍可聽懂未經實測**。若實測發現不可用，需另開 Issue 評估改走 `STREAM_TTS`，本輪不處理。
+- **rc30 的絕對音量只能逐格前進。** Android 沒有公開的設定音量 API（`setStreamVolume` 是 `@SystemApi`），因此「音量調到 50」以 `adjustStreamVolume(±1)` 迴圈走到目標級別，每一格都可能觸發系統音量提示音，最多來回 15 格。若真機實測顯示干擾明顯，需限制單次調整格數並分次執行。
+- **rc30 的喚醒率未經驗證。** `docs/testing.md` 既有的喚醒驗收（1 公尺正常音量、20 次中 18 次）本身仍是待驗收項，音量再往下壓只會更差。使用者可能體感「調小之後小助手壞掉」；此風險在設計時已知並接受，須待真機數據確認實際影響。
+- **rc30 未涵蓋的範圍**：只動 `STREAM_MUSIC`。鈴聲與通知音訊流不納入本輪，以避開 vivo 勿擾模式的行為差異；也不含 `STREAM_TTS` 拆分與喚醒率最佳化。
+- rc30 的語音靜音**不做二次確認**。這是相對於 `docs/phone-control-plan.md` §5「變更系統設定類操作需逐項確認」的刻意偏離，理由是靜音屬使用者直接可逆的音量操作；此選擇未經使用者最終確認，code review 時請一併檢視。
 
 ## 排程提醒
 

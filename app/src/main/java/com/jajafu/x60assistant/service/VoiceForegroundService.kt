@@ -47,6 +47,7 @@ import com.jajafu.x60assistant.orchestration.VoiceState
 import com.jajafu.x60assistant.vad.SherpaVadEngine
 import com.jajafu.x60assistant.vad.SpeechEndpointConfig
 import com.jajafu.x60assistant.vad.SpeechEndpointDetector
+import com.jajafu.x60assistant.volume.AndroidVolumeActionExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -238,6 +239,11 @@ class VoiceForegroundService : Service() {
                         selectedPackageName = settings.navPackageName,
                         selectedAppName = settings.navAppName.ifBlank { "地圖 App" },
                     )
+                } else {
+                    null
+                },
+                volumeExecutor = if (settings.voiceVolumeControl) {
+                    AndroidVolumeActionExecutor(context = applicationContext)
                 } else {
                     null
                 },

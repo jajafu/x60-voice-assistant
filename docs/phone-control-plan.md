@@ -127,6 +127,31 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 - **高德延後**：實測可用但需多一次選點（「台北101」會展開成 10 個以上 POI，含購物店等子項）。已與使用者確認接受，TTS 須說明請在終點清單選擇要去的地方。
 - 「回家／去公司」等常用目的地簡稱、導航中的語音控制（暫停／繼續／重新規劃）未納入本輪。
 
+## 8.5 語音音量（2026-10-02 納入，rc30）
+
+### 8.5.1 本期範圍
+
+只調整 `STREAM_MUSIC`。指令為 `VolumeCommand` 的 `Up`／`Down`／`Mute`／`Unmute`／`SetTo(percent)`，由 `VolumeCommandRouter` 在本機解析，與音樂、提醒、導航同一條鏈路，未設定 LLM 時也能使用。路由順序為 關閉 → 提醒 → 音樂 → 導航 → 音量 → LLM。
+
+「音量調到 50」的 `50` 是**百分比**，目標級別 = `round(0.50 × 裝置上限)`；回話報實際級別與上限。語音可調整的**下限為 2 格**：要求更低時不執行，改為回報已到下限並提示可說「靜音」，因為音量 0 與靜音在 Android 上是兩件事。靜音不做二次確認，此點相對 §5 的逐項確認原則是刻意偏離，已列入 `docs/known-issues.md` 待檢視。
+
+### 8.5.2 技術選擇與其代價
+
+Android 沒有公開的設定音量 API（`setStreamVolume` 是 `@SystemApi`），因此：
+
+- **相對調整**用 `adjustStreamVolume(STREAM_MUSIC, ±1)`。刻意**不用** `adjustSuggestedStreamVolume()`：它依當下有焦點的播放器決定目標 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與本期範圍不符。
+- **絕對音量**以 `getStreamVolume()`／`getStreamMaxVolume()` 換算目標，再用 `adjustStreamVolume(±1)` 逐格前進。代價是每一格都可能觸發系統音量提示音，最多來回 15 格。若真機實測顯示干擾明顯，需限制單次調整格數並分次執行。
+- **靜音**用 `ADJUST_MUTE`／`ADJUST_UNMUTE`，狀態查詢用 `isStreamMute(int)`。`setStreamMute` 在 API 35 已棄用，不採用。
+- 決策邏輯集中在 `VolumeTargetPolicy`（純函式），`VolumeActionExecutor` 只負責呼叫 Android API，因此換算與夾限可完整單元測試。
+- 回話文字集中在 `VolumeReply`，並以單元測試鎖住「未實際調整時不得出現『音量已調到』」。
+
+### 8.5.3 已知限制
+
+- **TTS 與音樂共用 `STREAM_MUSIC`**（§3 rc27 的 X60 實測）。使用者說「小聲一點」時，小助手自己的回話也會一起變小；下限 2 格只是緩解，該下限的回話是否可聽懂未經實測。若實測不可用，才另開 Issue 評估改走 `STREAM_TTS`，本期不處理。
+- **低音量下的喚醒率未驗證**。§4.3 既有的喚醒率驗收本身就是待驗收項，音量再壓只會更差。使用者可能體感「調小之後小助手壞掉」；此取捨在設計時已知並接受。
+- **vivo／OriginOS 可能攔截背景音量變更**或另存音量曲線，必須真機驗收，不得以單元測試結論代替。
+- **未納入**：鈴聲與通知音訊流（避開 vivo 勿擾模式的行為差異）、`STREAM_TTS` 拆分、喚醒率最佳化、反向操作（「取消調高音量」）。
+
 ## 9. 參考依據
 
 - 現有程式：`app/src/main/java/com/jajafu/x60assistant/orchestration/VoiceOrchestrator.kt`、`app/src/main/AndroidManifest.xml`、`docs/test-reports/m5-2026-09-22-vivo-x60.md`。
