@@ -87,3 +87,16 @@
 - **修正一個只有真機才發現的缺陷**：`AndroidTtsEngine.selectVoice()` 原本以 `locale.country` 比對 `zh-TW`／`zh-CN` 來優先繁中與簡中，但 vivo 引擎回報的是**以書寫系統標記**的 `zh-Hant`／`zh-Hans`，其 `country` 為空字串，導致那兩條規則永遠不成立，只能靠最後的「任何中文」fallback 僥倖命中。這次改成以 `Locale.forLanguageTag` 取 `language` 與 `script`，同時相容書寫系統與地區兩種標記（`zh-Hant`、`zh-TW`、`zh-HK`、`zh-MO` 視為繁中）。
 - 設定頁排序與自動選擇改為共用同一套規則（繁中優先、離線優先、名稱），避免清單第一個與實際被選中的不一致。
 - 測試樣本改用 vivo 引擎實際回報的 locale 樣式（`zh-Hant`／`zh-Hans`），先前使用 `zh-TW` 的樣本無法涵蓋這個缺陷。
+
+## rc30（2026-10-02，Issue #20）
+
+- **開發者決定（語意）**：「音量調到 50」的 `50` 定義為**百分比**，目標級別 = `round(0.50 × 裝置上限)`，不在解析階段假設固定格數。這樣換手機不必改程式，回話會報出實際級別與上限。超出 0–100 的輸入夾到邊界而不是整句作廢，避免落回 LLM 亂猜。
+- **開發者決定（範圍）**：第一輪**只做 `STREAM_MUSIC`**。鈴聲與通知不納入，因為 vivo 勿擾模式的行為差異會放大驗收範圍。
+- **開發者決定（下限）**：語音可調整的音量下限設為 **2 格**。rc27 已實測 TTS 與音樂共用 `STREAM_MUSIC`，壓太低會讓小助手自己的回話與喚醒提示音一起變小聲。要求比下限更低時**不執行**，改為回報已到下限並提示可說「靜音」，不用音量 0 硬掰。
+- **開發者決定（API 選擇）**：Android 沒有公開的設定音量 API（`setStreamVolume` 是 `@SystemApi`），因此絕對音量以 `getStreamVolume()`／`getStreamMaxVolume()` 換算目標後，用 `adjustStreamVolume(±1)` 逐格前進。相對音量**刻意不用** `adjustSuggestedStreamVolume`：它會依當下有焦點的播放器決定調整哪個 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與「只動媒體音量」的範圍不符。
+- **靜音用 `ADJUST_MUTE`／`ADJUST_UNMUTE`，不用 `setStreamMute`**：後者在 API 35 已棄用。靜音狀態查詢用 `isStreamMute(int)`；`AudioManager` 沒有 `isMusicMute()`，一開始誤用導致編譯失敗，已改正。
+- **與 Plan 的偏離（需 review 檢視）**：Plan 原訂的指令集只有 `Up`／`Down`／`Mute`／`SetTo`，實作時**新增 `Unmute`**（對應「取消靜音」「恢復聲音」）。理由是只有 `Mute` 會讓語音靜音變成單向操作，使用者只能靠實體音量鍵跳出。另**新增最大／最小聲映射**到 `SetTo(100)`／`SetTo(0)`，避免這兩種常見說法落回 LLM 被假稱已完成。
+- **路由順序**：關閉 → 提醒 → 音樂 → 導航 → 音量 → LLM。音量插在導航之後，兩組詞彙沒有交疊；提醒路由雖帶數字優先級更高，但沒有裸數字規則，單元測試鎖住「音量調到50」不會被提醒路由吞掉。
+- **回話文字集中於 `VolumeReply`**，並用單元測試鎖住「不可用或未改動時不得出現『音量已調到』」，呼應 `docs/phone-control-plan.md` §4.1 不虛報成功的原則。
+- 靜音不做二次確認（相對 phone-control-plan §5 的逐項確認原則之偏離），已記於 `docs/known-issues.md` 待 review 檢視。
+- **本輪未做真機驗收**：依開發者指示先做 code review。`test`、`lint`、`assembleDebug` 通過；MuMu smoke 與 vivo X60 驗收均未執行，見 `docs/known-issues.md`。

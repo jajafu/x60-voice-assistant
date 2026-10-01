@@ -76,6 +76,7 @@ import com.jajafu.x60assistant.music.MusicAppOption
 import com.jajafu.x60assistant.navigation.NavigationAppOption
 import com.jajafu.x60assistant.reminder.ScheduledReminder
 import com.jajafu.x60assistant.reminder.ReminderFrequency
+import com.jajafu.x60assistant.volume.VolumeTargetPolicy
 import com.jajafu.x60assistant.reminder.ReminderRecurrence
 import com.jajafu.x60assistant.reminder.label
 import com.jajafu.x60assistant.tts.TtsEngineOption
@@ -778,6 +779,22 @@ private fun SettingsPage(
                         Text("開啟${draft.navAppName.ifBlank { "導航 App" }}完成首次設定")
                     }
                 }
+            }
+        }
+
+        item {
+            SectionCard("語音調音量") {
+                ToggleRow("允許語音調整手機音量", draft.voiceVolumeControl, enabled) {
+                    draft = draft.copy(voiceVolumeControl = it)
+                }
+                Text(
+                    "開啟後說「聲音小一點」「音量調到50」或「靜音」，小助手會調整媒體音量。" +
+                        "音量最低只到 ${VolumeTargetPolicy.MIN_VOLUME_INDEX} 格，避免小助手自己的回話小到聽不見。" +
+                        "音樂與小助手的語音共用同一個音量級別，調整時兩者會一起變化。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
             }
         }
 
