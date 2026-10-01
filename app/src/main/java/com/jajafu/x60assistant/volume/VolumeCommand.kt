@@ -13,12 +13,6 @@ sealed interface VolumeCommand {
     /** 音量調低一格。 */
     data object Down : VolumeCommand
 
-    /** 靜音。不會把音量級別設成 0，也不會記住原本的音量。 */
-    data object Mute : VolumeCommand
-
-    /** 解除靜音，沿用原本的音量級別。 */
-    data object Unmute : VolumeCommand
-
     /**
      * 調到指定百分比。
      *

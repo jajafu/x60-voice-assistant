@@ -788,7 +788,7 @@ private fun SettingsPage(
                     draft = draft.copy(voiceVolumeControl = it)
                 }
                 Text(
-                    "開啟後說「聲音小一點」「音量調到50」或「靜音」，小助手會調整媒體音量。" +
+                    "開啟後說「聲音小一點」「音量調到50」，小助手會調整媒體音量。" +
                         "音量最低只到 ${VolumeTargetPolicy.MIN_VOLUME_INDEX} 格，避免小助手自己的回話小到聽不見。" +
                         "音樂與小助手的語音共用同一個音量級別，調整時兩者會一起變化。",
                     style = MaterialTheme.typography.bodySmall,

@@ -24,7 +24,6 @@ class VolumeCommandRouterTest {
     fun `parses simplified chinese variants`() {
         assertEquals(VolumeCommand.Down, parse("声音小一点"))
         assertEquals(VolumeCommand.Up, parse("声音大一点"))
-        assertEquals(VolumeCommand.Mute, parse("静音"))
     }
 
     @Test
@@ -62,13 +61,11 @@ class VolumeCommandRouterTest {
     }
 
     @Test
-    fun `distinguishes mute from unmute`() {
-        assertEquals(VolumeCommand.Mute, parse("靜音"))
-        assertEquals(VolumeCommand.Mute, parse("安靜"))
-        assertEquals(VolumeCommand.Mute, parse("閉嘴"))
-        assertEquals(VolumeCommand.Unmute, parse("取消靜音"))
-        assertEquals(VolumeCommand.Unmute, parse("解除靜音"))
-        assertEquals(VolumeCommand.Unmute, parse("恢復聲音"))
+    fun `does not control volume using mute phrases`() {
+        assertNull(parse("靜音"))
+        assertNull(parse("静音"))
+        assertNull(parse("取消靜音"))
+        assertNull(parse("解除靜音"))
     }
 
     @Test
@@ -93,7 +90,7 @@ class VolumeCommandRouterTest {
         assertNull(parse("不要調小音量"))
         assertNull(parse("不用調大聲音"))
         assertNull(parse("別調音量"))
-        assertNull(parse("先不要靜音"))
+        assertNull(parse("先不要調音量"))
     }
 
     @Test

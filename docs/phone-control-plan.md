@@ -131,9 +131,9 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 
 ### 8.5.1 本期範圍
 
-只調整 `STREAM_MUSIC`。指令為 `VolumeCommand` 的 `Up`／`Down`／`Mute`／`Unmute`／`SetTo(percent)`，由 `VolumeCommandRouter` 在本機解析，與音樂、提醒、導航同一條鏈路，未設定 LLM 時也能使用。路由順序為 關閉 → 提醒 → 音樂 → 導航 → 音量 → LLM。
+只調整 `STREAM_MUSIC`。指令為 `VolumeCommand` 的 `Up`／`Down`／`SetTo(percent)`，由 `VolumeCommandRouter` 在本機解析，與音樂、提醒、導航同一條鏈路，未設定 LLM 時也能使用。**不提供靜音或解除靜音指令**。路由順序為 關閉 → 提醒 → 音樂 → 導航 → 音量 → LLM。
 
-「音量調到 50」的 `50` 是**百分比**，目標級別 = `round(0.50 × 裝置上限)`；回話報實際級別與上限。語音可調整的**下限為 2 格**：要求更低時不執行，改為回報已到下限並提示可說「靜音」，因為音量 0 與靜音在 Android 上是兩件事。靜音不做二次確認，此點相對 §5 的逐項確認原則是刻意偏離，已列入 `docs/known-issues.md` 待檢視。
+「音量調到 50」的 `50` 是**百分比**，目標級別 = `round(0.50 × 裝置上限)`；回話報實際級別與上限。語音可調整的**下限為 2 格**：要求更低時不執行，改為回報已到下限。此功能不改變靜音狀態或提供靜音／解除靜音指令。
 
 ### 8.5.2 技術選擇與其代價
 
@@ -141,7 +141,6 @@ Android 沒有公開的設定音量 API（`setStreamVolume` 是 `@SystemApi`）�
 
 - **相對調整**用 `adjustStreamVolume(STREAM_MUSIC, ±1)`。刻意**不用** `adjustSuggestedStreamVolume()`：它依當下有焦點的播放器決定目標 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與本期範圍不符。
 - **絕對音量**以 `getStreamVolume()`／`getStreamMaxVolume()` 換算目標，再用 `adjustStreamVolume(±1)` 逐格前進。代價是每一格都可能觸發系統音量提示音，最多來回 15 格。若真機實測顯示干擾明顯，需限制單次調整格數並分次執行。
-- **靜音**用 `ADJUST_MUTE`／`ADJUST_UNMUTE`，狀態查詢用 `isStreamMute(int)`。`setStreamMute` 在 API 35 已棄用，不採用。
 - 決策邏輯集中在 `VolumeTargetPolicy`（純函式），`VolumeActionExecutor` 只負責呼叫 Android API，因此換算與夾限可完整單元測試。
 - 回話文字集中在 `VolumeReply`，並以單元測試鎖住「未實際調整時不得出現『音量已調到』」。
 
