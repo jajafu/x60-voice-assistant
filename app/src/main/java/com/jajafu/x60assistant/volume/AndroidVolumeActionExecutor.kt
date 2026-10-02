@@ -12,10 +12,13 @@ import kotlinx.coroutines.withContext
  * 音樂與小助手的 TTS 共用這個音量級別（`docs/decision-log.md` rc27 的 vivo X60 實測），
  * 因此使用者說「小聲一點」時，小助手自己的回話也會一起變小聲，這是已知取捨。
  *
- * 本實作以 [AudioManager.adjustStreamVolume] 逐格前進；`setStreamVolume` 也是公開 SDK API，
- * 但不由此類別呼叫。每格都可能觸發系統提示音，且實際裝置行為仍待 X60 驗收；
- * 相對音量也刻意指定 `STREAM_MUSIC`，不用 `adjustSuggestedStreamVolume`，
- * 避免沒有音訊焦點時調整到其他音訊流。
+ * 本實作以 [AudioManager.setStreamVolume] 一次設定到目標級別。
+ *
+ * 探測結果（rc30 commit `3e9b742`，vivo V2046A）：逐格 [AudioManager.adjustStreamVolume]
+ * 的呼叫有送達系統（`dumpsys audio` 可見 `adjustStreamVolume ... from com.jajafu.x60assistant`），
+ * 但音量完全不變；同一台機以 shell 身分呼叫同一支 API 則正常。逐格方案因此無法使用。
+ * 改用 `setStreamVolume` 同樣只需要 `MODIFY_AUDIO_SETTINGS`，並一次到位、不必逐格播提示音。
+ * vivo／OriginOS 是否也限制本 App 的 setter 尚待實測。
  */
 class AndroidVolumeActionExecutor(
     context: Context,
@@ -43,7 +46,7 @@ class AndroidVolumeActionExecutor(
                 message = if (raise) VolumeReply.atCeiling(maxIndex) else VolumeReply.atFloor(minVolumeIndex),
                 applied = false,
             )
-        applySteps(manager, VolumeTargetPolicy.adjustmentStepsTo(target, currentIndex))
+        applyTarget(manager, target)
         return verify(manager, target, maxIndex)
     }
 
@@ -59,7 +62,7 @@ class AndroidVolumeActionExecutor(
         if (target.index == currentIndex) {
             return VolumeActionResult(VolumeReply.unchanged(currentIndex, maxIndex), applied = false)
         }
-        applySteps(manager, VolumeTargetPolicy.adjustmentStepsTo(target.index, currentIndex))
+        applyTarget(manager, target.index)
         return verify(manager, target.index, maxIndex)
     }
 
@@ -75,14 +78,13 @@ class AndroidVolumeActionExecutor(
             maxIndex = maxIndex,
         )
 
-    /** 逐格前進；每一格都可能讓系統播一次音量提示音，所以路徑交給 [VolumeTargetPolicy] 產生。 */
-    private fun applySteps(manager: AudioManager, steps: List<VolumeStep>) {
-        for (step in steps) {
-            val direction = when (step.direction) {
-                VolumeStepDirection.RAISE -> AudioManager.ADJUST_RAISE
-                VolumeStepDirection.LOWER -> AudioManager.ADJUST_LOWER
-            }
-            manager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
-        }
+    /**
+     * 一次設定到目標級別。
+     *
+     * 逐格 `adjustStreamVolume` 已證實在 vivo X60 上無效（見類別說明），因此不再使用；
+     * 目標級別仍由 [VolumeTargetPolicy] 夾在下限與上限之間，這裡只負責呼叫 API。
+     */
+    private fun applyTarget(manager: AudioManager, targetIndex: Int) {
+        manager.setStreamVolume(AudioManager.STREAM_MUSIC, targetIndex, 0)
     }
 }

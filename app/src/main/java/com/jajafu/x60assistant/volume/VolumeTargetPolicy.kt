@@ -66,8 +66,9 @@ object VolumeTargetPolicy {
     /**
      * 從目前級別逐格走到 [targetIndex] 的完整路徑，不含出發點。
      *
-     * `AudioManager.setStreamVolume` 是公開 SDK API；本功能目前選擇以 `adjustStreamVolume`
-     * 逐格執行，因此這裡產生包含每步方向的完整序列。
+     * 逐格路徑在 vivo X60 上已證實無效（`adjustStreamVolume` 有呼叫但音量不動），
+     * 因此 `AndroidVolumeActionExecutor` 目前改用 `setStreamVolume` 一次到位，不再呼叫這裡。
+     * 保留此純函式與其測試，作為逐格方案的紀錄；若 setter 同樣被限制，可據此回復。
      */
     fun stepsTo(targetIndex: Int, currentIndex: Int): List<Int> {
         if (targetIndex == currentIndex) return emptyList()
