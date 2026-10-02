@@ -76,11 +76,32 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 6. 把音量調到 0.50 確認變小聲；調到 0 確認靜音，且畫面仍正常顯示文字。
 7. 確認重開 App 後引擎、音調與音量都保留；清除資料後回到預設（引擎自動選擇、音調自動選擇、音量 1.00）。
 
-## 語音調整手機音量（rc30，**待真機驗收**）
+## 語音調整手機音量（rc30，**功能待真機驗收**）
 
-設定 →「語音調音量」預設開啟。需在 vivo X60 驗收，**以下步驟本輪尚未執行**：
+### 安裝與啟動 smoke（rc30 commit `3e9b742`，已執行）
 
-1. 先記錄基準值：`adb shell dumpsys audio` 讀 `STREAM_MUSIC` 的目前級別與上限，記下實際格數（本專案 `docs/decision-log.md` rc27 曾寫「10/15」，語意不明，本輪需以實測釐清）。
+`docs/ANDROID_MUMU_SMOKE.md` 的 smoke 範圍套用在實體 X60：安裝成功、從 launcher 開啟、啟動畫面可見且沒有立即崩潰。
+
+| 項目 | 結果 |
+| --- | --- |
+| 裝置 | vivo V2046A，Android 13（SDK 33），OriginOS 14.0，`arm64-v8a` |
+| 受測 commit | `3e9b7428aebf4af703fe00c4c61fb11e2a2ef9e2` |
+| APK SHA-256 | `C204A4FCFDEA8CBBF6C2E8848AB9828F9EC9AD2317BD3B9952636FBFCB88C7E6` |
+| package／版本 | `com.jajafu.x60assistant`／`1.0.0-rc30` / `34`（由 rc29 / 33 覆蓋安裝） |
+| 權限 | `MODIFY_AUDIO_SETTINGS: granted=true` |
+| 啟動 | `am start -n com.jajafu.x60assistant/.MainActivity` 成功，pid 29608，前景顯示「運作中」／「等待喚醒」 |
+| 崩潰檢查 | logcat 無 `FATAL`／`AndroidRuntime`／ANR |
+| `STREAM_MUSIC` 上限 | `Max: 15`，未靜音（`Muted: false`），當下為 10 格 |
+
+安裝過程：`adb install -r` 逾時，經裝置端人工確認後完成；後續 `dumpsys package` 確認已升級至 `versionCode 34`。一次重試的 `adb install -r -g` 回報失敗但未改變已安裝版本。測試結束時裝置已從 adb 斷線（`device not found`），如需補測須重新連線。
+
+此 smoke 只代表安裝與啟動正常，**不代表語音音量功能驗收通過**；以下 10 個步驟仍需真人語音在該機執行。
+
+### 功能步驟（**本輪尚未執行**）
+
+設定 →「語音調音量」預設開啟。需在 vivo X60 驗收：
+
+1. 先記錄基準值：`adb shell dumpsys audio` 讀 `STREAM_MUSIC` 的目前級別與上限。本輪 smoke 已在該機讀到 `Max: 15`，`docs/decision-log.md` rc27 曾寫的「10/15」指目前 10 格、上限 15 格，語意已釐清；功能測試前仍須重新讀取當下值。
 2. 相對調整：說「聲音小一點」，確認音量降一格並聽到小助手的回報；連續 10 次確認每次只動一格。
 3. **共用音量級別的已知取捨**：TTS 與音樂共用 `STREAM_MUSIC`，因此確認小助手的回話音量與音樂同步變化；在下限 2 格時確認回話仍可聽懂，若小到不可用需如實記錄。
 4. 百分比：說「音量調到50」，確認回報的實際級別約為上限的一半，且**沒有**出現「音量已調到」以外的假稱完成。
@@ -90,6 +111,8 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 8. **喚醒率（重點）**：把音量調到下限 2 格，一公尺說「小助手」20 次，記錄喚醒次數。此項目與 `docs/testing.md` 既有的喚醒驗收並列，不得以單元測試或合成語音替代。
 9. 副作用：確認音量面板未被意外拉出，以及逐格前進時的連續提示音是否造成明顯干擾（對應 Issue #20 風險 4）。
 10. 確認一般問答不受影響：說「什麼時候音量太大」應走一般問答而非調整音量。
+11. **PR #21 code review 新增解析案例**（rc30 commit `3e9b742` 後補）：說「音量調高一格」應只調一格而非 1%；說「音量有點大」應**不動作**並照送 LLM；說「亮度調到最大」應**不動作**，不得改動媒體音量。
+12. **讀回一致性**（rc30 commit `3e9b742` 後補）：若 vivo／OriginOS 夾限音量，小助手應回報讀回的實際級別而非宣稱已調到目標。可用實體音量鍵製造不一致後再說指令觀察。
 
 ## 手動步驟
 
