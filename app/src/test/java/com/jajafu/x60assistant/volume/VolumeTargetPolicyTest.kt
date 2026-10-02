@@ -100,4 +100,27 @@ class VolumeTargetPolicyTest {
             VolumeTargetPolicy.stepsTo(targetIndex = 2, currentIndex = 15).size,
         )
     }
+
+    @Test
+    fun `plans directions from the current level including the first step`() {
+        assertEquals(
+            listOf(VolumeStep(4, VolumeStepDirection.LOWER)),
+            VolumeTargetPolicy.adjustmentStepsTo(targetIndex = 4, currentIndex = 5),
+        )
+        assertEquals(
+            listOf(
+                VolumeStep(4, VolumeStepDirection.LOWER),
+                VolumeStep(3, VolumeStepDirection.LOWER),
+                VolumeStep(2, VolumeStepDirection.LOWER),
+            ),
+            VolumeTargetPolicy.adjustmentStepsTo(targetIndex = 2, currentIndex = 5),
+        )
+        assertEquals(
+            listOf(
+                VolumeStep(6, VolumeStepDirection.RAISE),
+                VolumeStep(7, VolumeStepDirection.RAISE),
+            ),
+            VolumeTargetPolicy.adjustmentStepsTo(targetIndex = 7, currentIndex = 5),
+        )
+    }
 }

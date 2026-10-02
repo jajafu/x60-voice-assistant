@@ -93,8 +93,9 @@
 - **開發者決定（語意）**：「音量調到 50」的 `50` 定義為**百分比**，目標級別 = `round(0.50 × 裝置上限)`，不在解析階段假設固定格數。這樣換手機不必改程式，回話會報出實際級別與上限。超出 0–100 的輸入夾到邊界而不是整句作廢，避免落回 LLM 亂猜。
 - **開發者決定（範圍）**：第一輪**只做 `STREAM_MUSIC`**。鈴聲與通知不納入，因為 vivo 勿擾模式的行為差異會放大驗收範圍。
 - **開發者決定（下限）**：語音可調整的音量下限設為 **2 格**。rc27 已實測 TTS 與音樂共用 `STREAM_MUSIC`，壓太低會讓小助手自己的回話與喚醒提示音一起變小聲。要求比下限更低時**不執行**，改為回報已到下限，不調成音量 0。
-- **開發者決定（API 選擇）**：Android 沒有公開的設定音量 API（`setStreamVolume` 是 `@SystemApi`），因此絕對音量以 `getStreamVolume()`／`getStreamMaxVolume()` 換算目標後，用 `adjustStreamVolume(±1)` 逐格前進。相對音量**刻意不用** `adjustSuggestedStreamVolume`：它會依當下有焦點的播放器決定調整哪個 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與「只動媒體音量」的範圍不符。
+- **API 選擇更正**：`AudioManager.setStreamVolume()` 是公開 SDK API，且同樣使用 `MODIFY_AUDIO_SETTINGS`；先前將其記為 `@SystemApi` 是錯誤。本版仍沿用已實作的 `adjustStreamVolume(±1)` 逐格路徑，逐格提示音副作用與是否改用公開 setter 留待 review／真機驗收決定。相對音量**刻意不用** `adjustSuggestedStreamVolume`：它會依當下有焦點的播放器決定調整哪個 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與「只動媒體音量」的範圍不符。
 - **開發者決定（PR #21 review 時）**：不提供語音靜音／解除靜音選項。因此 `VolumeCommand` 僅保留 `Up`／`Down`／`SetTo(percent)`，相關解析分支、AudioManager 呼叫、回覆與測試皆移除。使用者可透過 Android 系統控制靜音。
+- **PR #21 code review 修正**：逐格路徑第一步也必須比較目前級別與目標級別來選方向；已將方向規劃抽至 `VolumeTargetPolicy.adjustmentStepsTo()`，並以單元測試覆蓋上調、單格下調與多格下調。
 - **與原 Plan 的偏離**：新增最大／最小聲映射到 `SetTo(100)`／`SetTo(0)`，避免這兩種常見說法落回 LLM 被假稱已完成；語音音量下限策略仍會阻止實際調到低於 2 格。
 - **路由順序**：關閉 → 提醒 → 音樂 → 導航 → 音量 → LLM。音量插在導航之後，兩組詞彙沒有交疊；提醒路由雖帶數字優先級更高，但沒有裸數字規則，單元測試鎖住「音量調到50」不會被提醒路由吞掉。
 - **回話文字集中於 `VolumeReply`**，並用單元測試鎖住「不可用或未改動時不得出現『音量已調到』」，呼應 `docs/phone-control-plan.md` §4.1 不虛報成功的原則。
