@@ -81,6 +81,19 @@ object VolumeTargetPolicy {
         return steps
     }
 
+    /**
+     * 調整後依實際讀回的級別決定回話。
+     *
+     * 目標與讀回值不同時不得宣稱已調到，改報實際級別，
+     * 對應 `docs/phone-control-plan.md` §4.1 不虛報成功的原則。
+     */
+    fun verify(targetIndex: Int, actualIndex: Int, maxIndex: Int): VolumeActionResult =
+        if (actualIndex == targetIndex) {
+            VolumeActionResult(VolumeReply.setTo(actualIndex, maxIndex), applied = true)
+        } else {
+            VolumeActionResult(VolumeReply.diverged(actualIndex, maxIndex), applied = false)
+        }
+
     /** 以目前級別作為第一步的起點，為每一格產生正確的調整方向。 */
     fun adjustmentStepsTo(targetIndex: Int, currentIndex: Int): List<VolumeStep> {
         var previousIndex = currentIndex

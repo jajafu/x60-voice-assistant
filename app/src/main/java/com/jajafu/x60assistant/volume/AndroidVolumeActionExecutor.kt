@@ -44,7 +44,7 @@ class AndroidVolumeActionExecutor(
                 applied = false,
             )
         applySteps(manager, VolumeTargetPolicy.adjustmentStepsTo(target, currentIndex))
-        return VolumeActionResult(VolumeReply.setTo(target, maxIndex), applied = true)
+        return verify(manager, target, maxIndex)
     }
 
     private fun setTo(manager: AudioManager, percent: Int): VolumeActionResult {
@@ -60,8 +60,20 @@ class AndroidVolumeActionExecutor(
             return VolumeActionResult(VolumeReply.unchanged(currentIndex, maxIndex), applied = false)
         }
         applySteps(manager, VolumeTargetPolicy.adjustmentStepsTo(target.index, currentIndex))
-        return VolumeActionResult(VolumeReply.setTo(target.index, maxIndex), applied = true)
+        return verify(manager, target.index, maxIndex)
     }
+
+    /**
+     * 調整後讀回實際級別再回話。
+     *
+     * 系統或 OEM 可能夾限或忽略變更；只看目標值等於假稱已完成，因此以讀回值為準。
+     */
+    private fun verify(manager: AudioManager, targetIndex: Int, maxIndex: Int): VolumeActionResult =
+        VolumeTargetPolicy.verify(
+            targetIndex = targetIndex,
+            actualIndex = manager.getStreamVolume(AudioManager.STREAM_MUSIC),
+            maxIndex = maxIndex,
+        )
 
     /** 逐格前進；每一格都可能讓系統播一次音量提示音，所以路徑交給 [VolumeTargetPolicy] 產生。 */
     private fun applySteps(manager: AudioManager, steps: List<VolumeStep>) {

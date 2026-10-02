@@ -15,6 +15,14 @@ class VolumeReplyTest {
     }
 
     @Test
+    fun `reports the level actually read back from the device`() {
+        assertEquals(
+            "音量現在是 6 格，共 15 格，跟剛才要求的不一樣。",
+            VolumeReply.diverged(6, 15),
+        )
+    }
+
+    @Test
     fun `explains the floor instead of claiming success`() {
         assertEquals(
             "音量已經是最低的 2 格。",
@@ -35,6 +43,7 @@ class VolumeReplyTest {
             VolumeReply.atCeiling(15),
             VolumeReply.belowFloor(2),
             VolumeReply.unchanged(8, 15),
+            VolumeReply.diverged(6, 15),
             VolumeReply.unavailable(),
             VolumeReply.failed(),
         ).forEach { message ->
