@@ -2,6 +2,7 @@ package com.jajafu.x60assistant.volume
 
 import android.content.Context
 import android.media.AudioManager
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -46,7 +47,7 @@ class AndroidVolumeActionExecutor(
                 message = if (raise) VolumeReply.atCeiling(maxIndex) else VolumeReply.atFloor(minVolumeIndex),
                 applied = false,
             )
-        applyTarget(manager, target)
+        applyTarget(manager, target, currentIndex, maxIndex)
         return verify(manager, target, maxIndex)
     }
 
@@ -62,7 +63,7 @@ class AndroidVolumeActionExecutor(
         if (target.index == currentIndex) {
             return VolumeActionResult(VolumeReply.unchanged(currentIndex, maxIndex), applied = false)
         }
-        applyTarget(manager, target.index)
+        applyTarget(manager, target.index, currentIndex, maxIndex)
         return verify(manager, target.index, maxIndex)
     }
 
@@ -79,12 +80,27 @@ class AndroidVolumeActionExecutor(
         )
 
     /**
-     * 一次設定到目標級別。
+     * 一次設定到目標級別，並記錄調整前後的實測值。
      *
      * 逐格 `adjustStreamVolume` 已證實在 vivo X60 上無效（見類別說明），因此不再使用；
      * 目標級別仍由 [VolumeTargetPolicy] 夾在下限與上限之間，這裡只負責呼叫 API。
+     *
+     * `setStreamVolume` 在 vivo 上可能不丟例外卻靜默失效，沒有調整前後的實測值就只能靠猜測；
+     * 此日誌用於還原實際情況，確認穩定後可移除。
      */
-    private fun applyTarget(manager: AudioManager, targetIndex: Int) {
+    private fun applyTarget(
+        manager: AudioManager,
+        targetIndex: Int,
+        currentIndex: Int,
+        maxIndex: Int,
+    ) {
+        Log.i(DIAGNOSTIC_TAG, "before current=$currentIndex target=$targetIndex max=$maxIndex")
         manager.setStreamVolume(AudioManager.STREAM_MUSIC, targetIndex, 0)
+        val readBack = manager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        Log.i(DIAGNOSTIC_TAG, "after target=$targetIndex readBack=$readBack applied=${readBack == targetIndex}")
+    }
+
+    private companion object {
+        const val DIAGNOSTIC_TAG = "VolumeDiag"
     }
 }
