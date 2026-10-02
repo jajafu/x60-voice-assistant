@@ -24,6 +24,12 @@ object VolumeCommandRouter {
     /** 否定句不執行：目前不支援「取消調高音量」這類反向操作。 */
     private val negativeMarkers = listOf("不要", "別", "别", "不用", "不必", "先不")
 
+    /**
+     * 談的是別的東西就不碰手機音量：語音只處理音量與聲音，亮度、螢幕亮度不納入。
+     * 有音量名詞也一樣拒絕，避免「聲音和亮度都調大」這種混句誤觸。
+     */
+    private val foreignSubjects = listOf("亮度", "螢幕", "屏幕", "背光")
+
     /** 必須出現其中一個名詞才算在談音量，避免「大一點」之類的半句誤觸。 */
     private val volumeNouns = listOf("音量", "声量", "聲量", "聲音", "声音")
 
@@ -35,15 +41,21 @@ object VolumeCommandRouter {
         "最小聲", "最小声", "最小音量", "音量最小", "聲音最小", "声音最小", "調到最小", "调到最小",
     )
 
+    /**
+     * 調整方向詞。
+     *
+     * 只收「要求改變」的說法；「音量有點大」這類陳述目前狀態的句子不納入，
+     * 避免使用者只是在描述，卻被反向操作。
+     */
     private val raiseMarkers = listOf(
         "大聲", "大声", "大一點", "大一点", "大一些", "大點", "大一格",
-        "音量大", "聲音大", "声音大", "有點大", "有点大", "稍微大", "稍微大聲", "稍微大声",
+        "音量大", "聲音大", "声音大", "稍微大", "稍微大聲", "稍微大声",
         "調大", "调大", "加大", "調高", "调高", "提高音量", "音量提高",
     )
 
     private val lowerMarkers = listOf(
         "小聲", "小声", "小一點", "小一点", "小一些", "小點", "小一格",
-        "音量小", "聲音小", "声音小", "有點小", "有点小", "稍微小", "稍微小聲", "稍微小声",
+        "音量小", "聲音小", "声音小", "稍微小", "稍微小聲", "稍微小声",
         "調小", "调小", "減小", "减小", "調低", "调低", "降低音量", "音量降低",
     )
 
@@ -54,17 +66,21 @@ object VolumeCommandRouter {
         "稍微大聲一點", "稍微小聲一點", "稍微大聲", "稍微小聲", "稍微大声", "稍微小声",
     )
 
+    /** 最大／最小同樣要求音量語意，不讓「亮度調到最大」靠字面命中。 */
+    private val bareExtremes = setOf("最大聲", "最大声", "最小聲", "最小声")
+
     /**
      * 「音量調到 50」這類說法。
      *
      * 名詞與數字之間最多容許 4 個非數字字（涵蓋「音量調整到」「聲音設成」）。
-     * 結尾的負向斷言讓「音量調大一點」不會被當成百分比 1。
+     * 結尾的負向斷言讓「音量調大一點」不會被當成百分比 1，
+     * 也讓「音量調高一格」不會被當成 1%——量詞後面跟的是格數，不是百分比。
      */
     private val setToPattern = Regex(
         "(?:音量|声量|聲量|聲音|声音)" +
             "\\D{0,4}?" +
             "(\\d{1,3}|[零〇○一二兩两三四五六七八九十百]{1,3})" +
-            "(?:%|％)?(?![點点些])"
+            "(?:%|％)?(?![點点些格级級个个])"
     )
 
     fun parse(
@@ -89,10 +105,17 @@ object VolumeCommandRouter {
         if (questionMarkers.any { stripped.contains(it) }) return null
         if (negativeMarkers.any { stripped.contains(it) }) return null
 
-        if (maxRequests.any { stripped.contains(it) }) return VolumeCommand.SetTo(100)
-        if (minRequests.any { stripped.contains(it) }) return VolumeCommand.SetTo(0)
+        // 談的是亮度、螢幕亮度就整句不處理，避免順手把媒體音量也調了。
+        if (foreignSubjects.any { stripped.contains(it) }) return null
 
         val hasNoun = volumeNouns.any { stripped.contains(it) }
+        if (maxRequests.any { stripped.contains(it) } && (hasNoun || stripped in bareExtremes)) {
+            return VolumeCommand.SetTo(100)
+        }
+        if (minRequests.any { stripped.contains(it) } && (hasNoun || stripped in bareExtremes)) {
+            return VolumeCommand.SetTo(0)
+        }
+
         if (!hasNoun && stripped !in barePhrases) return null
 
         if (hasNoun) {

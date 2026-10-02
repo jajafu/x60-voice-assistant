@@ -123,4 +123,16 @@ class VolumeTargetPolicyTest {
             VolumeTargetPolicy.adjustmentStepsTo(targetIndex = 7, currentIndex = 5),
         )
     }
+
+    @Test
+    fun `confirms success only when the device reports the requested level`() {
+        val reached = VolumeTargetPolicy.verify(targetIndex = 8, actualIndex = 8, maxIndex = 15)
+        assertTrue(reached.applied)
+        assertEquals("音量已調到 8，共 15 格。", reached.message)
+
+        // 系統或 OEM 夾限時不得宣稱已調到目標，改報讀回的實際級別。
+        val diverged = VolumeTargetPolicy.verify(targetIndex = 8, actualIndex = 6, maxIndex = 15)
+        assertFalse(diverged.applied)
+        assertEquals("音量現在是 6 格，共 15 格，跟剛才要求的不一樣。", diverged.message)
+    }
 }

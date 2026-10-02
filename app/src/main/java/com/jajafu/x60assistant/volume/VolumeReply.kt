@@ -17,6 +17,14 @@ object VolumeReply {
 
     fun belowFloor(minIndex: Int): String = "音量最低只到 $minIndex 格，還沒調低。"
 
+    /**
+     * 調整後讀回的級別與目標不同。
+     *
+     * 系統或 OEM 可能夾限或忽略變更，因此回報實際讀到的值而不是原本要求的值。
+     */
+    fun diverged(actual: Int, maxIndex: Int): String =
+        "音量現在是 $actual 格，共 $maxIndex 格，跟剛才要求的不一樣。"
+
     fun unavailable(): String = "這個裝置無法調整音量。"
 
     fun failed(): String = "音量調整失敗，請稍後再試一次。"

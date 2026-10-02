@@ -77,6 +77,48 @@ class VolumeCommandRouterTest {
     }
 
     @Test
+    fun `reads a level count as one step instead of a percentage`() {
+        // 「一格」「兩格」數量的是格數，不是百分比；每次調整就是一格。
+        assertEquals(VolumeCommand.Up, parse("音量調高一格"))
+        assertEquals(VolumeCommand.Up, parse("音量調高兩格"))
+        assertEquals(VolumeCommand.Down, parse("音量調低一格"))
+        assertEquals(VolumeCommand.Down, parse("音量調低兩格"))
+        assertEquals(VolumeCommand.Up, parse("音量大一格"))
+        assertEquals(VolumeCommand.Down, parse("聲音小一格"))
+        // 百分比寫法仍然照舊。
+        assertEquals(VolumeCommand.SetTo(50), parse("音量調到50"))
+        assertEquals(VolumeCommand.SetTo(50), parse("音量調到 50%"))
+    }
+
+    @Test
+    fun `does not treat a level description as a command`() {
+        // 只收要求改變的說法；描述目前狀態的句子不觸發，避免反向操作。
+        assertNull(parse("音量有點大"))
+        assertNull(parse("音量有點小"))
+        assertNull(parse("聲音有點大"))
+        assertNull(parse("聲音有點小"))
+        assertNull(parse("声音有点大"))
+        assertNull(parse("音量稍微有點小"))
+        // 但要求改變的說法仍然照常解析。
+        assertEquals(VolumeCommand.Up, parse("音量大一點"))
+        assertEquals(VolumeCommand.Up, parse("聲音大一點"))
+        assertEquals(VolumeCommand.Down, parse("音量稍微小聲"))
+    }
+
+    @Test
+    fun `does not treat brightness as a volume request`() {
+        // 語音只處理音量與聲音，亮度、螢幕亮度不納入。
+        assertNull(parse("亮度調到最大"))
+        assertNull(parse("亮度調高一點"))
+        assertNull(parse("亮度大一點"))
+        assertNull(parse("螢幕調到最大"))
+        assertNull(parse("屏幕調亮一點"))
+        assertNull(parse("聲音和亮度都調大"))
+        // 亮度句不因為含有「音量」而誤觸媒體音量。
+        assertEquals(VolumeCommand.SetTo(100), parse("音量調到最大"))
+    }
+
+    @Test
     fun `does not trigger on questions`() {
         assertNull(parse("什麼時候音量太大"))
         assertNull(parse("怎麼調音量"))

@@ -135,6 +135,8 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 
 「音量調到 50」的 `50` 是**百分比**，目標級別 = `round(0.50 × 裝置上限)`；回話報實際級別與上限。語音可調整的**下限為 2 格**：要求更低時不執行，改為回報已到下限。此功能不改變靜音狀態或提供靜音／解除靜音指令。
 
+相對調整每次只走一格（`Up`／`Down`），「音量大一點」「聲音大一點」「大聲一點」「音量調高一格」都視為調高一格；「一格」「兩格」是格數而不是百分比。解析只收「要求改變」的說法，「音量有點大」這種描述現況的句子不觸發。語音只處理音量與聲音，亮度與螢幕亮度不納入，含有這類詞的句子整句不處理。
+
 ### 8.5.2 技術選擇與其代價
 
 `AudioManager.setStreamVolume()` 是公開 SDK API，可在宣告 `MODIFY_AUDIO_SETTINGS` 後呼叫。本版選擇逐格呼叫 `adjustStreamVolume()`；這是本版的實作選擇，並非因 `setStreamVolume()` 非公開。提示音與 vivo／OriginOS 上的實際行為仍待真機驗收。
@@ -142,6 +144,7 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 - **相對調整**用 `adjustStreamVolume(STREAM_MUSIC, ±1)`。刻意**不用** `adjustSuggestedStreamVolume()`：它依當下有焦點的播放器決定目標 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與本期範圍不符。
 - **絕對音量**以 `getStreamVolume()`／`getStreamMaxVolume()` 換算目標，再用 `adjustStreamVolume(±1)` 逐格前進。代價是每一格都可能觸發系統音量提示音，最多來回 15 格。若真機實測顯示干擾明顯，另評估改用 `setStreamVolume()` 或限制單次調整格數。
 - 決策邏輯集中在 `VolumeTargetPolicy`（純函式），`VolumeActionExecutor` 只負責呼叫 Android API，因此換算與夾限可完整單元測試。
+- 調整後**讀回 `getStreamVolume()`** 再決定回話：讀回值等於目標才回報「音量已調到」；不一致則回報實際級別並視為未套用，避免系統或 OEM 夾限時虛報成功。
 - 回話文字集中在 `VolumeReply`，並以單元測試鎖住「未實際調整時不得出現『音量已調到』」。
 
 ### 8.5.3 已知限制
