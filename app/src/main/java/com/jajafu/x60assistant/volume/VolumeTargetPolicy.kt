@@ -8,6 +8,17 @@ data class PercentTarget(
     val belowFloor: Boolean,
 )
 
+/** 一次逐格音量調整及其方向。 */
+data class VolumeStep(
+    val index: Int,
+    val direction: VolumeStepDirection,
+)
+
+enum class VolumeStepDirection {
+    RAISE,
+    LOWER,
+}
+
 /**
  * 決定目標音量級別的純邏輯，不碰 Android API，因此可以完整單元測試。
  *
@@ -55,8 +66,8 @@ object VolumeTargetPolicy {
     /**
      * 從目前級別逐格走到 [targetIndex] 的完整路徑，不含出發點。
      *
-     * Android 沒有公開的設定音量的 API（`setStreamVolume` 是 `@SystemApi`），
-     * 只能用 `adjustStreamVolume` 一格一格前進，所以這裡產生完整的步驟序列。
+     * `AudioManager.setStreamVolume` 是公開 SDK API；本功能目前選擇以 `adjustStreamVolume`
+     * 逐格執行，因此這裡產生包含每步方向的完整序列。
      */
     fun stepsTo(targetIndex: Int, currentIndex: Int): List<Int> {
         if (targetIndex == currentIndex) return emptyList()
@@ -68,5 +79,19 @@ object VolumeTargetPolicy {
             steps += index
         }
         return steps
+    }
+
+    /** 以目前級別作為第一步的起點，為每一格產生正確的調整方向。 */
+    fun adjustmentStepsTo(targetIndex: Int, currentIndex: Int): List<VolumeStep> {
+        var previousIndex = currentIndex
+        return stepsTo(targetIndex, currentIndex).map { index ->
+            val direction = if (index > previousIndex) {
+                VolumeStepDirection.RAISE
+            } else {
+                VolumeStepDirection.LOWER
+            }
+            previousIndex = index
+            VolumeStep(index, direction)
+        }
     }
 }

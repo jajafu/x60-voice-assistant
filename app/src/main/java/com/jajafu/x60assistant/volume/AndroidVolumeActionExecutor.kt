@@ -12,8 +12,8 @@ import kotlinx.coroutines.withContext
  * 音樂與小助手的 TTS 共用這個音量級別（`docs/decision-log.md` rc27 的 vivo X60 實測），
  * 因此使用者說「小聲一點」時，小助手自己的回話也會一起變小聲，這是已知取捨。
  *
- * Android 沒有公開的「設定音量」API（`setStreamVolume` 是 `@SystemApi`），
- * 所以絕對音量只能用 [AudioManager.adjustStreamVolume] 逐格前進；
+ * 本實作以 [AudioManager.adjustStreamVolume] 逐格前進；`setStreamVolume` 也是公開 SDK API，
+ * 但不由此類別呼叫。每格都可能觸發系統提示音，且實際裝置行為仍待 X60 驗收；
  * 相對音量也刻意指定 `STREAM_MUSIC`，不用 `adjustSuggestedStreamVolume`，
  * 避免沒有音訊焦點時調整到其他音訊流。
  */
@@ -43,7 +43,7 @@ class AndroidVolumeActionExecutor(
                 message = if (raise) VolumeReply.atCeiling(maxIndex) else VolumeReply.atFloor(minVolumeIndex),
                 applied = false,
             )
-        applySteps(manager, VolumeTargetPolicy.stepsTo(target, currentIndex))
+        applySteps(manager, VolumeTargetPolicy.adjustmentStepsTo(target, currentIndex))
         return VolumeActionResult(VolumeReply.setTo(target, maxIndex), applied = true)
     }
 
@@ -59,21 +59,18 @@ class AndroidVolumeActionExecutor(
         if (target.index == currentIndex) {
             return VolumeActionResult(VolumeReply.unchanged(currentIndex, maxIndex), applied = false)
         }
-        applySteps(manager, VolumeTargetPolicy.stepsTo(target.index, currentIndex))
+        applySteps(manager, VolumeTargetPolicy.adjustmentStepsTo(target.index, currentIndex))
         return VolumeActionResult(VolumeReply.setTo(target.index, maxIndex), applied = true)
     }
 
     /** 逐格前進；每一格都可能讓系統播一次音量提示音，所以路徑交給 [VolumeTargetPolicy] 產生。 */
-    private fun applySteps(manager: AudioManager, steps: List<Int>) {
-        var previous: Int? = null
-        for (index in steps) {
-            val direction = if (previous == null || index > previous) {
-                AudioManager.ADJUST_RAISE
-            } else {
-                AudioManager.ADJUST_LOWER
+    private fun applySteps(manager: AudioManager, steps: List<VolumeStep>) {
+        for (step in steps) {
+            val direction = when (step.direction) {
+                VolumeStepDirection.RAISE -> AudioManager.ADJUST_RAISE
+                VolumeStepDirection.LOWER -> AudioManager.ADJUST_LOWER
             }
             manager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
-            previous = index
         }
     }
 }
