@@ -41,6 +41,8 @@ Android 13／vivo X60 的本機喚醒語音助理 release candidate。使用者�
 
 Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Release variant 未配置 production signing，因此只能視為未正式簽章的候選產物。
 
+正式 Release APK 由 Actions 手動 workflow 建置並由 App 內更新機制下載安裝，見 [docs/app-update.md](docs/app-update.md)。
+
 ## 手機設定
 
 1. App 分成「對話／設定／診斷」三個分頁；日常使用只需停留在「對話」。

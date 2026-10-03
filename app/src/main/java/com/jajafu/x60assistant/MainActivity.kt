@@ -53,8 +53,18 @@ import com.jajafu.x60assistant.tts.TtsEngineOption
 import com.jajafu.x60assistant.tts.TtsVoiceOption
 import com.jajafu.x60assistant.ui.diagnostics.DeviceDiagnosticsScreen
 import com.jajafu.x60assistant.ui.theme.X60AssistantTheme
+import com.jajafu.x60assistant.update.UpdateCheckResult
+import com.jajafu.x60assistant.update.UpdateCheckWorker
+import com.jajafu.x60assistant.update.UpdateChecker
+import com.jajafu.x60assistant.update.UpdateDownload
+import com.jajafu.x60assistant.update.UpdateDownloader
+import com.jajafu.x60assistant.update.UpdateInfo
+import com.jajafu.x60assistant.update.UpdateInstaller
+import com.jajafu.x60assistant.update.UpdateUiState
+import com.jajafu.x60assistant.update.describeUpdateFailure
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     private lateinit var diagnosticsCollector: DeviceDiagnosticsCollector
@@ -80,6 +90,11 @@ class MainActivity : ComponentActivity() {
     private var ttsVoicesLoading by mutableStateOf(false)
     private var ttsCatalog: TtsEngineCatalog? = null
     private var ttsVoicesJob: Job? = null
+    private var updateUiState by mutableStateOf<UpdateUiState>(UpdateUiState.Idle)
+    private var updateCheckJob: Job? = null
+    private var updateDownloadJob: Job? = null
+    private var pendingUpdateInfo: UpdateInfo? = null
+    private var pendingUpdateApk: File? = null
 
     private val diagnosticsExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain"),
@@ -164,6 +179,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         showExactAlarmOnboarding = shouldShowExactAlarmOnboarding()
+        UpdateCheckWorker.schedule(applicationContext)
 
         setContent {
             val serviceRunning by ServiceStateRepository.running.collectAsStateWithLifecycle()
@@ -221,6 +237,11 @@ class MainActivity : ComponentActivity() {
                     onSaveReminder = ::saveReminder,
                     onDeleteReminder = ::deleteReminder,
                     onChooseReminderSound = ::openRingtonePicker,
+                    updateState = updateUiState,
+                    onToggleAutoUpdate = ::toggleAutoUpdateCheck,
+                    onCheckUpdate = ::checkAppUpdate,
+                    onDownloadUpdate = ::downloadAppUpdate,
+                    onInstallUpdate = ::installAppUpdate,
                 )
             }
         }
@@ -460,6 +481,68 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun toggleAutoUpdateCheck(enabled: Boolean) {
+        lifecycleScope.launch {
+            runCatching {
+                settingsRepository.save(settingsRepository.current().copy(autoUpdateCheck = enabled))
+            }.onFailure {
+                updateUiState = UpdateUiState.Failed("自動檢查設定儲存失敗：${it.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun checkAppUpdate() {
+        updateCheckJob?.cancel()
+        updateUiState = UpdateUiState.Checking
+        updateCheckJob = lifecycleScope.launch {
+            val result = UpdateChecker().checkLatest(BuildConfig.VERSION_CODE)
+            updateUiState = when (result) {
+                UpdateCheckResult.UpToDate -> UpdateUiState.UpToDate(BuildConfig.VERSION_CODE)
+                is UpdateCheckResult.Available -> UpdateUiState.Available(result.info)
+                is UpdateCheckResult.Failed ->
+                    UpdateUiState.Failed("檢查更新失敗：" + describeUpdateFailure(result.failure, result.detail))
+            }
+        }
+    }
+
+    private fun downloadAppUpdate(info: UpdateInfo) {
+        updateDownloadJob?.cancel()
+        pendingUpdateInfo = info
+        pendingUpdateApk = null
+        updateDownloadJob = lifecycleScope.launch {
+            UpdateDownloader().download(info, UpdateDownloader.updateDir(applicationContext)).collect { event ->
+                updateUiState = when (event) {
+                    is UpdateDownload.Progress -> UpdateUiState.Downloading(event.bytesRead, event.totalBytes)
+                    is UpdateDownload.Done -> {
+                        pendingUpdateApk = event.apkFile
+                        UpdateUiState.ReadyToInstall(info.versionName)
+                    }
+                    is UpdateDownload.Failed -> {
+                        pendingUpdateApk = null
+                        UpdateUiState.Failed("下載失敗：" + describeUpdateFailure(event.failure, event.detail))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun installAppUpdate() {
+        val apk = pendingUpdateApk?.takeIf { it.isFile } ?: run {
+            updateUiState = UpdateUiState.Failed("安裝檔遺失，請重新下載。")
+            return
+        }
+        if (!UpdateInstaller.canInstallUnknownApps(this)) {
+            startActivity(UpdateInstaller.unknownAppSourcesIntent(this))
+            updateUiState = UpdateUiState.ReadyToInstall(
+                pendingUpdateInfo?.versionName.orEmpty(),
+                needPermissionHint = true,
+            )
+            return
+        }
+        runCatching { startActivity(UpdateInstaller.installIntent(this, apk)) }
+            .onFailure { updateUiState = UpdateUiState.Failed("無法開啟安裝程式。") }
+    }
+
     private fun testConnection(settings: AssistantSettings, apiKey: String) {
         if (testingConnection) return
         testingConnection = true
@@ -613,6 +696,8 @@ class MainActivity : ComponentActivity() {
             temperatureCelsius = null,
             thermalStatus = null,
             exactAlarmPermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S,
+            appVersionName = "",
+            appVersionCode = 0,
         )
     }
 }

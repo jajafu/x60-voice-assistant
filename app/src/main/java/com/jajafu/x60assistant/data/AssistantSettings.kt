@@ -32,6 +32,7 @@ data class AssistantSettings(
     val speechRate: Float = 1.0f,
     val pitch: Float = 1.0f,
     val connectionVerified: Boolean = false,
+    val autoUpdateCheck: Boolean = true,
 ) {
     fun normalized(): AssistantSettings = copy(
         wakePhrase = wakePhrase.trim().ifBlank { DEFAULT_WAKE_PHRASE }.take(MAX_WAKE_PHRASE_LENGTH),

@@ -32,6 +32,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -74,6 +75,9 @@ import com.jajafu.x60assistant.diagnostics.M1DiagnosticsSnapshot
 import com.jajafu.x60assistant.orchestration.VoiceState
 import com.jajafu.x60assistant.music.MusicAppOption
 import com.jajafu.x60assistant.navigation.NavigationAppOption
+import com.jajafu.x60assistant.update.UpdateInfo
+import com.jajafu.x60assistant.update.UpdateUiState
+import com.jajafu.x60assistant.update.formatUpdateProgress
 import com.jajafu.x60assistant.reminder.ScheduledReminder
 import com.jajafu.x60assistant.reminder.ReminderFrequency
 import com.jajafu.x60assistant.reminder.ReminderRecurrence
@@ -129,6 +133,11 @@ fun DeviceDiagnosticsScreen(
     onSaveReminder: (String?, String, Long, ReminderRecurrence?) -> Unit,
     onDeleteReminder: (String) -> Unit,
     onChooseReminderSound: () -> Unit,
+    updateState: UpdateUiState,
+    onToggleAutoUpdate: (Boolean) -> Unit,
+    onCheckUpdate: () -> Unit,
+    onDownloadUpdate: (UpdateInfo) -> Unit,
+    onInstallUpdate: () -> Unit,
 ) {
     var section by rememberSaveable { mutableStateOf(AppSection.VOICE) }
     var showDiagnostics by rememberSaveable { mutableStateOf(false) }
@@ -193,6 +202,11 @@ fun DeviceDiagnosticsScreen(
                 onRefresh = onRefresh,
                 onExportDiagnostics = onExportDiagnostics,
                 onClearPrivateData = onClearPrivateData,
+                updateState = updateState,
+                onToggleAutoUpdate = onToggleAutoUpdate,
+                onCheckUpdate = onCheckUpdate,
+                onDownloadUpdate = onDownloadUpdate,
+                onInstallUpdate = onInstallUpdate,
             ) else SettingsPage(
                 modifier = Modifier.padding(scaffoldPadding),
                 saved = assistantSettings,
@@ -1303,6 +1317,124 @@ private fun formatReminderTime(epochMillis: Long): String = Instant.ofEpochMilli
     .format(DateTimeFormatter.ofPattern("yyyy/MM/dd（E）HH:mm", Locale.TAIWAN))
 
 @Composable
+private fun UpdateSection(
+    device: DeviceDiagnostics,
+    settings: AssistantSettings,
+    state: UpdateUiState,
+    onToggleAutoUpdate: (Boolean) -> Unit,
+    onCheckUpdate: () -> Unit,
+    onDownloadUpdate: (UpdateInfo) -> Unit,
+    onInstallUpdate: () -> Unit,
+) {
+    SectionCard("App 版本與更新") {
+        val versionLabel = if (device.appVersionName.isBlank()) {
+            "讀取中…"
+        } else {
+            "${device.appVersionName}（${device.appVersionCode}）"
+        }
+        InfoRow("目前版本", versionLabel)
+        ToggleRow("自動檢查更新", settings.autoUpdateCheck, true, onToggleAutoUpdate)
+        Text(
+            "每天連網檢查一次 GitHub Releases；有新版只發通知，下載與安裝都要你確認。安裝前會驗證 SHA-256，系統也會要求你確認安裝。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        when (state) {
+            UpdateUiState.Idle -> {
+                Text(
+                    "尚未檢查更新。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            UpdateUiState.Checking -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    Text(
+                        "檢查中…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                }
+            }
+            is UpdateUiState.UpToDate -> {
+                Text(
+                    "已是最新版本。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            is UpdateUiState.Available -> {
+                Text(
+                    "發現新版本 ${state.info.versionName}。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                if (state.info.notes.isNotBlank()) {
+                    Text(
+                        state.info.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                Button(
+                    onClick = { onDownloadUpdate(state.info) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+                ) { Text("下載更新") }
+            }
+            is UpdateUiState.Downloading -> {
+                Text(
+                    formatUpdateProgress(state.bytesRead, state.totalBytes),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                if (state.totalBytes > 0) {
+                    LinearProgressIndicator(
+                        progress = { state.bytesRead.toFloat() / state.totalBytes },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+            }
+            is UpdateUiState.ReadyToInstall -> {
+                Text(
+                    "已下載 ${state.versionName}，安裝時系統會要求確認。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                if (state.needPermissionHint) {
+                    Text(
+                        "請先允許「安裝未知應用」後再按一次安裝。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                Button(
+                    onClick = onInstallUpdate,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+                ) { Text("安裝更新") }
+            }
+            is UpdateUiState.Failed -> {
+                MessageCard(state.message, error = true)
+            }
+        }
+        if (state !is UpdateUiState.Checking && state !is UpdateUiState.Downloading) {
+            OutlinedButton(
+                onClick = onCheckUpdate,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+            ) { Text("檢查更新") }
+        }
+    }
+}
+
+@Composable
 private fun DiagnosticsPage(
     modifier: Modifier,
     device: DeviceDiagnostics,
@@ -1316,6 +1448,11 @@ private fun DiagnosticsPage(
     onRefresh: () -> Unit,
     onExportDiagnostics: () -> Unit,
     onClearPrivateData: () -> Unit,
+    updateState: UpdateUiState,
+    onToggleAutoUpdate: (Boolean) -> Unit,
+    onCheckUpdate: () -> Unit,
+    onDownloadUpdate: (UpdateInfo) -> Unit,
+    onInstallUpdate: () -> Unit,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -1385,6 +1522,17 @@ private fun DiagnosticsPage(
                 InfoRow("ASR RTF", runtime.asrRtf?.let { String.format(Locale.ROOT, "%.3f", it) } ?: "—")
                 InfoRow("TTS", "${runtime.ttsEngine} / ${runtime.ttsVoice}")
             }
+        }
+        item {
+            UpdateSection(
+                device = device,
+                settings = settings,
+                state = updateState,
+                onToggleAutoUpdate = onToggleAutoUpdate,
+                onCheckUpdate = onCheckUpdate,
+                onDownloadUpdate = onDownloadUpdate,
+                onInstallUpdate = onInstallUpdate,
+            )
         }
         item {
             SectionCard("裝置") {

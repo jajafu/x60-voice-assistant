@@ -55,6 +55,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.SPEECH_RATE] = settings.speechRate
             prefs[Keys.PITCH] = settings.pitch
             prefs[Keys.CONNECTION_VERIFIED] = settings.connectionVerified
+            prefs[Keys.AUTO_UPDATE_CHECK] = settings.autoUpdateCheck
         }
     }
 
@@ -97,6 +98,7 @@ class SettingsRepository(private val context: Context) {
         speechRate = prefs[Keys.SPEECH_RATE] ?: 1.0f,
         pitch = prefs[Keys.PITCH] ?: 1.0f,
         connectionVerified = prefs[Keys.CONNECTION_VERIFIED] ?: false,
+        autoUpdateCheck = prefs[Keys.AUTO_UPDATE_CHECK] ?: true,
     ).normalized()
 
     private object Keys {
@@ -131,5 +133,6 @@ class SettingsRepository(private val context: Context) {
         val SPEECH_RATE = floatPreferencesKey("tts_speech_rate")
         val PITCH = floatPreferencesKey("tts_pitch")
         val CONNECTION_VERIFIED = booleanPreferencesKey("llm_connection_verified")
+        val AUTO_UPDATE_CHECK = booleanPreferencesKey("app_auto_update_check")
     }
 }

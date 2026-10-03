@@ -12,12 +12,26 @@ android {
     namespace = "com.jajafu.x60assistant"
     compileSdk = 36
 
+    // 正式簽章只在 CI 手動 workflow 提供 keystore 時啟用；本機建置維持既有未簽章行為。
+    val ciReleaseKeystore = System.getenv("RELEASE_KEYSTORE_PATH")?.let(::file)?.takeIf { it.isFile }
+
+    signingConfigs {
+        create("ciRelease") {
+            if (ciReleaseKeystore != null) {
+                storeFile = ciReleaseKeystore
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "com.jajafu.x60assistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 33
-        versionName = "1.0.0-rc29"
+        versionCode = 35
+        versionName = "1.0.0-rc31"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -30,6 +44,9 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (ciReleaseKeystore != null) {
+                signingConfig = signingConfigs.getByName("ciRelease")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

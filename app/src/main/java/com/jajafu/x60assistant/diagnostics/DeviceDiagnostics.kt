@@ -18,6 +18,8 @@ data class DeviceDiagnostics(
     val temperatureCelsius: Double?,
     val thermalStatus: Int?,
     val exactAlarmPermissionGranted: Boolean = true,
+    val appVersionName: String = "",
+    val appVersionCode: Long = 0L,
 )
 
 object DeviceDiagnosticsFormatter {
