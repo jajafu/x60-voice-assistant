@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag，例如 v1.0.0-rc31（必須唯一；將直接建立公開 Release）'
+        description: 'Release tag，例如 v1.0.1（必須唯一；將直接建立公開 Release）'
         required: true
       release_notes:
         description: 'Release 說明（繁中簡短）'

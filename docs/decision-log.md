@@ -87,3 +87,10 @@
 - **修正一個只有真機才發現的缺陷**：`AndroidTtsEngine.selectVoice()` 原本以 `locale.country` 比對 `zh-TW`／`zh-CN` 來優先繁中與簡中，但 vivo 引擎回報的是**以書寫系統標記**的 `zh-Hant`／`zh-Hans`，其 `country` 為空字串，導致那兩條規則永遠不成立，只能靠最後的「任何中文」fallback 僥倖命中。這次改成以 `Locale.forLanguageTag` 取 `language` 與 `script`，同時相容書寫系統與地區兩種標記（`zh-Hant`、`zh-TW`、`zh-HK`、`zh-MO` 視為繁中）。
 - 設定頁排序與自動選擇改為共用同一套規則（繁中優先、離線優先、名稱），避免清單第一個與實際被選中的不一致。
 - 測試樣本改用 vivo 引擎實際回報的 locale 樣式（`zh-Hant`／`zh-Hans`），先前使用 `zh-TW` 的樣本無法涵蓋這個缺陷。
+
+## 1.0.1（2026-10-03，Issue #22 自動更新）
+
+- **開發者決定**：產品版號自本版起改用 `1.0.1` 起跳的 patch 遞增（下一版 `1.0.2`…），取代 `rcN` 候選命名；Release tag 取 `v<versionName>`（如 `v1.0.1`）；`update.json` 格式維持 `versionCode`／`versionName`／`apkUrl`／`sha256`／`notes`，release notes 用繁中簡短。
+- **開發者決定**：自動檢查改為每次回到 App 前景時靜默檢查一次（取代原 Plan 的每日 WorkManager），有新版才發通知；`UpdateCheckWorker` 已刪除。
+- 正式 keystore 由 AI 以 keytool 產生（RSA-2048，PKCS12，30 年效期），存於 repo 外的 `release-keystore/` 並由使用者另行備份；GitHub Secrets 命名為 `RELEASE_KEYSTORE_BASE64`／`RELEASE_KEYSTORE_PASSWORD`／`RELEASE_KEY_ALIAS`（`x60release`）／`RELEASE_KEY_PASSWORD`。PKCS12 不支援 key 與 keystore 分開設密碼，因此後兩組密碼相同。
+- `rc30` 版號保留給 issue/20 分支，避免兩邊版號碰撞；合併順序由需求決定者決定。

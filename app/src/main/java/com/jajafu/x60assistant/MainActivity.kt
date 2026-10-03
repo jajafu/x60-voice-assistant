@@ -54,12 +54,12 @@ import com.jajafu.x60assistant.tts.TtsVoiceOption
 import com.jajafu.x60assistant.ui.diagnostics.DeviceDiagnosticsScreen
 import com.jajafu.x60assistant.ui.theme.X60AssistantTheme
 import com.jajafu.x60assistant.update.UpdateCheckResult
-import com.jajafu.x60assistant.update.UpdateCheckWorker
 import com.jajafu.x60assistant.update.UpdateChecker
 import com.jajafu.x60assistant.update.UpdateDownload
 import com.jajafu.x60assistant.update.UpdateDownloader
 import com.jajafu.x60assistant.update.UpdateInfo
 import com.jajafu.x60assistant.update.UpdateInstaller
+import com.jajafu.x60assistant.update.UpdateNotifier
 import com.jajafu.x60assistant.update.UpdateUiState
 import com.jajafu.x60assistant.update.describeUpdateFailure
 import kotlinx.coroutines.Job
@@ -179,7 +179,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         showExactAlarmOnboarding = shouldShowExactAlarmOnboarding()
-        UpdateCheckWorker.schedule(applicationContext)
 
         setContent {
             val serviceRunning by ServiceStateRepository.running.collectAsStateWithLifecycle()
@@ -262,6 +261,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AssistantUiVisibility.onStart()
+        checkAppUpdateOnLaunch()
         if (skipAutoStartOnNextStart) {
             skipAutoStartOnNextStart = false
             return
@@ -501,6 +501,24 @@ class MainActivity : ComponentActivity() {
                 is UpdateCheckResult.Available -> UpdateUiState.Available(result.info)
                 is UpdateCheckResult.Failed ->
                     UpdateUiState.Failed("檢查更新失敗：" + describeUpdateFailure(result.failure, result.detail))
+            }
+        }
+    }
+
+    /**
+     * 每次回到前景時靜默檢查一次（開關見 autoUpdateCheck）。
+     * 有新版才發通知並更新診斷頁狀態；已是最新或失敗都不打擾。
+     * 若使用者正在看更新狀態（非 Idle），不覆蓋。
+     */
+    private fun checkAppUpdateOnLaunch() {
+        lifecycleScope.launch {
+            val settings = runCatching { settingsRepository.current() }.getOrNull() ?: return@launch
+            if (!settings.autoUpdateCheck) return@launch
+            if (updateUiState != UpdateUiState.Idle) return@launch
+            val result = runCatching { UpdateChecker().checkLatest(BuildConfig.VERSION_CODE) }.getOrNull()
+            if (result is UpdateCheckResult.Available) {
+                updateUiState = UpdateUiState.Available(result.info)
+                UpdateNotifier.showAvailable(this@MainActivity, result.info)
             }
         }
     }

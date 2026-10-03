@@ -1335,7 +1335,7 @@ private fun UpdateSection(
         InfoRow("目前版本", versionLabel)
         ToggleRow("自動檢查更新", settings.autoUpdateCheck, true, onToggleAutoUpdate)
         Text(
-            "每天連網檢查一次 GitHub Releases；有新版只發通知，下載與安裝都要你確認。安裝前會驗證 SHA-256，系統也會要求你確認安裝。",
+            "每次開啟 App 自動檢查一次 GitHub Releases；有新版只發通知，下載與安裝都要你確認。安裝前會驗證 SHA-256，系統也會要求你確認安裝。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp),
