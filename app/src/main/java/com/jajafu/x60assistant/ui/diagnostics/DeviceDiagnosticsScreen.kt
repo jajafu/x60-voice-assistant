@@ -1353,6 +1353,8 @@ private fun DiagnosticsPage(
                 InfoRow("服務時間", formatDuration(runtime.serviceUptimeMs))
                 InfoRow("Audio Error / Dropped", "${runtime.audioErrorCount} / ${runtime.droppedFrameCount}")
                 InfoRow("最後錯誤", runtime.lastError?.name ?: "—")
+                InfoRow("音量指令", runtime.volumeLastCommand)
+                InfoRow("音量實測", runtime.volumeLastDetail)
                 InfoRow("LLM HTTP", runtime.llmHttpStatus?.toString() ?: "—")
                 InfoRow("LLM 延遲", runtime.llmTotalLatencyMs?.let { "$it ms" } ?: "—")
             }

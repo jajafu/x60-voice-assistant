@@ -27,7 +27,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - `kws/`、`vad/`、`asr/`、`model/`：本機語音偵測／固定 X-ASR 辨識、APK 內建模型安裝與 SHA256 驗證；舊版下載工作保留升級相容處理。
 - `music/`、`reminder/`：媒體操作與本機提醒路由、執行與排程。
 - `navigation/`：語音導航的本機指令解析、地圖 App 目錄與路線預覽啟動。只開啟使用者選定的地圖 App 到路線預覽頁，最後的開始導航由使用者點擊。
-- `volume/`：本機 `STREAM_MUSIC` 音量指令解析、級別換算與 Android `AudioManager` 執行；不提供語音靜音／解除靜音。
+- `volume/`：本機 `STREAM_MUSIC` 音量指令解析、級別換算與 Android `AudioManager` 執行（相對調整用 `adjustStreamVolume`，絕對音量用 `setStreamVolume`）；不使用無障礙設定頁，不提供語音靜音／解除靜音。
 - `llm/`、`tts/`：可設定的 OpenAI 相容 SSE 用戶端與 Android 語音輸出。
 - `data/`、`security/`、`diagnostics/`：DataStore 設定、Keystore 密鑰、有限且遮罩的診斷。
 - `app/src/test/`、`app/src/androidTest/`、`docs/test-reports/`：單元測試、裝置測試與真機紀錄。

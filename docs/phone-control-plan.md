@@ -9,7 +9,7 @@
 
 第一輪交付以音樂為樣板，但架構應能容納「開啟 App」、「媒體控制」、「系統允許的操作」與「特定 App 的操作介面」。**不承諾任意 App 的任意畫面都能由語音自動點擊**；每個 App、動作及鎖屏情境都要單獨驗證。付款、傳送訊息、撥號及變更系統安全設定不在第一輪自動執行範圍。
 
-本文件是現有 [主規格書](../../vivo-x60-voice-assistant-spec.md) 的後續擴充提案。原規格將音樂服務排除在第一版外，也禁止用 Accessibility Service 繞過 Android 限制；本案不改寫已完成的第一版需求。若未來啟用無障礙操作，僅用於使用者明確授權、裝置已解鎖且經逐項驗證的 UI 流程，不用它繞過鎖屏或背景啟動限制。
+本文件是現有 [主規格書](../../vivo-x60-voice-assistant-spec.md) 的後續擴充提案。原規格將音樂服務排除在第一版外，也禁止用 Accessibility Service 繞過 Android 限制；本案不改寫已完成的第一版需求。Issue #20 曾加入音量無障礙 fallback 與 ADB shell helper，但前者在 X60 鎖屏實測失敗，後者已依使用者要求移除；目前回到純 `AudioManager` 方案。
 
 ## 2. 現有基礎與待補缺口
 
@@ -65,8 +65,8 @@
 
 ## 5. 權限、風險與使用者控制
 
-- 初版只要求執行某類能力所必需的權限。MusicCabin 的一般播放與喜愛清單瀏覽不需要通知監聽或無障礙服務；收藏與取消收藏才需使用者授予通知存取。無障礙服務保持獨立開關，且在沒有單一 App 實測需求前不加入 Manifest。
-- 設定頁顯示目前選定的音樂 App、通知存取／無障礙服務狀態、可用的操作，以及可隨時關閉手機操作的總開關。
+- 初版只要求執行某類能力所必需的權限。MusicCabin 的一般播放與喜愛清單瀏覽不需要通知監聽或無障礙服務；收藏與取消收藏才需使用者授予通知存取。音量不宣告 Accessibility Service。
+- 設定頁顯示目前選定的音樂 App、通知存取狀態、可用的操作，以及可隨時關閉手機操作的總開關。
 - 開啟 App、播放、暫停、切歌可直接執行；傳訊、撥號、購買、刪除資料及修改安全設定應另訂逐項確認流程，在本期一律不執行。
 - 不自動解鎖、不輸入密碼、不使用 root、ADB 或 overlay 規避 Android 限制。第三方 App 的訂閱、地區、登入和內容授權可能使搜尋或播放失敗，需回報真實狀態。
 - 若未來準備上架 Google Play，Accessibility Service 的用途、揭露及政策審核需另做檢查；本規劃不把側載可行等同商店可上架。[Google Play Accessibility Service 政策](https://support.google.com/googleplay/android-developer/answer/10964491)
@@ -139,10 +139,11 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 
 ### 8.5.2 技術選擇與其代價
 
-`AudioManager.setStreamVolume()` 是公開 SDK API，可在宣告 `MODIFY_AUDIO_SETTINGS` 後呼叫。本版選擇逐格呼叫 `adjustStreamVolume()`；這是本版的實作選擇，並非因 `setStreamVolume()` 非公開。提示音與 vivo／OriginOS 上的實際行為仍待真機驗收。
+`AudioManager.setStreamVolume()` 與 `adjustStreamVolume()` 都是公開 SDK API，可在宣告 `MODIFY_AUDIO_SETTINGS` 後呼叫。vivo X60 實測曾證實兩者呼叫送達但音量沒變；目前仍回到此方案，調整後讀回實際級別，未生效時如實回報而不虛報成功。
 
-- **相對調整**用 `adjustStreamVolume(STREAM_MUSIC, ±1)`。刻意**不用** `adjustSuggestedStreamVolume()`：它依當下有焦點的播放器決定目標 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與本期範圍不符。
-- **絕對音量**以 `getStreamVolume()`／`getStreamMaxVolume()` 換算目標，再用 `adjustStreamVolume(±1)` 逐格前進。代價是每一格都可能觸發系統音量提示音，最多來回 15 格。若真機實測顯示干擾明顯，另評估改用 `setStreamVolume()` 或限制單次調整格數。
+- **相對調整**用 `adjustStreamVolume(STREAM_MUSIC, ±1)` 走一格。刻意**不用** `adjustSuggestedStreamVolume()`：它依當下有焦點的播放器決定目標 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與本期範圍不符。
+- **絕對音量**以 `getStreamVolume()`／`getStreamMaxVolume()` 換算目標，再用 `setStreamVolume(STREAM_MUSIC, target, 0)` 一次設定，不逐格播放調整提示音。
+- `WRITE_MEDIA_AUDIO` 管理媒體音訊檔案寫入，與音量無關；音量操作所需 manifest 權限為 `MODIFY_AUDIO_SETTINGS`。Android 音訊服務也有獨立的 `AUDIO_MEDIA_VOLUME` AppOp，若裝置上該項被明確拒絕，應檢查它而不是 `WRITE_MEDIA_AUDIO`。
 - 決策邏輯集中在 `VolumeTargetPolicy`（純函式），`VolumeActionExecutor` 只負責呼叫 Android API，因此換算與夾限可完整單元測試。
 - 調整後**讀回 `getStreamVolume()`** 再決定回話：讀回值等於目標才回報「音量已調到」；不一致則回報實際級別並視為未套用，避免系統或 OEM 夾限時虛報成功。
 - 回話文字集中在 `VolumeReply`，並以單元測試鎖住「未實際調整時不得出現『音量已調到』」。
@@ -153,6 +154,10 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 - **低音量下的喚醒率未驗證**。§4.3 既有的喚醒率驗收本身就是待驗收項，音量再壓只會更差。使用者可能體感「調小之後小助手壞掉」；此取捨在設計時已知並接受。
 - **vivo／OriginOS 可能攔截背景音量變更**或另存音量曲線，必須真機驗收，不得以單元測試結論代替。
 - **未納入**：鈴聲與通知音訊流（避開 vivo 勿擾模式的行為差異）、`STREAM_TTS` 拆分、喚醒率最佳化、反向操作（「取消調高音量」）。
+
+### 8.5.4 X60 路徑（2026-10-04 更新）
+
+X60 上 App UID 的 AudioManager 寫入曾被系統忽略；無障礙 fallback 與 ADB shell helper 方案均已依使用者要求移除。目前回到純 `AudioManager` 方案（§8.5.2），調整後讀回實際級別，未生效時如實回報。此路徑仍需 X60 真人語音驗收後才可標為通過。
 
 ## 9. 參考依據
 

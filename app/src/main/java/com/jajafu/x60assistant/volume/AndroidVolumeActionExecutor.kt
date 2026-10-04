@@ -2,7 +2,7 @@ package com.jajafu.x60assistant.volume
 
 import android.content.Context
 import android.media.AudioManager
-import android.util.Log
+import com.jajafu.x60assistant.diagnostics.M1DiagnosticsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -13,13 +13,10 @@ import kotlinx.coroutines.withContext
  * 音樂與小助手的 TTS 共用這個音量級別（`docs/decision-log.md` rc27 的 vivo X60 實測），
  * 因此使用者說「小聲一點」時，小助手自己的回話也會一起變小聲，這是已知取捨。
  *
- * 本實作以 [AudioManager.setStreamVolume] 一次設定到目標級別。
- *
- * 探測結果（rc30 commit `3e9b742`，vivo V2046A）：逐格 [AudioManager.adjustStreamVolume]
- * 的呼叫有送達系統（`dumpsys audio` 可見 `adjustStreamVolume ... from com.jajafu.x60assistant`），
- * 但音量完全不變；同一台機以 shell 身分呼叫同一支 API 則正常。逐格方案因此無法使用。
- * 改用 `setStreamVolume` 同樣只需要 `MODIFY_AUDIO_SETTINGS`，並一次到位、不必逐格播提示音。
- * vivo／OriginOS 是否也限制本 App 的 setter 尚待實測。
+ * 相對調整（`Up`／`Down`）用 [AudioManager.adjustStreamVolume] 走一格；
+ * 絕對音量（`SetTo`）用 [AudioManager.setStreamVolume] 一次設定到目標級別。
+ * 兩者都只需要 `MODIFY_AUDIO_SETTINGS`。
+ * 每次調整後讀回實際級別再回話；系統或 OEM 忽略變更時不虛報成功。
  */
 class AndroidVolumeActionExecutor(
     context: Context,
@@ -47,8 +44,16 @@ class AndroidVolumeActionExecutor(
                 message = if (raise) VolumeReply.atCeiling(maxIndex) else VolumeReply.atFloor(minVolumeIndex),
                 applied = false,
             )
-        applyTarget(manager, target, currentIndex, maxIndex)
-        return verify(manager, target, maxIndex)
+        val direction = if (raise) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
+        manager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
+        return verify(
+            manager = manager,
+            targetIndex = target,
+            currentIndex = currentIndex,
+            maxIndex = maxIndex,
+            command = if (raise) "UP" else "DOWN",
+            path = "ADJUST",
+        )
     }
 
     private fun setTo(manager: AudioManager, percent: Int): VolumeActionResult {
@@ -63,44 +68,41 @@ class AndroidVolumeActionExecutor(
         if (target.index == currentIndex) {
             return VolumeActionResult(VolumeReply.unchanged(currentIndex, maxIndex), applied = false)
         }
-        applyTarget(manager, target.index, currentIndex, maxIndex)
-        return verify(manager, target.index, maxIndex)
+        manager.setStreamVolume(AudioManager.STREAM_MUSIC, target.index, 0)
+        return verify(
+            manager = manager,
+            targetIndex = target.index,
+            currentIndex = currentIndex,
+            maxIndex = maxIndex,
+            command = "SET_$percent",
+            path = "SET",
+        )
     }
 
     /**
-     * 調整後讀回實際級別再回話。
+     * 調整後讀回實際級別再回話，並把調整前後的實測值記入診斷頁。
      *
      * 系統或 OEM 可能夾限或忽略變更；只看目標值等於假稱已完成，因此以讀回值為準。
      */
-    private fun verify(manager: AudioManager, targetIndex: Int, maxIndex: Int): VolumeActionResult =
-        VolumeTargetPolicy.verify(
-            targetIndex = targetIndex,
-            actualIndex = manager.getStreamVolume(AudioManager.STREAM_MUSIC),
-            maxIndex = maxIndex,
-        )
-
-    /**
-     * 一次設定到目標級別，並記錄調整前後的實測值。
-     *
-     * 逐格 `adjustStreamVolume` 已證實在 vivo X60 上無效（見類別說明），因此不再使用；
-     * 目標級別仍由 [VolumeTargetPolicy] 夾在下限與上限之間，這裡只負責呼叫 API。
-     *
-     * `setStreamVolume` 在 vivo 上可能不丟例外卻靜默失效，沒有調整前後的實測值就只能靠猜測；
-     * 此日誌用於還原實際情況，確認穩定後可移除。
-     */
-    private fun applyTarget(
+    private fun verify(
         manager: AudioManager,
         targetIndex: Int,
         currentIndex: Int,
         maxIndex: Int,
-    ) {
-        Log.i(DIAGNOSTIC_TAG, "before current=$currentIndex target=$targetIndex max=$maxIndex")
-        manager.setStreamVolume(AudioManager.STREAM_MUSIC, targetIndex, 0)
+        command: String,
+        path: String,
+    ): VolumeActionResult {
         val readBack = manager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        Log.i(DIAGNOSTIC_TAG, "after target=$targetIndex readBack=$readBack applied=${readBack == targetIndex}")
-    }
-
-    private companion object {
-        const val DIAGNOSTIC_TAG = "VolumeDiag"
+        M1DiagnosticsRepository.setVolumeAttempt(
+            command = command,
+            detail = "current=$currentIndex target=$targetIndex readBack=$readBack " +
+                "max=$maxIndex applied=${readBack == targetIndex} fixed=${manager.isVolumeFixed} " +
+                "path=$path",
+        )
+        return VolumeTargetPolicy.verify(
+            targetIndex = targetIndex,
+            actualIndex = readBack,
+            maxIndex = maxIndex,
+        )
     }
 }
