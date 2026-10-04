@@ -37,7 +37,7 @@
 - rc27 新增 TTS 音量設定與引擎／音調選擇器。`test`、`lint`、`assembleDebug` 與 MuMu vmindex 0（Android 15）安裝開啟 smoke 已通過，並以截圖確認新 UI 渲染與空狀態提示。**核心假設尚未在 vivo X60 驗證：`TextToSpeech.Engine.KEY_PARAM_VOLUME` 在該機的 `com.vivo.aiservice` 引擎上是否真的改變輸出音量。** Android 標示此參數範圍為 0.0–1.0，超過 1.0 由引擎自行決定，可能破音或被忽略；`TextToSpeech.setVolume()` 不是公開 API 因此無法採用。若調整音量後聲音沒有變化，必須記為未生效而非通過，並另尋管道（例如改走 `STREAM_TTS`，但那需要 `MODIFY_AUDIO_SETTINGS` 權限）。`docs/testing.md`「TTS 音量與引擎／音調選擇（rc27，待真機驗收）」7 個步驟仍待補做。
 - rc30 新增語音調整手機音量（Issue #20）。`test`、`lint`、`assembleDebug` 已通過。**已執行** vivo V2046A（Android 13／OriginOS 14.0）的安裝與啟動 smoke：覆蓋安裝至 `1.0.0-rc30` / `34`、`MODIFY_AUDIO_SETTINGS` 已授予、`MainActivity` 前景啟動無崩潰、讀到 `STREAM_MUSIC` 上限 15 格且未靜音。**語音功能本身在該機仍未驗收**，`docs/testing.md`「語音調整手機音量（rc30）」的 12 個功能步驟全數待補做，包含最關鍵的喚醒率項目。
 - **rc30 已知且接受的取捨：TTS 與音樂共用 `STREAM_MUSIC`。** rc27 已在該機實測確認 TTS 的 AudioTrack 是 `USAGE_MEDIA`、與音樂同一音量級別，因此使用者說「聲音小一點」時，小助手自己的回話也會一起變小；語音下限設為 2 格緩解，但**下限 2 格時回話是否仍可聽懂未經實測**。若實測發現不可用，需另開 Issue 評估改走 `STREAM_TTS`，本輪不處理。
-- **rc30 目前以 `adjustStreamVolume(±1)` 逐格設定絕對音量。** `setStreamVolume()` 實際上是公開 SDK API；本版仍採逐格實作，因此每一格都可能觸發系統音量提示音，最多來回 15 格。是否改用公開 setter、提示音副作用及 vivo／OriginOS 實際行為仍待驗收。
+- **X60 鎖屏語音音量仍待真機驗收。** App UID 的 AudioManager 寫入與 Accessibility 設定頁均已在 vivo V2046A 上證實無效；ADB shell helper 方案也已依使用者要求移除。目前實作回到純 `AudioManager`（相對調整用 `adjustStreamVolume`，絕對音量用 `setStreamVolume`），調整後讀回實際級別，未生效時如實回報。完成實機測試前不能宣稱修復。
 - **rc30 的音量指令解析只接受要求改變的說法。** 「音量有點大」這類描述現況的句子不觸發，會照一般問答送 LLM；「音量調高一格」視為調高一格而非 1%。亮度與螢幕亮度不納入，含有這類詞的句子（例如「聲音和亮度都調大」）整句不處理，避免順手改動媒體音量。
 - **rc30 調整後會讀回實際音量。** 若系統或 OEM 夾限音量，回話會報讀回的級別並視為未套用，而不是宣稱已調到目標；此行為尚未在 vivo X60 實測。
 - **rc30 的喚醒率未經驗證。** `docs/testing.md` 既有的喚醒驗收（1 公尺正常音量、20 次中 18 次）本身仍是待驗收項，音量再往下壓只會更差。使用者可能體感「調小之後小助手壞掉」；此風險在設計時已知並接受，須待真機數據確認實際影響。
