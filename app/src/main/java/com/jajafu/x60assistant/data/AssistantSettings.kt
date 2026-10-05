@@ -27,6 +27,7 @@ data class AssistantSettings(
     val navAppName: String = DEFAULT_NAV_APP_NAME,
     val navPackageName: String = DEFAULT_NAV_PACKAGE_NAME,
     val voiceVolumeControl: Boolean = DEFAULT_VOICE_VOLUME_CONTROL,
+    val llmCorrectionEnabled: Boolean = DEFAULT_LLM_CORRECTION_ENABLED,
     val ttsEngine: String = "",
     val ttsVoice: String = "",
     val ttsVolume: Float = DEFAULT_TTS_VOLUME,
@@ -87,6 +88,12 @@ data class AssistantSettings(
          * 關閉時 `VoiceForegroundService` 不建立音量執行器，指令會落到一般問答流程。
          */
         const val DEFAULT_VOICE_VOLUME_CONTROL = true
+
+        /**
+         * X-ASR 同音錯字的 LLM 校正總開關（Issue #24）。
+         * 開啟時本機 Router 全 miss 才多打一次 LLM，關閉即回舊行為不上網。
+         */
+        const val DEFAULT_LLM_CORRECTION_ENABLED = true
 
         /**
          * TTS 輸出的增益，套用到 TextToSpeech.Engine.KEY_PARAM_VOLUME。

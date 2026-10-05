@@ -50,6 +50,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.NAV_APP_NAME] = settings.navAppName
             prefs[Keys.NAV_PACKAGE_NAME] = settings.navPackageName
             prefs[Keys.VOICE_VOLUME_CONTROL] = settings.voiceVolumeControl
+            prefs[Keys.LLM_CORRECTION_ENABLED] = settings.llmCorrectionEnabled
             prefs[Keys.TTS_ENGINE] = settings.ttsEngine
             prefs[Keys.TTS_VOICE] = settings.ttsVoice
             prefs[Keys.TTS_VOLUME] = settings.ttsVolume
@@ -93,6 +94,8 @@ class SettingsRepository(private val context: Context) {
         navAppName = prefs[Keys.NAV_APP_NAME] ?: AssistantSettings.DEFAULT_NAV_APP_NAME,
         navPackageName = prefs[Keys.NAV_PACKAGE_NAME] ?: AssistantSettings.DEFAULT_NAV_PACKAGE_NAME,
         voiceVolumeControl = prefs[Keys.VOICE_VOLUME_CONTROL] ?: AssistantSettings.DEFAULT_VOICE_VOLUME_CONTROL,
+        llmCorrectionEnabled = prefs[Keys.LLM_CORRECTION_ENABLED]
+            ?: AssistantSettings.DEFAULT_LLM_CORRECTION_ENABLED,
         ttsEngine = prefs[Keys.TTS_ENGINE].orEmpty(),
         ttsVoice = prefs[Keys.TTS_VOICE].orEmpty(),
         ttsVolume = prefs[Keys.TTS_VOLUME] ?: AssistantSettings.DEFAULT_TTS_VOLUME,
@@ -128,6 +131,7 @@ class SettingsRepository(private val context: Context) {
         val NAV_APP_NAME = stringPreferencesKey("nav_app_name")
         val NAV_PACKAGE_NAME = stringPreferencesKey("nav_package_name")
         val VOICE_VOLUME_CONTROL = booleanPreferencesKey("voice_volume_control")
+        val LLM_CORRECTION_ENABLED = booleanPreferencesKey("llm_correction_enabled")
         val TTS_ENGINE = stringPreferencesKey("tts_engine")
         val TTS_VOICE = stringPreferencesKey("tts_voice")
         val TTS_VOLUME = floatPreferencesKey("tts_volume")
