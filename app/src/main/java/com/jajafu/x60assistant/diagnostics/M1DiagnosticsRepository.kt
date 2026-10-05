@@ -43,6 +43,8 @@ data class M1DiagnosticsSnapshot(
     val audioQueueDepth: Int = 0,
     val audioQueueHighWaterMark: Int = 0,
     val serviceRestartCount: Long = 0,
+    val volumeLastCommand: String = "—",
+    val volumeLastDetail: String = "—",
 )
 
 object M1DiagnosticsRepository {
@@ -77,6 +79,8 @@ object M1DiagnosticsRepository {
     private val audioQueueDepth = AtomicLong(0)
     private val audioQueueHighWaterMark = AtomicLong(0)
     private val serviceRestartCount = AtomicLong(0)
+    private val volumeLastCommand = AtomicReference("—")
+    private val volumeLastDetail = AtomicReference("—")
     private val mutableSnapshot = MutableStateFlow(M1DiagnosticsSnapshot())
 
     val snapshot = mutableSnapshot.asStateFlow()
@@ -204,6 +208,20 @@ object M1DiagnosticsRepository {
         publish()
     }
 
+    /**
+     * 記錄一次語音音量操作的前後實測值。
+     *
+     * vivo／OriginOS 上 `setStreamVolume` 可能不丟例外卻靜默失效，只看回話無法分辨
+     * 是寫入被丟棄還是讀回讀錯對象，因此把調整前、目標與讀回值一併留下。
+     * 同時寫入 ring log，會隨診斷匯出一起帶出。
+     */
+    fun setVolumeAttempt(command: String, detail: String) {
+        volumeLastCommand.set(command)
+        volumeLastDetail.set(detail)
+        log("VOLUME_$command", detail = detail)
+        publish()
+    }
+
     fun setAudioQueue(depth: Int, highWaterMark: Int) {
         audioQueueDepth.set(depth.toLong())
         audioQueueHighWaterMark.set(highWaterMark.toLong())
@@ -287,6 +305,8 @@ object M1DiagnosticsRepository {
             audioQueueDepth = audioQueueDepth.get().toInt(),
             audioQueueHighWaterMark = audioQueueHighWaterMark.get().toInt(),
             serviceRestartCount = serviceRestartCount.get(),
+            volumeLastCommand = volumeLastCommand.get(),
+            volumeLastDetail = volumeLastDetail.get(),
         )
     }
 

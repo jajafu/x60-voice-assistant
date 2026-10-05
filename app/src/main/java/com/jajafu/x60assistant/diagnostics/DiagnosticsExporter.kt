@@ -37,6 +37,8 @@ object DiagnosticsExporter {
         appendLine("temperature_c=${device.temperatureCelsius ?: "-"}")
         appendLine("thermal_status=${device.thermalStatus ?: "-"}")
         appendLine("last_error=${runtime.lastError ?: "-"}")
+        appendLine("volume_last_command=${runtime.volumeLastCommand}")
+        appendLine("volume_last_detail=${runtime.volumeLastDetail}")
         appendLine("logs:")
         logs.takeLast(100).forEach {
             appendLine("${it.elapsedRealtimeMs}|${it.event}|${it.errorCode ?: "-"}|${it.detail.orEmpty()}")
