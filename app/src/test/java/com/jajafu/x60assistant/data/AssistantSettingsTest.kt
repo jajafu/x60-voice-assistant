@@ -20,6 +20,11 @@ class AssistantSettingsTest {
     }
 
     @Test
+    fun `llm transcript correction is enabled by default`() {
+        assertEquals(true, AssistantSettings().llmCorrectionEnabled)
+    }
+
+    @Test
     fun `follow up accepts zero and clamps outside range`() {
         assertEquals(0, AssistantSettings(followUpSeconds = 0).normalized().followUpSeconds)
         assertEquals(0, AssistantSettings(followUpSeconds = -1).normalized().followUpSeconds)

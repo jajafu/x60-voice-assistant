@@ -544,6 +544,14 @@ private fun ModelsPage(
                     enabled = enabled && maskedApiKey != "未設定",
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(48.dp),
                 ) { Text("刪除 API Key") }
+                ToggleRow("ASR 同音校正（LLM）", draft.llmCorrectionEnabled, enabled) {
+                    draft = draft.copy(llmCorrectionEnabled = it)
+                }
+                Text(
+                    "開啟時，本機指令沒命中才多打一次 LLM，把同音錯字（如長根→長庚）修回導航／音樂；關閉即回舊行為不上網。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 

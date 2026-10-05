@@ -120,3 +120,7 @@
 
 - 依使用者要求移除 ADB shell helper（含 `VolumeAdbShellBridge`、`VolumeAdbShellDaemon`、`VolumeShellProtocol`、啟動／停止腳本與診斷頁 helper 狀態），回到純 `AudioManager` 方案：相對調整用 `adjustStreamVolume(STREAM_MUSIC, ±1)`，絕對音量用 `setStreamVolume()`。
 - 診斷頁保留「音量指令／音量實測」（current／target／readBack／max／applied／fixed＋path），未生效時仍如實回報。
+## 1.0.1（2026-10-05，Issue #24）
+
+- **開發者決定（版號）**：不再使用 `1.0.0-rcN` 候選版號。從本版起為 `1.0.1`／`versionCode 35`，後續行為變更的 APK 依序為 `1.0.2`、`1.0.3`…直到另行決定。`versionCode 35` 高於各分支已用的 34（含 Issue #20 的 rc30），覆蓋安裝不會被 Android 拒絕。
+- X-ASR 同音錯字加 LLM 校正（Typeless 兩段式）：本機 Router 全 miss 才打一次 LLM（`temperature 0.0`、固定 JSON），命中導航／音樂就轉回既有本機 Executor；`AssistantSettings.llmCorrectionEnabled`（預設 true）在 LLM Provider 卡片有開關，關閉即回舊行為。校正 prompt 是程式常數，不受 DataStore 舊值影響。
