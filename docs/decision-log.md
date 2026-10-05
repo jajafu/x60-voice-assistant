@@ -88,6 +88,38 @@
 - 設定頁排序與自動選擇改為共用同一套規則（繁中優先、離線優先、名稱），避免清單第一個與實際被選中的不一致。
 - 測試樣本改用 vivo 引擎實際回報的 locale 樣式（`zh-Hant`／`zh-Hans`），先前使用 `zh-TW` 的樣本無法涵蓋這個缺陷。
 
+## rc30（2026-10-02，Issue #20）
+
+- **開發者決定（語意）**：「音量調到 50」的 `50` 定義為**百分比**，目標級別 = `round(0.50 × 裝置上限)`，不在解析階段假設固定格數。這樣換手機不必改程式，回話會報出實際級別與上限。超出 0–100 的輸入夾到邊界而不是整句作廢，避免落回 LLM 亂猜。
+- **開發者決定（範圍）**：第一輪**只做 `STREAM_MUSIC`**。鈴聲與通知不納入，因為 vivo 勿擾模式的行為差異會放大驗收範圍。
+- **開發者決定（下限）**：語音可調整的音量下限設為 **2 格**。rc27 已實測 TTS 與音樂共用 `STREAM_MUSIC`，壓太低會讓小助手自己的回話與喚醒提示音一起變小聲。要求比下限更低時**不執行**，改為回報已到下限，不調成音量 0。
+- **API 選擇更正**：`AudioManager.setStreamVolume()` 是公開 SDK API，且同樣使用 `MODIFY_AUDIO_SETTINGS`；先前將其記為 `@SystemApi` 是錯誤。本版仍沿用已實作的 `adjustStreamVolume(±1)` 逐格路徑，逐格提示音副作用與是否改用公開 setter 留待 review／真機驗收決定。相對音量**刻意不用** `adjustSuggestedStreamVolume`：它會依當下有焦點的播放器決定調整哪個 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與「只動媒體音量」的範圍不符。
+- **開發者決定（PR #21 review 時）**：不提供語音靜音／解除靜音選項。因此 `VolumeCommand` 僅保留 `Up`／`Down`／`SetTo(percent)`，相關解析分支、AudioManager 呼叫、回覆與測試皆移除。使用者可透過 Android 系統控制靜音。
+- **PR #21 code review 修正**：逐格路徑第一步也必須比較目前級別與目標級別來選方向；已將方向規劃抽至 `VolumeTargetPolicy.adjustmentStepsTo()`，並以單元測試覆蓋上調、單格下調與多格下調。
+- **開發者決定（PR #21 code review）**：相對調整一律一格，「音量調高一格／兩格」是格數不是百分比，解析比對時排除「格／级／級／个／個」等量詞。
+- **開發者決定（PR #21 code review）**：解析只收「要求改變」的說法，移除「有點大／有点大／有點小／有点小」四個描述性詞，避免使用者只是在描述現況卻被反向操作；「音量大一點」仍因含「大一點」照常解析。
+- **開發者決定（PR #21 code review）**：語音只處理音量與聲音。亮度、螢幕、屏幕、背光等詞一出現就整句不處理，因此「亮度調到最大」不會命中「調到最大」而誤改媒體音量；最大／最小的無名詞說法只保留「最大聲／最小聲」白名單。
+- **開發者決定（PR #21 code review）**：調整後讀回 `getStreamVolume()`，只有讀回值等於目標才回報「音量已調到」，否則回報實際級別並標為未套用。
+- **vivo X60 實測後的修正**：rc30 的 `adjustStreamVolume(STREAM_MUSIC, ±1)` 呼叫有送達系統，但音量級別沒有改變；目前實作改用公開 SDK 的 `setStreamVolume()` 一次設定目標，並在診斷頁記錄 current／target／readBack／max／fixed。此修正仍需用新 APK 在 X60 驗收。`WRITE_MEDIA_AUDIO` 是媒體檔案寫入 AppOp，與此操作無關；本功能使用 `MODIFY_AUDIO_SETTINGS`。
+- **修正版 X60 驗收結果（2026-10-02）**：新 APK 的 `UP` 指令解析成功，呼叫 `setStreamVolume()` 後仍為 `current=10 target=11 readBack=10 max=15 applied=false fixed=false`。`MODIFY_AUDIO_SETTINGS` 已授予，`AUDIO_MEDIA_VOLUME` 為 allow；setter 在本機也無效。
+- **使用者核准的範圍擴充（本對話，2026-10-02）**：使用者同意加入 Accessibility Service 作為 X60 fallback。服務只接收 `com.android.settings` 的視窗事件，在 Android「聲音與震動」頁定位「媒體」SeekBar，設定後返回；不保存或上傳 UI 文字。需要使用者在系統無障礙設定中親自啟用。
+- **X60 無障礙 fallback 追測（2026-10-02）**：使用者回報多輪對話中只有一次「音量調到 50」成功。診斷顯示服務已啟用且手勢完成，但 `setProgress=false`；失敗的 100% 案例讀值為 `current=8 target=15 readBack=8 max=15`，SeekBar bounds 為 `150..1035`，range 為 `0..600`。bounds 含左右 thumb travel inset，舊版用整個 bounds 線性映射，使中間點可成功、端點落在實際軌道外。已改用依 SeekBar 高度估算的軌道內縮座標並重新安裝；端點語音操作仍待 X60 複測，不宣稱已通過。
+- **與原 Plan 的偏離**：新增最大／最小聲映射到 `SetTo(100)`／`SetTo(0)`，避免這兩種常見說法落回 LLM 被假稱已完成；語音音量下限策略仍會阻止實際調到低於 2 格。
+- **路由順序**：關閉 → 提醒 → 音樂 → 導航 → 音量 → LLM。音量插在導航之後，兩組詞彙沒有交疊；提醒路由雖帶數字優先級更高，但沒有裸數字規則，單元測試鎖住「音量調到50」不會被提醒路由吞掉。
+- **回話文字集中於 `VolumeReply`**，並用單元測試鎖住「不可用或未改動時不得出現『音量已調到』」，呼應 `docs/phone-control-plan.md` §4.1 不虛報成功的原則。
+- **本輪未做真機驗收**：依開發者指示先做 code review。`test`、`lint`、`assembleDebug` 通過；MuMu smoke 與 vivo X60 驗收均未執行，見 `docs/known-issues.md`。
+
+## 2026-10-02：X60 鎖屏語音音量改用 ADB shell helper
+
+- 使用者回報鎖屏時無障礙音量輔助仍無法控制；確認舊執行器在 AudioManager 寫入無效後會開啟系統設定頁，鎖屏時停在 `TIMED_OUT`。因此移除 Accessibility Service 的 Manifest 註冊與調用路徑。
+- 使用者先前已明確要求每次重開機後用電腦 USB/ADB 重新啟用。X60 上 `cmd media_session volume --stream 3 --set N` 以 shell UID 執行可改變 STREAM_MUSIC；改採每次開機由 PowerShell 腳本透過 ADB 啟動的狹窄 app_process helper。它僅讀取 app-specific request 檔、驗證 nonce／時間／數值，固定呼叫 media_session 設定音量並讀回；不使用 Shizuku、root 或 Accessibility，也不接受任意命令字串。
+- helper 未啟動時，App 明確回報需由電腦啟動；不再打開音效設定頁。重開機會終止 helper，使用者需再次連接 USB 執行 `scripts/start-x60-volume-helper.ps1`；可由 `scripts/stop-x60-volume-helper.ps1` 手動停止。
+- 目前 `test`、`lint`、`assembleDebug` 通過。X60 在安裝前從 ADB 斷線，尚未確認 app_process 載入 APK、持續運作或鎖屏語音操作；真人鎖屏驗收未通過／待執行。
+
+## 2026-10-04：移除 ADB shell helper，回到純 AudioManager
+
+- 依使用者要求移除 ADB shell helper（含 `VolumeAdbShellBridge`、`VolumeAdbShellDaemon`、`VolumeShellProtocol`、啟動／停止腳本與診斷頁 helper 狀態），回到純 `AudioManager` 方案：相對調整用 `adjustStreamVolume(STREAM_MUSIC, ±1)`，絕對音量用 `setStreamVolume()`。
+- 診斷頁保留「音量指令／音量實測」（current／target／readBack／max／applied／fixed＋path），未生效時仍如實回報。
 ## 1.0.1（2026-10-05，Issue #24）
 
 - **開發者決定（版號）**：不再使用 `1.0.0-rcN` 候選版號。從本版起為 `1.0.1`／`versionCode 35`，後續行為變更的 APK 依序為 `1.0.2`、`1.0.3`…直到另行決定。`versionCode 35` 高於各分支已用的 34（含 Issue #20 的 rc30），覆蓋安裝不會被 Android 拒絕。

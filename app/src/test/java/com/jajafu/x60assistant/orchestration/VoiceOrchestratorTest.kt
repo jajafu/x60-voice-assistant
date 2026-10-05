@@ -9,6 +9,9 @@ import com.jajafu.x60assistant.llm.*
 import com.jajafu.x60assistant.music.*
 import com.jajafu.x60assistant.tts.*
 import com.jajafu.x60assistant.vad.*
+import com.jajafu.x60assistant.volume.VolumeActionExecutor
+import com.jajafu.x60assistant.volume.VolumeActionResult
+import com.jajafu.x60assistant.volume.VolumeCommand
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -269,6 +272,71 @@ class VoiceOrchestratorTest {
         }
     }
 
+    /** 音量指令必須在本機完成，不經過 LLM，也不影響音樂的暫停／恢復。 */
+    @Test fun `volume commands run locally without calling the llm`() = runTest {
+        val volume = FakeVolume()
+        val f = Fixture(backgroundScope, text = "聲音小一點", volume = volume)
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(listOf(VolumeCommand.Down), volume.commands)
+            assertEquals(listOf("音量已調到 8，共 15 格。"), f.output.spoken)
+            assertTrue(f.provider.requests.isEmpty())
+        } finally { dispose(f) }
+    }
+
+    /** 「音量調到50」帶數字，必須確認不會被更前面的提醒路由吞掉。 */
+    @Test fun `a percentage volume request is routed locally`() = runTest {
+        val volume = FakeVolume()
+        val f = Fixture(backgroundScope, text = "音量調到50", volume = volume)
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(listOf(VolumeCommand.SetTo(50)), volume.commands)
+            assertTrue(f.provider.requests.isEmpty())
+        } finally { dispose(f) }
+    }
+
+    /** 關掉總開關後執行器不存在，音量指令應回到一般問答而不是默默執行。 */
+    @Test fun `volume commands fall back to the llm when the executor is absent`() = runTest {
+        val f = Fixture(backgroundScope, text = "音量調到50", volume = null)
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(1, f.provider.requests.size)
+        } finally { dispose(f) }
+    }
+
+    /** 執行器丟出例外時必須明說失敗，不得把未發生的調整講成已調整。 */
+    @Test fun `a failing volume executor is reported as a failure`() = runTest {
+        val volume = FakeVolume(failure = SecurityException("missing MODIFY_AUDIO_SETTINGS"))
+        val f = Fixture(backgroundScope, text = "音量調到50", volume = volume)
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(listOf(VolumeCommand.SetTo(50)), volume.commands)
+            assertEquals(listOf("音量調整失敗，請稍後再試一次。"), f.output.spoken)
+        } finally { dispose(f) }
+    }
+
+    /** 音量指令不該動到音樂的暫停狀態，因為它不是播放控制。 */
+    @Test fun `volume commands do not disturb the music hold state`() = runTest {
+        val music = FakeMusic(pauseResult = true)
+        val volume = FakeVolume()
+        val f = Fixture(backgroundScope, text = "聲音小一點", music = music, volume = volume)
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(1, music.pauseCalls)
+            assertTrue(music.commands.isEmpty())
+        } finally { dispose(f) }
+    }
+
     @Test fun `music refusal is buffered and only local recovery result is spoken`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val f = Fixture(backgroundScope, text = "搜尋周杰倫的歌曲", chunks = flow {
@@ -445,6 +513,7 @@ class VoiceOrchestratorTest {
         text: String = "解釋天空的顏色",
         chunks: Flow<LlmChunk> = flowOf(LlmChunk("回答。")),
         val music: FakeMusic? = null,
+        val volume: FakeVolume? = null,
         decode: () -> Unit = {},
         followUpSeconds: Int = 0,
         corrector: TranscriptCorrector? = null,
@@ -482,6 +551,7 @@ class VoiceOrchestratorTest {
             ),
             llm = provider,
             musicExecutor = music,
+            volumeExecutor = volume,
             transcriptCorrector = corrector,
             speechOutput = output,
             clock = MonotonicClock { audio.now },
@@ -588,5 +658,17 @@ class VoiceOrchestratorTest {
             return true
         }
         override suspend fun stopForClose() = false
+    }
+
+    private class FakeVolume(
+        private val result: VolumeActionResult = VolumeActionResult("音量已調到 8，共 15 格。", applied = true),
+        private val failure: Throwable? = null,
+    ) : VolumeActionExecutor {
+        val commands = mutableListOf<VolumeCommand>()
+        override suspend fun execute(command: VolumeCommand): VolumeActionResult {
+            commands += command
+            failure?.let { throw it }
+            return result
+        }
     }
 }
