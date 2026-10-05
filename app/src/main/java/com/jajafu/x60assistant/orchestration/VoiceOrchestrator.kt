@@ -13,6 +13,8 @@ import com.jajafu.x60assistant.kws.WakeWordEngine
 import com.jajafu.x60assistant.data.AssistantSettings
 import com.jajafu.x60assistant.llm.ChatRequest
 import com.jajafu.x60assistant.llm.ConversationHistory
+import com.jajafu.x60assistant.llm.CorrectedIntent
+import com.jajafu.x60assistant.llm.TranscriptCorrector
 import com.jajafu.x60assistant.llm.LlmErrorCode
 import com.jajafu.x60assistant.llm.LlmException
 import com.jajafu.x60assistant.llm.LlmProvider
@@ -75,6 +77,7 @@ class VoiceOrchestrator(
     private val reminderExecutor: ReminderActionExecutor? = null,
     private val alarmExecutor: AlarmActionExecutor? = null,
     private val navigationExecutor: NavigationActionExecutor? = null,
+    private val transcriptCorrector: TranscriptCorrector? = null,
     speechOutput: SpeechOutputEngine? = null,
     private val speechOutputFactory: (suspend () -> SpeechOutputEngine?)? = null,
     private val clock: MonotonicClock = AndroidMonotonicClock,
@@ -353,6 +356,35 @@ class VoiceOrchestrator(
             executeNavigation(navigationCommand)
             return
         }
+        // Issue #24：本機全 miss 才做一次 LLM 同音校正（Typeless 兩段式）。
+        // 命中 navigate/music 就轉回既有本機 Executor；其餘用校正後文字走原 QA。
+        var effectiveText = userText
+        val corrector = transcriptCorrector
+        if (corrector != null && settings.llmCorrectionEnabled) {
+            val correction = runCatching { corrector.correct(userText, sessionId) }.getOrNull()
+            if (correction != null) {
+                when (correction.intent) {
+                    CorrectedIntent.NAVIGATE -> {
+                        val destination = correction.destination
+                        if (destination != null && navigationExecutor != null) {
+                            transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
+                            executeNavigation(NavigationCommand.Navigate(destination))
+                            return
+                        }
+                    }
+                    CorrectedIntent.MUSIC_SEARCH -> {
+                        val query = correction.query
+                        if (query != null && musicExecutor != null) {
+                            transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
+                            executeMusic(MusicCommand.SearchAndPlay(query))
+                            return
+                        }
+                    }
+                    CorrectedIntent.CHAT, CorrectedIntent.UNKNOWN -> Unit
+                }
+                if (correction.corrected.isNotBlank()) effectiveText = correction.corrected
+            }
+        }
         val provider = llm
         if (provider == null || settings.baseUrl.isBlank() || settings.model.isBlank()) {
             M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.LLM_CONFIG_INVALID, "session=$sessionId")
@@ -365,13 +397,13 @@ class VoiceOrchestrator(
             val started = clock.elapsedRealtimeMs()
             var firstTokenMs: Long? = null
             var providerTotalMs = 0L
-            val holdPreview = musicExecutor != null && MusicRefusalRecoveryRouter.mightBePlaybackRequest(userText)
+            val holdPreview = musicExecutor != null && MusicRefusalRecoveryRouter.mightBePlaybackRequest(effectiveText)
             var spoken = false
             ttsRecoveryAttempted = false
             try {
                 val chunks = provider.streamChat(
                     ChatRequest(
-                        messages = history.messages(settings.systemInstruction, userText),
+                        messages = history.messages(settings.systemInstruction, effectiveText),
                         maxOutputTokens = settings.maxOutputTokens,
                         temperature = settings.temperature,
                         requestId = sessionId,
@@ -396,7 +428,7 @@ class VoiceOrchestrator(
                     onQueue = M1DiagnosticsRepository::setTtsQueue,
                     onSpeechFailure = { provider.cancel() },
                 )
-                emit(Command.AnswerReady(userText, answer, firstTokenMs, providerTotalMs, spoken))
+                emit(Command.AnswerReady(effectiveText, answer, firstTokenMs, providerTotalMs, spoken))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {

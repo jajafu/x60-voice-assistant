@@ -87,3 +87,8 @@
 - **修正一個只有真機才發現的缺陷**：`AndroidTtsEngine.selectVoice()` 原本以 `locale.country` 比對 `zh-TW`／`zh-CN` 來優先繁中與簡中，但 vivo 引擎回報的是**以書寫系統標記**的 `zh-Hant`／`zh-Hans`，其 `country` 為空字串，導致那兩條規則永遠不成立，只能靠最後的「任何中文」fallback 僥倖命中。這次改成以 `Locale.forLanguageTag` 取 `language` 與 `script`，同時相容書寫系統與地區兩種標記（`zh-Hant`、`zh-TW`、`zh-HK`、`zh-MO` 視為繁中）。
 - 設定頁排序與自動選擇改為共用同一套規則（繁中優先、離線優先、名稱），避免清單第一個與實際被選中的不一致。
 - 測試樣本改用 vivo 引擎實際回報的 locale 樣式（`zh-Hant`／`zh-Hans`），先前使用 `zh-TW` 的樣本無法涵蓋這個缺陷。
+
+## 1.0.1（2026-10-05，Issue #24）
+
+- **開發者決定（版號）**：不再使用 `1.0.0-rcN` 候選版號。從本版起為 `1.0.1`／`versionCode 35`，後續行為變更的 APK 依序為 `1.0.2`、`1.0.3`…直到另行決定。`versionCode 35` 高於各分支已用的 34（含 Issue #20 的 rc30），覆蓋安裝不會被 Android 拒絕。
+- X-ASR 同音錯字加 LLM 校正（Typeless 兩段式）：本機 Router 全 miss 才打一次 LLM（`temperature 0.0`、固定 JSON），命中導航／音樂就轉回既有本機 Executor；`AssistantSettings.llmCorrectionEnabled`（預設 true）在 LLM Provider 卡片有開關，關閉即回舊行為。校正 prompt 是程式常數，不受 DataStore 舊值影響。

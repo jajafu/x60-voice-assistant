@@ -289,6 +289,38 @@ class VoiceOrchestratorTest {
         } finally { dispose(f) }
     }
 
+    @Test fun `transcript correction routes music search when direct parse misses`() = runTest {
+        val f = Fixture(
+            backgroundScope,
+            text = "晴天很好聽嗎",
+            music = FakeMusic(),
+            corrector = FakeCorrector(CorrectedTranscript("播放晴天", CorrectedIntent.MUSIC_SEARCH, query = "晴天")),
+        )
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(listOf(MusicCommand.SearchAndPlay("晴天")), f.music!!.commands)
+            assertEquals(listOf("本機播放結果。"), f.output.spoken)
+        } finally { dispose(f) }
+    }
+
+    @Test fun `transcript correction falls back to QA with corrected text`() = runTest {
+        val f = Fixture(
+            backgroundScope,
+            text = "長根醫院在哪裡",
+            corrector = FakeCorrector(CorrectedTranscript("長庚醫院在哪裡", CorrectedIntent.CHAT)),
+        )
+        try {
+            startListening(f)
+            f.utterance()
+            runCurrent()
+            assertEquals(1, f.provider.requests.size)
+            assertEquals("長庚醫院在哪裡", f.provider.requests.single().messages.last().content)
+            assertEquals(listOf("回答。"), f.output.spoken)
+        } finally { dispose(f) }
+    }
+
     @Test fun `close waits for non cancellable native decode without blocking caller`() = runBlocking {
         verifyDecodeShutdown(cancelParent = false)
     }
@@ -415,6 +447,7 @@ class VoiceOrchestratorTest {
         val music: FakeMusic? = null,
         decode: () -> Unit = {},
         followUpSeconds: Int = 0,
+        corrector: TranscriptCorrector? = null,
     ) {
         val audio = FakeAudio()
         val output = FakeOutput()
@@ -449,6 +482,7 @@ class VoiceOrchestratorTest {
             ),
             llm = provider,
             musicExecutor = music,
+            transcriptCorrector = corrector,
             speechOutput = output,
             clock = MonotonicClock { audio.now },
             audioResumeDelayMs = 0,
@@ -528,6 +562,10 @@ class VoiceOrchestratorTest {
         override fun streamChat(request: ChatRequest): Flow<LlmChunk> { requests += request; return chunks }
         override fun cancel() = Unit
         override fun close() = Unit
+    }
+
+    private class FakeCorrector(private val result: CorrectedTranscript?) : TranscriptCorrector {
+        override suspend fun correct(transcript: String, requestId: String) = result
     }
 
     private class FakeMusic(private val pauseResult: Boolean = false) : MusicActionExecutor {
