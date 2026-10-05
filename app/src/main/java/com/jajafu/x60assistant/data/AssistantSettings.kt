@@ -26,6 +26,7 @@ data class AssistantSettings(
     val musicServiceName: String = DEFAULT_MUSIC_SERVICE_NAME,
     val navAppName: String = DEFAULT_NAV_APP_NAME,
     val navPackageName: String = DEFAULT_NAV_PACKAGE_NAME,
+    val llmCorrectionEnabled: Boolean = DEFAULT_LLM_CORRECTION_ENABLED,
     val ttsEngine: String = "",
     val ttsVoice: String = "",
     val ttsVolume: Float = DEFAULT_TTS_VOLUME,
@@ -80,6 +81,12 @@ data class AssistantSettings(
          */
         const val DEFAULT_NAV_APP_NAME = "Google 地圖"
         const val DEFAULT_NAV_PACKAGE_NAME = "com.google.android.apps.maps"
+
+        /**
+         * X-ASR 同音錯字的 LLM 校正總開關（Issue #24）。
+         * 開啟時本機 Router 全 miss 才多打一次 LLM，關閉即回舊行為不上網。
+         */
+        const val DEFAULT_LLM_CORRECTION_ENABLED = true
 
         /**
          * TTS 輸出的增益，套用到 TextToSpeech.Engine.KEY_PARAM_VOLUME。

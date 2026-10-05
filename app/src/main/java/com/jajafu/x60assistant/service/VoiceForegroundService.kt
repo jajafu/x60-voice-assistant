@@ -28,6 +28,7 @@ import com.jajafu.x60assistant.diagnostics.M1DiagnosticsRepository
 import com.jajafu.x60assistant.diagnostics.VoiceErrorCode
 import com.jajafu.x60assistant.data.SettingsRepository
 import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
+import com.jajafu.x60assistant.llm.LlmTranscriptCorrector
 import com.jajafu.x60assistant.music.MusicCabinController
 import com.jajafu.x60assistant.navigation.NavigationActionExecutor
 import com.jajafu.x60assistant.navigation.NavigationAppCatalog
@@ -242,6 +243,11 @@ class VoiceForegroundService : Service() {
                     null
                 },
                 alarmExecutor = AndroidAlarmActionExecutor(applicationContext),
+                transcriptCorrector = if (llmProvider != null && settings.llmCorrectionEnabled) {
+                    LlmTranscriptCorrector(llmProvider)
+                } else {
+                    null
+                },
                 speechOutput = if (ttsStatus.available) ttsEngine else null,
                 speechOutputFactory = { createTtsEngine(settings) },
                 audioResumeDelayMs = settings.audioResumeDelayMs,
