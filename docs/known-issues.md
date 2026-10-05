@@ -43,6 +43,8 @@
 - **rc30 的喚醒率未經驗證。** `docs/testing.md` 既有的喚醒驗收（1 公尺正常音量、20 次中 18 次）本身仍是待驗收項，音量再往下壓只會更差。使用者可能體感「調小之後小助手壞掉」；此風險在設計時已知並接受，須待真機數據確認實際影響。
 - **rc30 未涵蓋的範圍**：只動 `STREAM_MUSIC`。鈴聲與通知音訊流不納入本輪，以避開 vivo 勿擾模式的行為差異；也不含 `STREAM_TTS` 拆分與喚醒率最佳化。
 - 依開發者在 PR #21 review 時的決定，rc30 **不提供語音靜音／解除靜音**，只提供相對增減與百分比調整；要求低於 2 格時不執行。靜音仍可由 Android 系統音量控制操作。
+- **1.0.2 在 vivo V2458A（Android 16／OriginOS 16.0）的語音音量重驗（2026-10-05，真人實測，未通過）：**「聲音大一點」（UP：current=90 target=91 readBack=90 applied=false）與「音量調到50」（SET_50：current=90 target=75 readBack=90 applied=false）皆解析成功、執行成功、如實回報未套用。\dumpsys audio\ 證實：(1) 本機 \STREAM_MUSIC\ 上限為 **150 級**（X60 為 15 級），百分比映射本身正確（50%→75）；(2) AudioService log 完全沒有 \com.jajafu.x60assistant\ 的 \setStreamVolume\／\djustStreamVolume\ 紀錄（只有 TTS 的 AudioFocus），第三方 UID 的寫入在到達 AudioService 前就被 OEM 丟棄；(3) 連 shell UID 的 \cmd media_session volume --set 80\ 讀回仍是 90。結論：vivo 兩代裝置上 App 側 AudioManager 調音量此路不通，如實回報是目前唯一正確的行為。
+- **1.0.2 在 V2458A 確認 TTS 音量參數無效（第二台裝置證實 rc27 假設）：** 設定頁 TTS 音量從 1.00 改到任何值，朗讀大小聲無變化。vivo 引擎忽略 \KEY_PARAM_VOLUME\，記為未生效而非通過。附帶發現：\dumpsys\ 顯示 \STREAM_TTS（aliased to STREAM_MUSIC）\ 確實存在（Max 15），但本 App TTS 輸出為 \USAGE_MEDIA\，走的仍是音樂音量；改走 \STREAM_TTS\ 需另開 Issue 評估。
 
 ## 排程提醒
 
