@@ -19,6 +19,7 @@ import com.jajafu.x60assistant.R
 import com.jajafu.x60assistant.BuildConfig
 import com.jajafu.x60assistant.asr.AsrModelPacks
 import com.jajafu.x60assistant.asr.AsrRecognizerKind
+import com.jajafu.x60assistant.asr.CloudSpeechRecognizerEngine
 import com.jajafu.x60assistant.asr.OfflineSpeechRecognizerEngine
 import com.jajafu.x60assistant.asr.SherpaSpeechRecognizerEngine
 import com.jajafu.x60assistant.asr.TraditionalChineseConverter
@@ -27,6 +28,8 @@ import com.jajafu.x60assistant.audio.WakeAcknowledgementPlayer
 import com.jajafu.x60assistant.diagnostics.M1DiagnosticsRepository
 import com.jajafu.x60assistant.diagnostics.VoiceErrorCode
 import com.jajafu.x60assistant.data.SettingsRepository
+import com.jajafu.x60assistant.llm.OpenAiAudioSpeechClient
+import com.jajafu.x60assistant.llm.OpenAiAudioTranscriptionClient
 import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
 import com.jajafu.x60assistant.llm.LlmTranscriptCorrector
 import com.jajafu.x60assistant.music.MusicCabinController
@@ -42,6 +45,7 @@ import com.jajafu.x60assistant.orchestration.AndroidMonotonicClock
 import com.jajafu.x60assistant.orchestration.VoiceOrchestrator
 import com.jajafu.x60assistant.security.AndroidKeystoreSecretStore
 import com.jajafu.x60assistant.tts.AndroidTtsEngine
+import com.jajafu.x60assistant.tts.CloudTtsEngine
 import com.jajafu.x60assistant.tts.SpeechOutputEngine
 import com.jajafu.x60assistant.data.AssistantSettings
 import com.jajafu.x60assistant.orchestration.VoiceState
@@ -163,17 +167,22 @@ class VoiceForegroundService : Service() {
                 return
             }
             val asrPack = AsrModelPacks.xAsr
-            val asrStatus = BundledAsrInstaller(applicationContext).ensureInstalled()
-            if (!asrStatus.valid) {
-                failAndStop(VoiceErrorCode.ASR_MODEL_INVALID, asrStatus.reason.orEmpty())
-                return
+            val secretStore = AndroidKeystoreSecretStore(applicationContext)
+            val hasApiKey = secretStore.maskedApiKey() != "未設定"
+            // 雲端 ASR spike：整輪錄完才上傳，不需要本機 X-ASR 模型；VAD 仍維持本機。
+            val useCloudAsr = settings.cloudAsrReady(hasApiKey)
+            if (!useCloudAsr) {
+                val asrStatus = BundledAsrInstaller(applicationContext).ensureInstalled()
+                if (!asrStatus.valid) {
+                    failAndStop(VoiceErrorCode.ASR_MODEL_INVALID, asrStatus.reason.orEmpty())
+                    return
+                }
             }
 
             var orchestratorReference: VoiceOrchestrator? = null
-            val secretStore = AndroidKeystoreSecretStore(applicationContext)
             val llmProvider = if (
                 settings.connectionVerified && settings.baseUrl.isNotBlank() &&
-                settings.model.isNotBlank() && secretStore.maskedApiKey() != "未設定"
+                settings.model.isNotBlank() && hasApiKey
             ) {
                 OpenAiCompatibleLlmProvider(
                     settings = settings,
@@ -183,7 +192,20 @@ class VoiceForegroundService : Service() {
             } else {
                 null
             }
-            val ttsEngine = AndroidTtsEngine(applicationContext, settings)
+            val useCloudTts = settings.cloudTtsReady(hasApiKey)
+            val ttsEngine: SpeechOutputEngine = if (useCloudTts) {
+                CloudTtsEngine(
+                    applicationContext,
+                    settings,
+                    OpenAiAudioSpeechClient(
+                        settings = settings,
+                        apiKeyProvider = secretStore::readApiKey,
+                        allowHttp = BuildConfig.DEBUG,
+                    ),
+                )
+            } else {
+                AndroidTtsEngine(applicationContext, settings)
+            }
             val ttsStatus = ttsEngine.initialize()
             M1DiagnosticsRepository.setTtsStatus(ttsStatus.engine, ttsStatus.voice)
             if (!ttsStatus.available) {
@@ -201,7 +223,16 @@ class VoiceForegroundService : Service() {
                 audio = audio,
                 kws = SherpaWakeWordEngine(assets, settings.wakePhrase),
                 vad = SherpaVadEngine(assets),
-                asr = when (asrPack.recognizerKind) {
+                asr = if (useCloudAsr) {
+                    CloudSpeechRecognizerEngine(
+                        modelId = "cloud/${settings.cloudAsrModel}",
+                        transcriber = OpenAiAudioTranscriptionClient(
+                            settings = settings,
+                            apiKeyProvider = secretStore::readApiKey,
+                            allowHttp = BuildConfig.DEBUG,
+                        ),
+                    )
+                } else when (asrPack.recognizerKind) {
                     AsrRecognizerKind.ZIPFORMER_CTC -> SherpaSpeechRecognizerEngine(
                         modelId = asrPack.id,
                         modelDirectory = modelManager.asrDirectory(asrPack),
@@ -255,7 +286,7 @@ class VoiceForegroundService : Service() {
                     null
                 },
                 speechOutput = if (ttsStatus.available) ttsEngine else null,
-                speechOutputFactory = { createTtsEngine(settings) },
+                speechOutputFactory = { createTtsEngine(settings, hasApiKey) },
                 audioResumeDelayMs = settings.audioResumeDelayMs,
                 endpointDetector = SpeechEndpointDetector(
                     SpeechEndpointConfig(
@@ -281,7 +312,7 @@ class VoiceForegroundService : Service() {
                 created.close()
                 return
             }
-            M1DiagnosticsRepository.setAsrModel(asrPack.id)
+            M1DiagnosticsRepository.setAsrModel(if (useCloudAsr) "cloud/${settings.cloudAsrModel}" else asrPack.id)
             startHealthPublishing()
             created.start()
         } catch (error: OutOfMemoryError) {
@@ -336,8 +367,20 @@ class VoiceForegroundService : Service() {
         }
     }
 
-    private suspend fun createTtsEngine(settings: AssistantSettings): SpeechOutputEngine? {
-        val engine = AndroidTtsEngine(applicationContext, settings)
+    private suspend fun createTtsEngine(settings: AssistantSettings, hasApiKey: Boolean): SpeechOutputEngine? {
+        val engine: SpeechOutputEngine = if (settings.cloudTtsReady(hasApiKey)) {
+            CloudTtsEngine(
+                applicationContext,
+                settings,
+                OpenAiAudioSpeechClient(
+                    settings = settings,
+                    apiKeyProvider = AndroidKeystoreSecretStore(applicationContext)::readApiKey,
+                    allowHttp = BuildConfig.DEBUG,
+                ),
+            )
+        } else {
+            AndroidTtsEngine(applicationContext, settings)
+        }
         val status = engine.initialize()
         M1DiagnosticsRepository.setTtsStatus(status.engine, status.voice)
         return if (status.available) engine else null.also { engine.close() }
