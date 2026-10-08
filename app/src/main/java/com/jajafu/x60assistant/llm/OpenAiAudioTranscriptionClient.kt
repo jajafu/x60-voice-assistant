@@ -26,7 +26,7 @@ fun interface AudioTranscriber {
 /**
  * OpenAI `/audio/transcriptions` STT 客戶端（spike，預設 `whisper-1`）。
  *
- * 沿用 LLM 的 Base URL 與 API Key。錄完一整句才上傳整段 WAV，
+ * 使用獨立 Audio Provider 的 Base URL 與 API Key。錄完一整句才上傳整段 WAV，
  * 與本機 VAD 切出的語句邊界一致；不做串流、不做即時字幕。
  */
 class OpenAiAudioTranscriptionClient(
@@ -44,7 +44,8 @@ class OpenAiAudioTranscriptionClient(
         .build()
     private val activeCall = AtomicReference<Call?>(null)
 
-    fun transcriptionsUrl(): String = ProviderUrl.normalize(settings.baseUrl, "/audio/transcriptions", allowHttp)
+    fun transcriptionsUrl(): String =
+        ProviderUrl.normalize(settings.audioBaseUrl, "/audio/transcriptions", allowHttp)
 
     override fun transcribe(wavBytes: ByteArray): String {
         if (wavBytes.size <= WAV_HEADER_SIZE) {

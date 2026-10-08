@@ -104,7 +104,7 @@ class OpenAiAudioTranscriptionClientTest {
 
     private fun client(language: String): OpenAiAudioTranscriptionClient = OpenAiAudioTranscriptionClient(
         settings = AssistantSettings(
-            baseUrl = server.url("/v1/").toString(),
+            audioBaseUrl = server.url("/v1/").toString(),
             cloudAsrModel = "whisper-1",
             cloudAsrLanguage = language,
         ),

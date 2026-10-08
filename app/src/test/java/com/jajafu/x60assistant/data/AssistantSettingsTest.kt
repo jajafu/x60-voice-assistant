@@ -67,21 +67,21 @@ class AssistantSettingsTest {
     }
 
     @Test
-    fun `cloud voice is off by default and reuses llm credentials`() {
+    fun `cloud voice is off by default and uses audio credentials`() {
         val defaults = AssistantSettings()
         assertFalse(defaults.cloudTtsEnabled)
         assertFalse(defaults.cloudAsrEnabled)
         assertEquals("gpt-4o-mini-tts", defaults.cloudTtsModel)
         assertEquals("alloy", defaults.cloudTtsVoice)
         assertEquals("whisper-1", defaults.cloudAsrModel)
-        // 沒有 Key 時即使開關打開也不該走雲端；有 Key 才啟用。
-        assertFalse(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasApiKey = false))
-        assertFalse(AssistantSettings(cloudAsrEnabled = true).cloudAsrReady(hasApiKey = false))
-        assertFalse(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasApiKey = true))
-        assertFalse(AssistantSettings(cloudAsrEnabled = true).cloudAsrReady(hasApiKey = true))
-        val configured = AssistantSettings(baseUrl = "https://api.example.com")
-        assertTrue(configured.copy(cloudTtsEnabled = true).cloudTtsReady(hasApiKey = true))
-        assertTrue(configured.copy(cloudAsrEnabled = true).cloudAsrReady(hasApiKey = true))
+        // 沒有 Audio URL／Key 時即使開關打開也不該走雲端；兩者都具備才啟用。
+        assertFalse(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasAudioApiKey = false))
+        assertFalse(AssistantSettings(cloudAsrEnabled = true).cloudAsrReady(hasAudioApiKey = false))
+        assertFalse(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasAudioApiKey = true))
+        assertFalse(AssistantSettings(cloudAsrEnabled = true).cloudAsrReady(hasAudioApiKey = true))
+        val configured = AssistantSettings(audioBaseUrl = "https://audio.example.com")
+        assertTrue(configured.copy(cloudTtsEnabled = true).cloudTtsReady(hasAudioApiKey = true))
+        assertTrue(configured.copy(cloudAsrEnabled = true).cloudAsrReady(hasAudioApiKey = true))
     }
 
     @Test

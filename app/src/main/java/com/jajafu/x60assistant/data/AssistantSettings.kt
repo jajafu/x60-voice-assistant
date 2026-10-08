@@ -40,15 +40,18 @@ data class AssistantSettings(
     val cloudAsrEnabled: Boolean = DEFAULT_CLOUD_ASR_ENABLED,
     val cloudAsrModel: String = DEFAULT_CLOUD_ASR_MODEL,
     val cloudAsrLanguage: String = "",
+    val audioBaseUrl: String = "",
 ) {
     /**
-     * 雲端語音是否可建立。沿用 LLM 的 Base URL 與 API Key，因此先檢查開關、Key
-     * 與非空 Base URL；完整 URL／Endpoint 驗證由雲端語音設定驗證器負責。
+     * 雲端語音是否可建立。音訊 Provider 有自己的 Base URL 與 API Key；完整 URL／Endpoint
+     * 驗證由雲端語音設定驗證器負責。未完成設定時維持本機引擎。
      * Model 欄位在 [normalized] 已回填預設值，不會是空白。
      */
-    fun cloudTtsReady(hasApiKey: Boolean): Boolean = cloudTtsEnabled && hasApiKey && baseUrl.isNotBlank()
+    fun cloudTtsReady(hasAudioApiKey: Boolean): Boolean =
+        cloudTtsEnabled && hasAudioApiKey && audioBaseUrl.isNotBlank()
 
-    fun cloudAsrReady(hasApiKey: Boolean): Boolean = cloudAsrEnabled && hasApiKey && baseUrl.isNotBlank()
+    fun cloudAsrReady(hasAudioApiKey: Boolean): Boolean =
+        cloudAsrEnabled && hasAudioApiKey && audioBaseUrl.isNotBlank()
     fun normalized(): AssistantSettings = copy(
         wakePhrase = wakePhrase.trim().ifBlank { DEFAULT_WAKE_PHRASE }.take(MAX_WAKE_PHRASE_LENGTH),
         wakeAcknowledgement = wakeAcknowledgement.trim()
@@ -80,6 +83,7 @@ data class AssistantSettings(
         cloudTtsVoice = cloudTtsVoice.trim().ifBlank { DEFAULT_CLOUD_TTS_VOICE }.take(MAX_CLOUD_IDENTIFIER_LENGTH),
         cloudAsrModel = cloudAsrModel.trim().ifBlank { DEFAULT_CLOUD_ASR_MODEL }.take(MAX_CLOUD_IDENTIFIER_LENGTH),
         cloudAsrLanguage = cloudAsrLanguage.trim().take(MAX_CLOUD_IDENTIFIER_LENGTH),
+        audioBaseUrl = audioBaseUrl.trim(),
     )
 
     companion object {
@@ -123,7 +127,7 @@ data class AssistantSettings(
 
         /**
          * 雲端語音 spike 設定。開關預設全關，既有行為維持純本機；
-         * 兩者皆沿用 LLM 的 Base URL 與 API Key，不另存憑證。
+         * TTS／Whisper 使用獨立的 Audio Base URL 與 API Key。
          * TTS 單次上限 4096 字元依 OpenAI `/audio/speech` 文件。
          */
         const val DEFAULT_CLOUD_TTS_ENABLED = false
