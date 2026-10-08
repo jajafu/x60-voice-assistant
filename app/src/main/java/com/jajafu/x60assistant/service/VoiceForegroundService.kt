@@ -168,14 +168,19 @@ class VoiceForegroundService : Service() {
                 return
             }
             val asrPack = AsrModelPacks.xAsr
-            val secretStore = AndroidKeystoreSecretStore(applicationContext)
-            val hasApiKey = secretStore.maskedApiKey() != "未設定"
-            CloudAudioSettingsValidator.validate(settings, hasApiKey, BuildConfig.DEBUG)?.let { detail ->
+            val llmSecretStore = AndroidKeystoreSecretStore(applicationContext)
+            val audioSecretStore = AndroidKeystoreSecretStore(
+                applicationContext,
+                AndroidKeystoreSecretStore.Scope.AUDIO,
+            )
+            val hasLlmApiKey = llmSecretStore.maskedApiKey() != "未設定"
+            val hasAudioApiKey = audioSecretStore.maskedApiKey() != "未設定"
+            CloudAudioSettingsValidator.validate(settings, hasAudioApiKey, BuildConfig.DEBUG)?.let { detail ->
                 failAndStop(VoiceErrorCode.LLM_CONFIG_INVALID, detail)
                 return
             }
-            // 雲端 ASR spike：整輪錄完才上傳，不需要本機 X-ASR 模型；VAD 仍維持本機。
-            val useCloudAsr = settings.cloudAsrReady(hasApiKey)
+            // 雲端 Whisper 只有 Audio Provider 開關、URL、Key 都可用時才取代 X-ASR；KWS／VAD 仍維持本機。
+            val useCloudAsr = settings.cloudAsrReady(hasAudioApiKey)
             if (!useCloudAsr) {
                 val asrStatus = BundledAsrInstaller(applicationContext).ensureInstalled()
                 if (!asrStatus.valid) {
@@ -187,24 +192,24 @@ class VoiceForegroundService : Service() {
             var orchestratorReference: VoiceOrchestrator? = null
             val llmProvider = if (
                 settings.connectionVerified && settings.baseUrl.isNotBlank() &&
-                settings.model.isNotBlank() && hasApiKey
+                settings.model.isNotBlank() && hasLlmApiKey
             ) {
                 OpenAiCompatibleLlmProvider(
                     settings = settings,
-                    apiKeyProvider = secretStore::readApiKey,
+                    apiKeyProvider = llmSecretStore::readApiKey,
                     allowHttp = BuildConfig.DEBUG,
                 )
             } else {
                 null
             }
-            val useCloudTts = settings.cloudTtsReady(hasApiKey)
+            val useCloudTts = settings.cloudTtsReady(hasAudioApiKey)
             val ttsEngine: SpeechOutputEngine = if (useCloudTts) {
                 CloudTtsEngine(
                     applicationContext,
                     settings,
                     OpenAiAudioSpeechClient(
                         settings = settings,
-                        apiKeyProvider = secretStore::readApiKey,
+                        apiKeyProvider = audioSecretStore::readApiKey,
                         allowHttp = BuildConfig.DEBUG,
                     ),
                 )
@@ -233,7 +238,7 @@ class VoiceForegroundService : Service() {
                         modelId = "cloud/${settings.cloudAsrModel}",
                         transcriber = OpenAiAudioTranscriptionClient(
                             settings = settings,
-                            apiKeyProvider = secretStore::readApiKey,
+                            apiKeyProvider = audioSecretStore::readApiKey,
                             allowHttp = BuildConfig.DEBUG,
                         ),
                     )
@@ -291,7 +296,7 @@ class VoiceForegroundService : Service() {
                     null
                 },
                 speechOutput = if (ttsStatus.available) ttsEngine else null,
-                speechOutputFactory = { createTtsEngine(settings, hasApiKey) },
+                speechOutputFactory = { createTtsEngine(settings, hasAudioApiKey) },
                 audioResumeDelayMs = settings.audioResumeDelayMs,
                 endpointDetector = SpeechEndpointDetector(
                     SpeechEndpointConfig(
@@ -372,14 +377,17 @@ class VoiceForegroundService : Service() {
         }
     }
 
-    private suspend fun createTtsEngine(settings: AssistantSettings, hasApiKey: Boolean): SpeechOutputEngine? {
-        val engine: SpeechOutputEngine = if (settings.cloudTtsReady(hasApiKey)) {
+    private suspend fun createTtsEngine(settings: AssistantSettings, hasAudioApiKey: Boolean): SpeechOutputEngine? {
+        val engine: SpeechOutputEngine = if (settings.cloudTtsReady(hasAudioApiKey)) {
             CloudTtsEngine(
                 applicationContext,
                 settings,
                 OpenAiAudioSpeechClient(
                     settings = settings,
-                    apiKeyProvider = AndroidKeystoreSecretStore(applicationContext)::readApiKey,
+                    apiKeyProvider = AndroidKeystoreSecretStore(
+                        applicationContext,
+                        AndroidKeystoreSecretStore.Scope.AUDIO,
+                    )::readApiKey,
                     allowHttp = BuildConfig.DEBUG,
                 ),
             )

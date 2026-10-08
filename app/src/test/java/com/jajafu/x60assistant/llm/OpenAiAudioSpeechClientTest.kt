@@ -105,7 +105,7 @@ class OpenAiAudioSpeechClientTest {
 
     private fun client(): OpenAiAudioSpeechClient = OpenAiAudioSpeechClient(
         settings = AssistantSettings(
-            baseUrl = server.url("/v1/").toString(),
+            audioBaseUrl = server.url("/v1/").toString(),
             cloudTtsModel = "gpt-4o-mini-tts",
             cloudTtsVoice = "alloy",
         ),

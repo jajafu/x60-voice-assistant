@@ -61,6 +61,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.CLOUD_ASR_ENABLED] = settings.cloudAsrEnabled
             prefs[Keys.CLOUD_ASR_MODEL] = settings.cloudAsrModel
             prefs[Keys.CLOUD_ASR_LANGUAGE] = settings.cloudAsrLanguage
+            prefs[Keys.AUDIO_BASE_URL] = settings.audioBaseUrl
             prefs[Keys.PITCH] = settings.pitch
             prefs[Keys.CONNECTION_VERIFIED] = settings.connectionVerified
         }
@@ -112,6 +113,7 @@ class SettingsRepository(private val context: Context) {
         cloudAsrEnabled = prefs[Keys.CLOUD_ASR_ENABLED] ?: AssistantSettings.DEFAULT_CLOUD_ASR_ENABLED,
         cloudAsrModel = prefs[Keys.CLOUD_ASR_MODEL] ?: AssistantSettings.DEFAULT_CLOUD_ASR_MODEL,
         cloudAsrLanguage = prefs[Keys.CLOUD_ASR_LANGUAGE].orEmpty(),
+        audioBaseUrl = prefs[Keys.AUDIO_BASE_URL].orEmpty(),
         pitch = prefs[Keys.PITCH] ?: 1.0f,
         connectionVerified = prefs[Keys.CONNECTION_VERIFIED] ?: false,
     ).normalized()
@@ -154,6 +156,7 @@ class SettingsRepository(private val context: Context) {
         val CLOUD_ASR_ENABLED = booleanPreferencesKey("cloud_asr_enabled")
         val CLOUD_ASR_MODEL = stringPreferencesKey("cloud_asr_model")
         val CLOUD_ASR_LANGUAGE = stringPreferencesKey("cloud_asr_language")
+        val AUDIO_BASE_URL = stringPreferencesKey("audio_base_url")
         val PITCH = floatPreferencesKey("tts_pitch")
         val CONNECTION_VERIFIED = booleanPreferencesKey("llm_connection_verified")
     }

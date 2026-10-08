@@ -25,7 +25,7 @@ fun interface SpeechSynthesizer {
 /**
  * OpenAI `/audio/speech` TTS 客戶端（spike）。
  *
- * 沿用 LLM 的 Base URL 與 API Key，只把 Endpoint 換成 `/audio/speech`；
+ * 使用獨立 Audio Provider 的 Base URL 與 API Key，只把 Endpoint 換成 `/audio/speech`；
  * Base URL 已含 `/v1` 時不會重複拼接（見 [ProviderUrl]）。
  * 成功時回傳完整 WAV 音訊位元組，由呼叫端自行播放。
  */
@@ -43,7 +43,7 @@ class OpenAiAudioSpeechClient(
         .build()
     private val activeCall = AtomicReference<Call?>(null)
 
-    fun speechUrl(): String = ProviderUrl.normalize(settings.baseUrl, "/audio/speech", allowHttp)
+    fun speechUrl(): String = ProviderUrl.normalize(settings.audioBaseUrl, "/audio/speech", allowHttp)
 
     override suspend fun synthesize(text: String): ByteArray = withContext(Dispatchers.IO) {
         if (text.isBlank()) throw LlmException(LlmErrorCode.CONFIG_INVALID, message = "沒有可朗讀的文字")

@@ -14,9 +14,9 @@ Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD 
 
 ## 雲端語音 spike 驗收（待真實 Provider／X60）
 
-1. 在診斷頁開啟雲端 TTS 或雲端 ASR，確認未設定 API Key、空白或不合法 Base URL 會在儲存／啟動前拒絕，不會靜默切回其他模式。
-2. 以「測試雲端 TTS」確認草稿中的 Model、Voice 與共用 Base URL／Key 被使用；播放期間停止服務或再次說喚醒詞，確認請求與播放可取消。
-3. 開啟雲端 ASR 後說出一般問句，確認 KWS／VAD 仍在本機，VAD 結束才上傳整段 WAV；停止服務時確認上傳請求不需等待完整 read timeout。
+1. 在診斷頁確認 LLM Provider 與 Audio Provider 的 Base URL／Key 分開保存；未設定 Audio URL／Key 時，即使雲端開關開啟也維持本機 X-ASR／TTS，不影響既有 LLM。
+2. 以「測試雲端 TTS」確認草稿中的 Model、Voice 與獨立 Audio Base URL／Key 被使用；播放期間停止服務或再次說喚醒詞，確認請求與播放可取消。
+3. 開啟 Whisper 雲端 ASR 且完成 Audio 設定後說出一般問句，確認 KWS／VAD 仍在本機，VAD 結束才上傳整段 WAV；停止服務時確認上傳請求不需等待完整 read timeout。
 4. 實際 Provider、費用、網路錯誤、鎖屏與真人語音結果須記錄 Provider、vivo X60、APK HEAD 與證據；MockWebServer／合成語音只能作自動化測試，不能取代真機驗收。
 
 rc22 另包含 Orchestrator 跨元件回歸測試：重複取消、暫停後取消、過期回答事件、辨識未完成時關閉／取消父 scope、第一句在串流結束前朗讀、長回答及音樂拒絕補救。JVM 以可控制的 engine、音訊來源及同步阻塞辨識替身驗證生命週期，診斷使用測試 clock shim，不能替代 native 或 Android 實機結果。另測試 12 段背壓、取消清空、網路失敗不補讀半句、逾期一次性／每日／每週提醒，以及鬧鐘 TTS 靜音／恢復。

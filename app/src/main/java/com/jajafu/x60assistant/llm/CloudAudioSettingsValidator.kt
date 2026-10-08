@@ -2,7 +2,7 @@ package com.jajafu.x60assistant.llm
 
 import com.jajafu.x60assistant.data.AssistantSettings
 
-/** Validates the shared LLM settings required by the optional cloud audio paths. */
+/** Validates the independent Audio Provider settings used by optional cloud audio paths. */
 object CloudAudioSettingsValidator {
     fun validateTts(
         settings: AssistantSettings,
@@ -11,7 +11,7 @@ object CloudAudioSettingsValidator {
     ): String? {
         if (!settings.cloudTtsEnabled) return null
         return validateCommon(settings, hasApiKey)
-            ?: endpointError(settings.baseUrl, "/audio/speech", allowHttp)
+            ?: endpointError(settings.audioBaseUrl, "/audio/speech", allowHttp)
     }
 
     fun validateAsr(
@@ -21,19 +21,26 @@ object CloudAudioSettingsValidator {
     ): String? {
         if (!settings.cloudAsrEnabled) return null
         return validateCommon(settings, hasApiKey)
-            ?: endpointError(settings.baseUrl, "/audio/transcriptions", allowHttp)
+            ?: endpointError(settings.audioBaseUrl, "/audio/transcriptions", allowHttp)
     }
 
     fun validate(
         settings: AssistantSettings,
         hasApiKey: Boolean,
         allowHttp: Boolean,
-    ): String? = validateTts(settings, hasApiKey, allowHttp)
-        ?: validateAsr(settings, hasApiKey, allowHttp)
+    ): String? {
+        if (configuredTts(settings, hasApiKey)) {
+            validateTts(settings, hasApiKey, allowHttp)?.let { return it }
+        }
+        if (configuredAsr(settings, hasApiKey)) {
+            validateAsr(settings, hasApiKey, allowHttp)?.let { return it }
+        }
+        return null
+    }
 
     private fun validateCommon(settings: AssistantSettings, hasApiKey: Boolean): String? = when {
-        !hasApiKey -> "雲端語音已開啟，但尚未設定 API Key。"
-        settings.baseUrl.isBlank() -> "雲端語音已開啟，但尚未設定 Base URL。"
+        !hasApiKey -> "雲端語音已開啟，但尚未設定 Audio API Key。"
+        settings.audioBaseUrl.isBlank() -> "雲端語音已開啟，但尚未設定 Audio Base URL。"
         else -> null
     }
 
@@ -41,5 +48,11 @@ object CloudAudioSettingsValidator {
         runCatching { ProviderUrl.normalize(baseUrl, endpoint, allowHttp) }
             .exceptionOrNull()
             ?.message
-            ?.let { "雲端語音 Base URL 無效：$it" }
+            ?.let { "Audio Base URL 無效：$it" }
+
+    private fun configuredTts(settings: AssistantSettings, hasApiKey: Boolean): Boolean =
+        settings.cloudTtsEnabled && hasApiKey && settings.audioBaseUrl.isNotBlank()
+
+    private fun configuredAsr(settings: AssistantSettings, hasApiKey: Boolean): Boolean =
+        settings.cloudAsrEnabled && hasApiKey && settings.audioBaseUrl.isNotBlank()
 }
