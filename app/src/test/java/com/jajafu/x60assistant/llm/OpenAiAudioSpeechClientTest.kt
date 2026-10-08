@@ -13,6 +13,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.runBlocking
 
 class OpenAiAudioSpeechClientTest {
     private lateinit var server: MockWebServer
@@ -44,6 +47,7 @@ class OpenAiAudioSpeechClientTest {
         assertEquals("gpt-4o-mini-tts", body["model"]!!.jsonPrimitive.content)
         assertEquals("測試語音", body["input"]!!.jsonPrimitive.content)
         assertEquals("alloy", body["voice"]!!.jsonPrimitive.content)
+        assertEquals("wav", body["response_format"]!!.jsonPrimitive.content)
         client.close()
     }
 
@@ -72,6 +76,31 @@ class OpenAiAudioSpeechClientTest {
         assertEquals(LlmErrorCode.CONFIG_INVALID, oversizedError.code)
         assertEquals(0, server.requestCount)
         client.close()
+    }
+
+    @Test
+    fun `cancel interrupts an in-flight speech request`() {
+        server.enqueue(
+            MockResponse()
+                .setBody(Buffer().write(byteArrayOf(1, 2, 3)))
+                .setBodyDelay(500, TimeUnit.MILLISECONDS),
+        )
+        val client = client()
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            val future = executor.submit<Throwable?> {
+                runCatching { runBlocking { client.synthesize("測試") } }.exceptionOrNull()
+            }
+            server.takeRequest()
+            client.cancel()
+            val error = future.get(2, TimeUnit.SECONDS)
+            assertTrue(error is LlmException)
+            assertEquals(LlmErrorCode.NETWORK_UNAVAILABLE, (error as LlmException).code)
+        } finally {
+            client.close()
+            executor.shutdownNow()
+            TimeUnit.MILLISECONDS.sleep(700)
+        }
     }
 
     private fun client(): OpenAiAudioSpeechClient = OpenAiAudioSpeechClient(

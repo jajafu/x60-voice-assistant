@@ -42,12 +42,13 @@ data class AssistantSettings(
     val cloudAsrLanguage: String = "",
 ) {
     /**
-     * 雲端語音是否可啟用。沿用 LLM 的 Base URL 與 API Key，因此只檢查開關與 Key；
+     * 雲端語音是否可建立。沿用 LLM 的 Base URL 與 API Key，因此先檢查開關、Key
+     * 與非空 Base URL；完整 URL／Endpoint 驗證由雲端語音設定驗證器負責。
      * Model 欄位在 [normalized] 已回填預設值，不會是空白。
      */
-    fun cloudTtsReady(hasApiKey: Boolean): Boolean = cloudTtsEnabled && hasApiKey
+    fun cloudTtsReady(hasApiKey: Boolean): Boolean = cloudTtsEnabled && hasApiKey && baseUrl.isNotBlank()
 
-    fun cloudAsrReady(hasApiKey: Boolean): Boolean = cloudAsrEnabled && hasApiKey
+    fun cloudAsrReady(hasApiKey: Boolean): Boolean = cloudAsrEnabled && hasApiKey && baseUrl.isNotBlank()
     fun normalized(): AssistantSettings = copy(
         wakePhrase = wakePhrase.trim().ifBlank { DEFAULT_WAKE_PHRASE }.take(MAX_WAKE_PHRASE_LENGTH),
         wakeAcknowledgement = wakeAcknowledgement.trim()
@@ -113,9 +114,9 @@ data class AssistantSettings(
         const val DEFAULT_LLM_CORRECTION_ENABLED = true
 
         /**
-         * TTS 輸出的增益，套用到 TextToSpeech.Engine.KEY_PARAM_VOLUME。
-         * 1.0 是引擎預設值；Android 標示範圍為 0.0–1.0，超過 1.0 是否放大取決於引擎，
-         * 可能破音或被忽略，因此預設維持 1.0 以維持既有行為。
+         * TTS 輸出的增益。系統 TTS 套用到 TextToSpeech.Engine.KEY_PARAM_VOLUME；
+         * 雲端 WAV TTS 在播放前套用 PCM 增益。1.0 是引擎預設值，超過 1.0 可能破音，
+         * 因此預設維持 1.0 以維持既有行為。
          */
         const val DEFAULT_TTS_VOLUME = 1.0f
         const val MAX_TTS_IDENTIFIER_LENGTH = 200

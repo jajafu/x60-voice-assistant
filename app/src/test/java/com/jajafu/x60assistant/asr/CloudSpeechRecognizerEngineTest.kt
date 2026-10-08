@@ -67,6 +67,29 @@ class CloudSpeechRecognizerEngineTest {
     }
 
     @Test
+    fun `cancel active request is delegated without clearing session state`() {
+        var cancelled = false
+        val transcriber = object : AudioTranscriber {
+            override fun transcribe(wavBytes: ByteArray): String = ""
+            override fun cancel() {
+                cancelled = true
+            }
+        }
+        val engine = CloudSpeechRecognizerEngine(
+            modelId = "cloud/whisper-1",
+            transcriber = transcriber,
+            clock = { fakeClock.now },
+        )
+        engine.beginSession()
+        engine.accept(AudioFrame(ShortArray(320) { 7 }, 0L))
+
+        engine.cancelActiveRequest()
+
+        assertTrue(cancelled)
+        engine.close()
+    }
+
+    @Test
     fun `buffer is capped at the configured maximum`() {
         var uploadedSamples = 0
         val engine = CloudSpeechRecognizerEngine(

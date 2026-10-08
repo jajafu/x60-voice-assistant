@@ -46,6 +46,7 @@ import com.jajafu.x60assistant.music.MusicCabinFavoriteAccess
 import com.jajafu.x60assistant.music.AssistantUiVisibility
 import com.jajafu.x60assistant.llm.OpenAiAudioSpeechClient
 import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
+import com.jajafu.x60assistant.llm.CloudAudioSettingsValidator
 import com.jajafu.x60assistant.kws.WakePhraseCompiler
 import com.jajafu.x60assistant.security.AndroidKeystoreSecretStore
 import com.jajafu.x60assistant.tts.AndroidTtsEngine
@@ -440,6 +441,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             var connectionStillVerified = false
             runCatching {
+                validateCloudAudioSettings(settings, apiKey)
                 WakePhraseCompiler.compile(assets, settings.wakePhrase)
                 val current = settingsRepository.current()
                 val providerUnchanged = settings.baseUrl.trim() == current.baseUrl &&
@@ -470,6 +472,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             var provider: OpenAiCompatibleLlmProvider? = null
             runCatching {
+                validateCloudAudioSettings(settings, apiKey)
                 WakePhraseCompiler.compile(assets, settings.wakePhrase)
                 settingsRepository.save(settings.copy(connectionVerified = false))
                 if (apiKey.isNotBlank()) secretStore.saveApiKey(apiKey.toCharArray())
@@ -504,31 +507,44 @@ class MainActivity : ComponentActivity() {
     private fun testTts(settings: AssistantSettings) {
         lifecycleScope.launch {
             val hasApiKey = secretStore.maskedApiKey() != "未設定"
-            val engine: SpeechOutputEngine = if (settings.cloudTtsReady(hasApiKey)) {
-                CloudTtsEngine(
-                    applicationContext,
-                    settings,
-                    OpenAiAudioSpeechClient(
-                        settings = settings,
-                        apiKeyProvider = secretStore::readApiKey,
-                        allowHttp = BuildConfig.DEBUG,
-                    ),
-                )
-            } else {
-                AndroidTtsEngine(applicationContext, settings)
-            }
-            runCatching {
-                val status = engine.initialize()
+            var engine: SpeechOutputEngine? = null
+            try {
+                if (settings.cloudTtsEnabled) {
+                    val configError = CloudAudioSettingsValidator.validateTts(
+                        settings,
+                        hasApiKey,
+                        BuildConfig.DEBUG,
+                    )
+                    require(configError == null) { configError.orEmpty() }
+                    engine = CloudTtsEngine(
+                        applicationContext,
+                        settings,
+                        OpenAiAudioSpeechClient(
+                            settings = settings,
+                            apiKeyProvider = secretStore::readApiKey,
+                            allowHttp = BuildConfig.DEBUG,
+                        ),
+                    )
+                } else {
+                    engine = AndroidTtsEngine(applicationContext, settings)
+                }
+                val activeEngine = requireNotNull(engine)
+                val status = activeEngine.initialize()
                 check(status.available) { status.message }
-                engine.speak("${settings.wakePhrase}語音測試完成。")
-                status
-            }.onSuccess {
-                settingsMessage = "TTS 測試完成：${it.engine}，${it.voice}"
-            }.onFailure {
-                settingsMessage = "TTS 測試失敗：${it.message ?: it.javaClass.simpleName}"
+                activeEngine.speak("${settings.wakePhrase}語音測試完成。")
+                settingsMessage = "TTS 測試完成：${status.engine}，${status.voice}"
+            } catch (error: Exception) {
+                settingsMessage = "TTS 測試失敗：${error.message ?: error.javaClass.simpleName}"
+            } finally {
+                engine?.close()
             }
-            engine.close()
         }
+    }
+
+    private fun validateCloudAudioSettings(settings: AssistantSettings, apiKey: String) {
+        val hasApiKey = apiKey.isNotBlank() || secretStore.maskedApiKey() != "未設定"
+        val error = CloudAudioSettingsValidator.validate(settings, hasApiKey, BuildConfig.DEBUG)
+        require(error == null) { error.orEmpty() }
     }
 
     private fun exportDiagnostics(

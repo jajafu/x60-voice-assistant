@@ -57,12 +57,20 @@ class CloudSpeechRecognizerEngine(
         )
     }
 
+    override fun cancelActiveRequest() {
+        transcriber.cancel()
+    }
+
     override fun cancel() {
         synchronized(lock) { pcm.clear() }
+        cancelActiveRequest()
     }
 
     override fun close() {
-        synchronized(lock) { pcm.clear() }
+        cancel()
+        (transcriber as? AutoCloseable)?.let { closeable ->
+            runCatching { closeable.close() }
+        }
     }
 
     companion object {

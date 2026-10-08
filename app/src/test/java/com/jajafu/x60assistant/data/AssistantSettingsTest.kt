@@ -44,7 +44,7 @@ class AssistantSettingsTest {
      */
     /**
      * issue #14：TTS 音量預設 1.0（維持引擎預設值），範圍 0.0–2.0。
-     * 0 是靜音，超過 1.0 是否放大由引擎決定，因此夾限必須兩端都成立。
+     * 0 是靜音，超過 1.0 可能破音，因此夾限必須兩端都成立。
      */
     @Test
     fun `tts volume defaults to the engine default and clamps both bounds`() {
@@ -77,8 +77,11 @@ class AssistantSettingsTest {
         // 沒有 Key 時即使開關打開也不該走雲端；有 Key 才啟用。
         assertFalse(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasApiKey = false))
         assertFalse(AssistantSettings(cloudAsrEnabled = true).cloudAsrReady(hasApiKey = false))
-        assertTrue(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasApiKey = true))
-        assertTrue(AssistantSettings(cloudAsrEnabled = true).cloudAsrReady(hasApiKey = true))
+        assertFalse(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasApiKey = true))
+        assertFalse(AssistantSettings(cloudAsrEnabled = true).cloudAsrReady(hasApiKey = true))
+        val configured = AssistantSettings(baseUrl = "https://api.example.com")
+        assertTrue(configured.copy(cloudTtsEnabled = true).cloudTtsReady(hasApiKey = true))
+        assertTrue(configured.copy(cloudAsrEnabled = true).cloudAsrReady(hasApiKey = true))
     }
 
     @Test
