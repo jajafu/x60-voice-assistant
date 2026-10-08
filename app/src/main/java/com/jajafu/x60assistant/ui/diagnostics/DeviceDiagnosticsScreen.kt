@@ -179,6 +179,7 @@ fun DeviceDiagnosticsScreen(
                 onSave = onSaveSettings,
                 onTestConnection = onTestConnection,
                 onDeleteApiKey = onDeleteApiKey,
+                onTestTts = onTestTts,
             )
 
             AppSection.SETTINGS -> if (showDiagnostics) DiagnosticsPage(
@@ -483,6 +484,7 @@ private fun ModelsPage(
     onSave: (AssistantSettings, String) -> Unit,
     onTestConnection: (AssistantSettings, String) -> Unit,
     onDeleteApiKey: () -> Unit,
+    onTestTts: (AssistantSettings) -> Unit,
 ) {
     // 不以 saved 為 remember key：設定流每次發布都是新物件，否則外部更新會清掉整份草稿。
     var draft by remember { mutableStateOf(saved) }
@@ -574,8 +576,13 @@ private fun ModelsPage(
                 SettingsField("雲端 ASR 語言（留白自動判斷）", draft.cloudAsrLanguage, enabled) {
                     draft = draft.copy(cloudAsrLanguage = it)
                 }
+                OutlinedButton(
+                    onClick = { onTestTts(draft.normalized()) },
+                    enabled = enabled && draft.cloudTtsEnabled,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
+                ) { Text("測試雲端 TTS") }
                 Text(
-                    "共用上方 Base URL 與 API Key；關閉即回本機 X-ASR 與系統 TTS。開啟後該段走網路：問題音訊會上傳轉文字，回答音訊由雲端產生；喚醒與 VAD 維持本機。修改後請停止再重新啟動語音服務；「測試語音」會直接用此處草稿試播。",
+                    "共用上方 Base URL 與 API Key；關閉即回本機 X-ASR 與系統 TTS。開啟後該段走網路：問題音訊會上傳轉文字，回答音訊由雲端產生；喚醒與 VAD 維持本機。儲存後請停止再重新啟動語音服務；上方按鈕會直接使用此處草稿測試雲端 TTS。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -855,7 +862,11 @@ private fun SettingsPage(
                     enabled = enabled,
                 )
                 Text(
-                    "音量套用到 TTS 引擎，部分引擎可能忽略。1.00 是引擎預設值，超過會放大且可能破音。",
+                    if (draft.cloudTtsEnabled) {
+                        "雲端 TTS 會在 WAV 播放前套用 0.00–2.00 增益；超過 1.00 可能破音。"
+                    } else {
+                        "音量套用到 TTS 引擎，部分引擎可能忽略。1.00 是引擎預設值，超過會放大且可能破音。"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

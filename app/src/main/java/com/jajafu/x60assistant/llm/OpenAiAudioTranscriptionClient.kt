@@ -4,6 +4,7 @@ import com.jajafu.x60assistant.data.AssistantSettings
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -11,12 +12,15 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.TimeUnit
 
 /** 可替換的語音轉文字器；正式實作為 OpenAI `/audio/transcriptions`，測試可用 Fake。 */
 fun interface AudioTranscriber {
     /** 輸入 16 kHz／mono／PCM16 的 WAV 位元組，回傳辨識文字。同步呼叫，由呼叫端決定執行緒。 */
     fun transcribe(wavBytes: ByteArray): String
+
+    fun cancel() = Unit
 }
 
 /**
@@ -38,6 +42,7 @@ class OpenAiAudioTranscriptionClient(
         .callTimeout(0, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(false)
         .build()
+    private val activeCall = AtomicReference<Call?>(null)
 
     fun transcriptionsUrl(): String = ProviderUrl.normalize(settings.baseUrl, "/audio/transcriptions", allowHttp)
 
@@ -68,8 +73,10 @@ class OpenAiAudioTranscriptionClient(
             .header("Authorization", authorization)
             .post(multipart)
             .build()
+        val call = client.newCall(request)
+        activeCall.set(call)
         return try {
-            client.newCall(request).execute().use { response ->
+            call.execute().use { response ->
                 if (!response.isSuccessful) throw mapHttpError(response.code)
                 val body = response.body?.string().orEmpty()
                 parseText(body)
@@ -80,7 +87,13 @@ class OpenAiAudioTranscriptionClient(
             throw LlmException(LlmErrorCode.NETWORK_TIMEOUT, message = "連線或讀取逾時", cause = error)
         } catch (error: IOException) {
             throw LlmException(LlmErrorCode.NETWORK_UNAVAILABLE, message = "網路連線失敗", cause = error)
+        } finally {
+            activeCall.compareAndSet(call, null)
         }
+    }
+
+    override fun cancel() {
+        activeCall.getAndSet(null)?.cancel()
     }
 
     private fun parseText(body: String): String = try {
@@ -100,18 +113,10 @@ class OpenAiAudioTranscriptionClient(
     }
 
     override fun close() {
-        val executor = client.dispatcher.executorService
-        runCatching {
-            executor.execute {
-                try {
-                    client.connectionPool.evictAll()
-                } finally {
-                    executor.shutdown()
-                }
-            }
-        }.onFailure {
-            executor.shutdown()
-        }
+        cancel()
+        client.dispatcher.cancelAll()
+        client.connectionPool.evictAll()
+        client.dispatcher.executorService.shutdown()
     }
 
     companion object {

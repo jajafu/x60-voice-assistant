@@ -9,6 +9,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class OpenAiAudioTranscriptionClientTest {
     private lateinit var server: MockWebServer
@@ -71,6 +73,33 @@ class OpenAiAudioTranscriptionClientTest {
         assertEquals(LlmErrorCode.CONFIG_INVALID, error.code)
         assertEquals(0, server.requestCount)
         client.close()
+    }
+
+    @Test
+    fun `cancel interrupts an in-flight transcription request`() {
+        server.enqueue(
+            MockResponse()
+                .setBody("{\"text\":\"延遲\"}")
+                .setBodyDelay(500, TimeUnit.MILLISECONDS),
+        )
+        val client = client(language = "")
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            val future = executor.submit<Throwable?> {
+                runCatching {
+                    client.transcribe(CloudSpeechRecognizerEngine.pcmToWav(ShortArray(160) { 1 }))
+                }.exceptionOrNull()
+            }
+            server.takeRequest()
+            client.cancel()
+            val error = future.get(2, TimeUnit.SECONDS)
+            assertTrue(error is LlmException)
+            assertEquals(LlmErrorCode.NETWORK_UNAVAILABLE, (error as LlmException).code)
+        } finally {
+            client.close()
+            executor.shutdownNow()
+            TimeUnit.MILLISECONDS.sleep(700)
+        }
     }
 
     private fun client(language: String): OpenAiAudioTranscriptionClient = OpenAiAudioTranscriptionClient(

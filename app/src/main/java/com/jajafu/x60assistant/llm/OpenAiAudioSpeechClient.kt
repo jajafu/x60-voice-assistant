@@ -5,17 +5,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.TimeUnit
 
 /** 可替換的語音合成器；正式實作為 OpenAI `/audio/speech`，測試可用 Fake。 */
 fun interface SpeechSynthesizer {
     suspend fun synthesize(text: String): ByteArray
+
+    fun cancel() = Unit
 }
 
 /**
@@ -23,7 +27,7 @@ fun interface SpeechSynthesizer {
  *
  * 沿用 LLM 的 Base URL 與 API Key，只把 Endpoint 換成 `/audio/speech`；
  * Base URL 已含 `/v1` 時不會重複拼接（見 [ProviderUrl]）。
- * 成功時回傳完整音訊位元組（預設 mp3），由呼叫端自行播放。
+ * 成功時回傳完整 WAV 音訊位元組，由呼叫端自行播放。
  */
 class OpenAiAudioSpeechClient(
     private val settings: AssistantSettings,
@@ -37,6 +41,7 @@ class OpenAiAudioSpeechClient(
         .callTimeout(0, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(false)
         .build()
+    private val activeCall = AtomicReference<Call?>(null)
 
     fun speechUrl(): String = ProviderUrl.normalize(settings.baseUrl, "/audio/speech", allowHttp)
 
@@ -55,15 +60,17 @@ class OpenAiAudioSpeechClient(
             put("model", settings.cloudTtsModel)
             put("input", text)
             put("voice", settings.cloudTtsVoice)
-            put("response_format", "mp3")
+            put("response_format", "wav")
         }.toString().toRequestBody(JSON_MEDIA_TYPE)
         val request = Request.Builder()
             .url(speechUrl())
             .header("Authorization", authorization)
             .post(body)
             .build()
+        val call = client.newCall(request)
+        activeCall.set(call)
         try {
-            client.newCall(request).execute().use { response ->
+            call.execute().use { response ->
                 if (!response.isSuccessful) throw mapHttpError(response.code)
                 val bytes = response.body?.bytes()
                     ?: throw LlmException(LlmErrorCode.RESPONSE_INVALID, message = "回應沒有內容")
@@ -76,7 +83,13 @@ class OpenAiAudioSpeechClient(
             throw LlmException(LlmErrorCode.NETWORK_TIMEOUT, message = "連線或讀取逾時", cause = error)
         } catch (error: IOException) {
             throw LlmException(LlmErrorCode.NETWORK_UNAVAILABLE, message = "網路連線失敗", cause = error)
+        } finally {
+            activeCall.compareAndSet(call, null)
         }
+    }
+
+    override fun cancel() {
+        activeCall.getAndSet(null)?.cancel()
     }
 
     private fun mapHttpError(status: Int): LlmException = when (status) {
@@ -89,18 +102,10 @@ class OpenAiAudioSpeechClient(
     }
 
     override fun close() {
-        val executor = client.dispatcher.executorService
-        runCatching {
-            executor.execute {
-                try {
-                    client.connectionPool.evictAll()
-                } finally {
-                    executor.shutdown()
-                }
-            }
-        }.onFailure {
-            executor.shutdown()
-        }
+        cancel()
+        client.dispatcher.cancelAll()
+        client.connectionPool.evictAll()
+        client.dispatcher.executorService.shutdown()
     }
 
     companion object {

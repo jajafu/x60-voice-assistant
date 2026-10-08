@@ -31,6 +31,7 @@ import com.jajafu.x60assistant.data.SettingsRepository
 import com.jajafu.x60assistant.llm.OpenAiAudioSpeechClient
 import com.jajafu.x60assistant.llm.OpenAiAudioTranscriptionClient
 import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
+import com.jajafu.x60assistant.llm.CloudAudioSettingsValidator
 import com.jajafu.x60assistant.llm.LlmTranscriptCorrector
 import com.jajafu.x60assistant.music.MusicCabinController
 import com.jajafu.x60assistant.navigation.NavigationActionExecutor
@@ -169,6 +170,10 @@ class VoiceForegroundService : Service() {
             val asrPack = AsrModelPacks.xAsr
             val secretStore = AndroidKeystoreSecretStore(applicationContext)
             val hasApiKey = secretStore.maskedApiKey() != "未設定"
+            CloudAudioSettingsValidator.validate(settings, hasApiKey, BuildConfig.DEBUG)?.let { detail ->
+                failAndStop(VoiceErrorCode.LLM_CONFIG_INVALID, detail)
+                return
+            }
             // 雲端 ASR spike：整輪錄完才上傳，不需要本機 X-ASR 模型；VAD 仍維持本機。
             val useCloudAsr = settings.cloudAsrReady(hasApiKey)
             if (!useCloudAsr) {
