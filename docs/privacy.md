@@ -4,6 +4,7 @@
 - BootReceiver 只顯示「點擊以恢復」提醒；不從開機、Alarm、Accessibility、Overlay 或背景自動建立 microphone FGS。
 - `AudioRecord` 的 PCM16 frame 先進入記憶體中的 50-frame 有界 queue。X-ASR 會將當次語句的 PCM 另在記憶體中保留至 VAD 結束（設定上限 60 秒）供整句辨識。音訊不寫入檔案、資料庫、Logcat 或診斷記錄。
 - 只有本機 ASR 的文字會送到使用者自行設定的 OpenAI-compatible HTTPS Provider；PCM、keyword audio 與診斷不會上傳。
+- 雲端語音 spike 是例外且預設關閉：開啟雲端 ASR 後，當次語句的整段 WAV 會上傳到上述 Provider 的 `/audio/transcriptions`；開啟雲端 TTS 後，回答文字會送到 `/audio/speech` 換回音訊。兩者皆需網路且會產生用量費用；喚醒詞偵測與 VAD 維持本機、不上傳。
 - 音樂播放請求若進入 LLM 且回覆表示無法播放，App 會在本機檢查回覆中的歌手或歌曲名稱並嘗試交給已選音樂 App；不會為此另外發送 LLM 請求。
 - API Key 使用 Android Keystore 不可匯出 AES-GCM key 加密；App Private Storage 只含 version、alias、IV 與 ciphertext。
 - Transcript、回答及最近對話不寫入 DataStore；停止 process 即消失。設定頁可清除 Key、設定與目前記憶體診斷。

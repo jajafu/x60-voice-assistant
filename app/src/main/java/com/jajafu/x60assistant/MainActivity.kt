@@ -44,10 +44,13 @@ import com.jajafu.x60assistant.navigation.NavigationAppOption
 import com.jajafu.x60assistant.music.MusicAppOption
 import com.jajafu.x60assistant.music.MusicCabinFavoriteAccess
 import com.jajafu.x60assistant.music.AssistantUiVisibility
+import com.jajafu.x60assistant.llm.OpenAiAudioSpeechClient
 import com.jajafu.x60assistant.llm.OpenAiCompatibleLlmProvider
 import com.jajafu.x60assistant.kws.WakePhraseCompiler
 import com.jajafu.x60assistant.security.AndroidKeystoreSecretStore
 import com.jajafu.x60assistant.tts.AndroidTtsEngine
+import com.jajafu.x60assistant.tts.CloudTtsEngine
+import com.jajafu.x60assistant.tts.SpeechOutputEngine
 import com.jajafu.x60assistant.tts.TtsEngineCatalog
 import com.jajafu.x60assistant.tts.TtsEngineOption
 import com.jajafu.x60assistant.tts.TtsVoiceOption
@@ -500,14 +503,27 @@ class MainActivity : ComponentActivity() {
 
     private fun testTts(settings: AssistantSettings) {
         lifecycleScope.launch {
-            val engine = AndroidTtsEngine(applicationContext, settings)
+            val hasApiKey = secretStore.maskedApiKey() != "未設定"
+            val engine: SpeechOutputEngine = if (settings.cloudTtsReady(hasApiKey)) {
+                CloudTtsEngine(
+                    applicationContext,
+                    settings,
+                    OpenAiAudioSpeechClient(
+                        settings = settings,
+                        apiKeyProvider = secretStore::readApiKey,
+                        allowHttp = BuildConfig.DEBUG,
+                    ),
+                )
+            } else {
+                AndroidTtsEngine(applicationContext, settings)
+            }
             runCatching {
                 val status = engine.initialize()
                 check(status.available) { status.message }
                 engine.speak("${settings.wakePhrase}語音測試完成。")
                 status
             }.onSuccess {
-                settingsMessage = "TTS 測試完成：${it.locale}，${it.voice}"
+                settingsMessage = "TTS 測試完成：${it.engine}，${it.voice}"
             }.onFailure {
                 settingsMessage = "TTS 測試失敗：${it.message ?: it.javaClass.simpleName}"
             }

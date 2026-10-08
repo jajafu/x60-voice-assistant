@@ -34,7 +34,20 @@ data class AssistantSettings(
     val speechRate: Float = 1.0f,
     val pitch: Float = 1.0f,
     val connectionVerified: Boolean = false,
+    val cloudTtsEnabled: Boolean = DEFAULT_CLOUD_TTS_ENABLED,
+    val cloudTtsModel: String = DEFAULT_CLOUD_TTS_MODEL,
+    val cloudTtsVoice: String = DEFAULT_CLOUD_TTS_VOICE,
+    val cloudAsrEnabled: Boolean = DEFAULT_CLOUD_ASR_ENABLED,
+    val cloudAsrModel: String = DEFAULT_CLOUD_ASR_MODEL,
+    val cloudAsrLanguage: String = "",
 ) {
+    /**
+     * 雲端語音是否可啟用。沿用 LLM 的 Base URL 與 API Key，因此只檢查開關與 Key；
+     * Model 欄位在 [normalized] 已回填預設值，不會是空白。
+     */
+    fun cloudTtsReady(hasApiKey: Boolean): Boolean = cloudTtsEnabled && hasApiKey
+
+    fun cloudAsrReady(hasApiKey: Boolean): Boolean = cloudAsrEnabled && hasApiKey
     fun normalized(): AssistantSettings = copy(
         wakePhrase = wakePhrase.trim().ifBlank { DEFAULT_WAKE_PHRASE }.take(MAX_WAKE_PHRASE_LENGTH),
         wakeAcknowledgement = wakeAcknowledgement.trim()
@@ -62,6 +75,10 @@ data class AssistantSettings(
         ttsVolume = ttsVolume.coerceIn(TTS_VOLUME_RANGE),
         speechRate = speechRate.coerceIn(SPEECH_RATE_RANGE),
         pitch = pitch.coerceIn(PITCH_RANGE),
+        cloudTtsModel = cloudTtsModel.trim().ifBlank { DEFAULT_CLOUD_TTS_MODEL }.take(MAX_CLOUD_IDENTIFIER_LENGTH),
+        cloudTtsVoice = cloudTtsVoice.trim().ifBlank { DEFAULT_CLOUD_TTS_VOICE }.take(MAX_CLOUD_IDENTIFIER_LENGTH),
+        cloudAsrModel = cloudAsrModel.trim().ifBlank { DEFAULT_CLOUD_ASR_MODEL }.take(MAX_CLOUD_IDENTIFIER_LENGTH),
+        cloudAsrLanguage = cloudAsrLanguage.trim().take(MAX_CLOUD_IDENTIFIER_LENGTH),
     )
 
     companion object {
@@ -102,6 +119,19 @@ data class AssistantSettings(
          */
         const val DEFAULT_TTS_VOLUME = 1.0f
         const val MAX_TTS_IDENTIFIER_LENGTH = 200
+
+        /**
+         * 雲端語音 spike 設定。開關預設全關，既有行為維持純本機；
+         * 兩者皆沿用 LLM 的 Base URL 與 API Key，不另存憑證。
+         * TTS 單次上限 4096 字元依 OpenAI `/audio/speech` 文件。
+         */
+        const val DEFAULT_CLOUD_TTS_ENABLED = false
+        const val DEFAULT_CLOUD_TTS_MODEL = "gpt-4o-mini-tts"
+        const val DEFAULT_CLOUD_TTS_VOICE = "alloy"
+        const val DEFAULT_CLOUD_ASR_ENABLED = false
+        const val DEFAULT_CLOUD_ASR_MODEL = "whisper-1"
+        const val MAX_CLOUD_IDENTIFIER_LENGTH = 100
+        const val CLOUD_TTS_MAX_CHARS = 4096
 
         /**
          * 喚醒詞開啟新一輪時會清除對話歷史，只有這個視窗內的追問才帶著上一輪。

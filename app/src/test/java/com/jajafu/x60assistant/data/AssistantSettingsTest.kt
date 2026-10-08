@@ -67,6 +67,45 @@ class AssistantSettingsTest {
     }
 
     @Test
+    fun `cloud voice is off by default and reuses llm credentials`() {
+        val defaults = AssistantSettings()
+        assertFalse(defaults.cloudTtsEnabled)
+        assertFalse(defaults.cloudAsrEnabled)
+        assertEquals("gpt-4o-mini-tts", defaults.cloudTtsModel)
+        assertEquals("alloy", defaults.cloudTtsVoice)
+        assertEquals("whisper-1", defaults.cloudAsrModel)
+        // 沒有 Key 時即使開關打開也不該走雲端；有 Key 才啟用。
+        assertFalse(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasApiKey = false))
+        assertFalse(AssistantSettings(cloudAsrEnabled = true).cloudAsrReady(hasApiKey = false))
+        assertTrue(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasApiKey = true))
+        assertTrue(AssistantSettings(cloudAsrEnabled = true).cloudAsrReady(hasApiKey = true))
+    }
+
+    @Test
+    fun `cloud model blanks fall back to defaults and identifiers are length limited`() {
+        val settings = AssistantSettings(
+            cloudTtsModel = "  ",
+            cloudTtsVoice = "  ",
+            cloudAsrModel = "",
+            cloudAsrLanguage = "  zh  ",
+        ).normalized()
+        assertEquals(AssistantSettings.DEFAULT_CLOUD_TTS_MODEL, settings.cloudTtsModel)
+        assertEquals(AssistantSettings.DEFAULT_CLOUD_TTS_VOICE, settings.cloudTtsVoice)
+        assertEquals(AssistantSettings.DEFAULT_CLOUD_ASR_MODEL, settings.cloudAsrModel)
+        assertEquals("zh", settings.cloudAsrLanguage)
+        val long = AssistantSettings(
+            cloudTtsModel = "m".repeat(500),
+            cloudTtsVoice = "v".repeat(500),
+            cloudAsrModel = "a".repeat(500),
+            cloudAsrLanguage = "l".repeat(500),
+        ).normalized()
+        assertEquals(AssistantSettings.MAX_CLOUD_IDENTIFIER_LENGTH, long.cloudTtsModel.length)
+        assertEquals(AssistantSettings.MAX_CLOUD_IDENTIFIER_LENGTH, long.cloudTtsVoice.length)
+        assertEquals(AssistantSettings.MAX_CLOUD_IDENTIFIER_LENGTH, long.cloudAsrModel.length)
+        assertEquals(AssistantSettings.MAX_CLOUD_IDENTIFIER_LENGTH, long.cloudAsrLanguage.length)
+    }
+
+    @Test
     fun `declared ranges match normalized clamping at both bounds`() {
         AssistantSettings(
             temperature = AssistantSettings.TEMPERATURE_RANGE.endInclusive,

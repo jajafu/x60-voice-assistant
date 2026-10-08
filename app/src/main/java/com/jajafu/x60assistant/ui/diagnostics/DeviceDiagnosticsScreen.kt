@@ -506,7 +506,7 @@ private fun ModelsPage(
         item {
             Text("模型", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "設定 LLM 服務；本機語音辨識固定使用內建 X-ASR。首次啟動語音服務時會解壓模型，請預留約 175 MB 空間。",
+                "設定 LLM 服務；語音辨識預設使用內建 X-ASR（首次啟動語音服務時會解壓模型，請預留約 175 MB 空間），可在下方開啟雲端語音 spike。",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -549,6 +549,33 @@ private fun ModelsPage(
                 }
                 Text(
                     "開啟時，本機指令沒命中才多打一次 LLM，把同音錯字（如長根→長庚）修回導航／音樂；關閉即回舊行為不上網。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        item {
+            SectionCard("雲端語音（spike）") {
+                ToggleRow("雲端 TTS", draft.cloudTtsEnabled, enabled) {
+                    draft = draft.copy(cloudTtsEnabled = it)
+                }
+                SettingsField("雲端 TTS Model", draft.cloudTtsModel, enabled) {
+                    draft = draft.copy(cloudTtsModel = it)
+                }
+                SettingsField("雲端 TTS Voice", draft.cloudTtsVoice, enabled) {
+                    draft = draft.copy(cloudTtsVoice = it)
+                }
+                ToggleRow("雲端 ASR", draft.cloudAsrEnabled, enabled) {
+                    draft = draft.copy(cloudAsrEnabled = it)
+                }
+                SettingsField("雲端 ASR Model", draft.cloudAsrModel, enabled) {
+                    draft = draft.copy(cloudAsrModel = it)
+                }
+                SettingsField("雲端 ASR 語言（留白自動判斷）", draft.cloudAsrLanguage, enabled) {
+                    draft = draft.copy(cloudAsrLanguage = it)
+                }
+                Text(
+                    "共用上方 Base URL 與 API Key；關閉即回本機 X-ASR 與系統 TTS。開啟後該段走網路：問題音訊會上傳轉文字，回答音訊由雲端產生；喚醒與 VAD 維持本機。修改後請停止再重新啟動語音服務；「測試語音」會直接用此處草稿試播。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
