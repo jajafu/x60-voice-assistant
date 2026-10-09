@@ -1,5 +1,6 @@
 package com.jajafu.x60assistant.llm
 
+import com.jajafu.x60assistant.audio.RiffWav
 import com.jajafu.x60assistant.data.AssistantSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,6 +29,10 @@ fun interface SpeechSynthesizer {
  * 使用獨立 Audio Provider 的 Base URL 與 API Key，只把 Endpoint 換成 `/audio/speech`；
  * Base URL 已含 `/v1` 時不會重複拼接（見 [ProviderUrl]）。
  * 成功時回傳完整 WAV 音訊位元組，由呼叫端自行播放。
+ *
+ * 請求已指定 `response_format=wav`，但部分 Provider 會忽略它而回傳 MP3 或錯誤內容。
+ * 這裡在送出播放前驗證 RIFF/WAVE 檔頭：不合就回報實際收到的 Content-Type 與檔頭位元組，
+ * 取代 `MediaPlayer` 不透明且難以診斷的 `1/-2147483648`。
  */
 class OpenAiAudioSpeechClient(
     private val settings: AssistantSettings,
@@ -38,7 +43,8 @@ class OpenAiAudioSpeechClient(
     private val client = clientBuilder
         .connectTimeout(settings.connectTimeoutSeconds.toLong(), TimeUnit.SECONDS)
         .readTimeout(settings.readTimeoutSeconds.toLong(), TimeUnit.SECONDS)
-        .callTimeout(0, TimeUnit.MILLISECONDS)
+        // 非串流的整句語音：總逾時與讀取逾時一致，避免慢速回應無上限佔住呼叫執行緒。
+        .callTimeout(settings.readTimeoutSeconds.toLong(), TimeUnit.SECONDS)
         .retryOnConnectionFailure(false)
         .build()
     private val activeCall = AtomicReference<Call?>(null)
@@ -75,6 +81,15 @@ class OpenAiAudioSpeechClient(
                 val bytes = response.body?.bytes()
                     ?: throw LlmException(LlmErrorCode.RESPONSE_INVALID, message = "回應沒有內容")
                 if (bytes.isEmpty()) throw LlmException(LlmErrorCode.RESPONSE_INVALID, message = "回應沒有內容")
+                if (!RiffWav.isWave(bytes)) {
+                    // 只記錄 Content-Type 與檔頭，不記錄音訊或 API Key。
+                    val contentType = response.header("Content-Type")?.substringBefore(';')?.trim()
+                    throw LlmException(
+                        LlmErrorCode.RESPONSE_INVALID,
+                        message = "Audio Provider 未回傳 WAV（Content-Type=${contentType ?: "無"}，" +
+                            "檔頭 ${RiffWav.signature(bytes)}）；請確認該 Provider 支援 /audio/speech 的 wav 格式",
+                    )
+                }
                 bytes
             }
         } catch (error: LlmException) {

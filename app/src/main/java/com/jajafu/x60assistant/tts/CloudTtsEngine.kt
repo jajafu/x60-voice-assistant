@@ -48,11 +48,14 @@ class CloudTtsEngine(
     private var focusRequest: AudioFocusRequest? = null
 
     override suspend fun initialize(): TtsStatus = TtsStatus(
+        // 雲端 TTS 必須實際連線才能確認，但啟動時沒有可用的輕量探針。
+        // 這裡回報 available 只代表「設定完整、不要阻止語音服務啟動」，不代表播放已驗證；
+        // 是否真的能播放由第一次 [speak] 決定，失敗會拋出而不靜默退回本機引擎。
         available = true,
         engine = "cloud/${settings.cloudTtsModel}",
         voice = settings.cloudTtsVoice,
         locale = "雲端",
-        message = "雲端 TTS（spike），需網路",
+        message = "雲端 TTS（spike）：設定完整，播放能力未驗證",
     )
 
     override suspend fun speak(text: String) {
@@ -91,13 +94,18 @@ class CloudTtsEngine(
                             player.setOnPreparedListener { prepared ->
                                 if (activePlayback.get() != active || !continuation.isActive) return@setOnPreparedListener
                                 try {
-                                    val playerVolume = if (gainApplied) 1.0f else settings.ttsVolume.coerceIn(0.0f, 1.0f)
+                                    val playerVolume = WavPlaybackSettings.volume(settings.ttsVolume, gainApplied)
                                     prepared.setVolume(playerVolume, playerVolume)
-                                    prepared.setPlaybackParams(
-                                        PlaybackParams()
-                                            .setSpeed(settings.speechRate)
-                                            .setPitch(settings.pitch),
-                                    )
+                                    // 語速／音調並非所有解碼器都支援。不支援時只降級為原速原調，
+                                    // 不能因為音調套用失敗就整句不播放。
+                                    WavPlaybackSettings.playbackParamsOrNull(settings.speechRate, settings.pitch)
+                                        ?.let { (speed, pitch) ->
+                                            runCatching {
+                                                prepared.setPlaybackParams(
+                                                    PlaybackParams().setSpeed(speed).setPitch(pitch),
+                                                )
+                                            }
+                                        }
                                     prepared.start()
                                 } catch (error: Exception) {
                                     if (activePlayback.compareAndSet(active, null)) {
@@ -175,9 +183,12 @@ class CloudTtsEngine(
     override fun stop() {
         synthesizer.cancel()
         val continuation = activeContinuation.getAndSet(null)
-        activePlayer.getAndSet(null)?.let { player ->
-            // onCompletion 不會因 stop() 觸發；先清 active 再停，避免回呼重複結算。
-            activePlayback.getAndSet(null)?.let { runCatching { it.file.delete() } }
+        // onCompletion 不會因 stop() 觸發；先清 active 再停，避免回呼重複結算。
+        // 暫存檔與 player 分開清除，避免 player 缺席時音訊殘留在 cache。
+        val active = activePlayback.getAndSet(null)
+        val player = activePlayer.getAndSet(null)
+        active?.let { runCatching { it.file.delete() } }
+        if (player != null) {
             runCatching { player.stop() }
             runCatching { player.release() }
         }

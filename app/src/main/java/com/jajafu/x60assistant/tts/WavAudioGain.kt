@@ -1,5 +1,6 @@
 package com.jajafu.x60assistant.tts
 
+import com.jajafu.x60assistant.audio.RiffWav
 import kotlin.math.roundToInt
 
 data class WavGainResult(
@@ -29,9 +30,7 @@ object WavAudioGain {
     }
 
     private fun findPcm16Data(bytes: ByteArray): Pair<Int, Int>? {
-        if (bytes.size < 12 || ascii(bytes, 0, "RIFF") != true || ascii(bytes, 8, "WAVE") != true) {
-            return null
-        }
+        if (!RiffWav.isWave(bytes)) return null
         var offset = 12
         var pcm16 = false
         while (offset + 8 <= bytes.size) {

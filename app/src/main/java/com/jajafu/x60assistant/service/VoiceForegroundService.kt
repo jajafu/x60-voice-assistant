@@ -176,7 +176,8 @@ class VoiceForegroundService : Service() {
             val hasLlmApiKey = llmSecretStore.maskedApiKey() != "未設定"
             val hasAudioApiKey = audioSecretStore.maskedApiKey() != "未設定"
             CloudAudioSettingsValidator.validate(settings, hasAudioApiKey, BuildConfig.DEBUG)?.let { detail ->
-                failAndStop(VoiceErrorCode.LLM_CONFIG_INVALID, detail)
+                // 音訊 Provider 的設定問題要與 LLM 分開，否則診斷會誤導成 LLM 故障。
+                failAndStop(VoiceErrorCode.AUDIO_CONFIG_INVALID, detail)
                 return
             }
             // 雲端 Whisper 只有 Audio Provider 開關、URL、Key 都可用時才取代 X-ASR；KWS／VAD 仍維持本機。

@@ -468,7 +468,9 @@ class MainActivity : ComponentActivity() {
                     "設定已儲存；請按「測試 LLM 連線」後再啟動服務。"
                 }
             }.onFailure {
-                settingsMessage = "設定儲存失敗：${it.javaClass.simpleName}"
+                // 雲端語音設定驗證會帶出具體原因（例如缺 Audio API Key），只印例外類別
+                // 會讓使用者只看到 IllegalArgumentException。例外訊息不含 API Key。
+                settingsMessage = "設定儲存失敗：${it.message ?: it.javaClass.simpleName}"
             }
         }
     }
