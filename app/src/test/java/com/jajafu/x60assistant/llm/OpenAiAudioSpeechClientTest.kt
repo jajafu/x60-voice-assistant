@@ -1,5 +1,6 @@
 package com.jajafu.x60assistant.llm
 
+import com.jajafu.x60assistant.asr.CloudSpeechRecognizerEngine
 import com.jajafu.x60assistant.data.AssistantSettings
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonObject
@@ -32,9 +33,9 @@ class OpenAiAudioSpeechClientTest {
     }
 
     @Test
-    fun `posts speech request and returns audio bytes`() = runTest {
-        val audio = byteArrayOf(0x49, 0x44, 0x33, 0x04)
-        server.enqueue(MockResponse().setBody(Buffer().write(audio)).setHeader("Content-Type", "audio/mpeg"))
+    fun `posts speech request and returns wav bytes`() = runTest {
+        val audio = CloudSpeechRecognizerEngine.pcmToWav(shortArrayOf(0, 1_000, -1_000))
+        server.enqueue(MockResponse().setBody(Buffer().write(audio)).setHeader("Content-Type", "audio/wav"))
         val client = client()
 
         val result = client.synthesize("測試語音")
@@ -48,6 +49,37 @@ class OpenAiAudioSpeechClientTest {
         assertEquals("測試語音", body["input"]!!.jsonPrimitive.content)
         assertEquals("alloy", body["voice"]!!.jsonPrimitive.content)
         assertEquals("wav", body["response_format"]!!.jsonPrimitive.content)
+        client.close()
+    }
+
+    @Test
+    fun `non wav response reports content type and header instead of failing at playback`() = runTest {
+        // Provider 忽略 response_format=wav 時會回 MP3；MediaPlayer 只會給出不透明的
+        // 1/-2147483648，必須在此指出實際收到的內容。
+        val mp3 = byteArrayOf(0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00, 0x00)
+        server.enqueue(MockResponse().setBody(Buffer().write(mp3)).setHeader("Content-Type", "audio/mpeg"))
+        val client = client()
+
+        val error = runCatching { client.synthesize("測試語音") }.exceptionOrNull() as LlmException
+
+        assertEquals(LlmErrorCode.RESPONSE_INVALID, error.code)
+        assertTrue(error.message.orEmpty().contains("audio/mpeg"))
+        assertTrue(error.message.orEmpty().contains("49 44 33 04"))
+        client.close()
+    }
+
+    @Test
+    fun `json error body with success status is rejected before playback`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setBody("""{"error":{"message":"model not supported"}}""")
+                .setHeader("Content-Type", "application/json"),
+        )
+        val client = client()
+
+        val error = runCatching { client.synthesize("測試語音") }.exceptionOrNull() as LlmException
+
+        assertEquals(LlmErrorCode.RESPONSE_INVALID, error.code)
         client.close()
     }
 

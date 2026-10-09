@@ -76,6 +76,48 @@ class OpenAiAudioTranscriptionClientTest {
     }
 
     @Test
+    fun `response without a text field is an error rather than an empty transcript`() {
+        // 靜默回空字串會被 Orchestrator 記成 ASR_NO_RESULT，使用者只會覺得自己沒說話，
+        // 無法分辨 Provider 回應格式改變。
+        server.enqueue(MockResponse().setBody("""{"segments":[]}"""))
+        val client = client(language = "")
+
+        val error = runCatching {
+            client.transcribe(CloudSpeechRecognizerEngine.pcmToWav(ShortArray(160) { 1 }))
+        }.exceptionOrNull() as LlmException
+
+        assertEquals(LlmErrorCode.RESPONSE_INVALID, error.code)
+        assertTrue(error.message.orEmpty().contains("text"))
+        client.close()
+    }
+
+    @Test
+    fun `blank text field is also rejected`() {
+        server.enqueue(MockResponse().setBody("""{"text":"   "}"""))
+        val client = client(language = "")
+
+        val error = runCatching {
+            client.transcribe(CloudSpeechRecognizerEngine.pcmToWav(ShortArray(160) { 1 }))
+        }.exceptionOrNull() as LlmException
+
+        assertEquals(LlmErrorCode.RESPONSE_INVALID, error.code)
+        client.close()
+    }
+
+    @Test
+    fun `non json body is rejected`() {
+        server.enqueue(MockResponse().setBody("<html>gateway timeout</html>"))
+        val client = client(language = "")
+
+        val error = runCatching {
+            client.transcribe(CloudSpeechRecognizerEngine.pcmToWav(ShortArray(160) { 1 }))
+        }.exceptionOrNull() as LlmException
+
+        assertEquals(LlmErrorCode.RESPONSE_INVALID, error.code)
+        client.close()
+    }
+
+    @Test
     fun `cancel interrupts an in-flight transcription request`() {
         server.enqueue(
             MockResponse()

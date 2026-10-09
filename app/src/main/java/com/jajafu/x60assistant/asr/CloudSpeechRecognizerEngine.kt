@@ -22,26 +22,49 @@ class CloudSpeechRecognizerEngine(
     private val maxBufferSeconds: Int = MAX_BUFFER_SECONDS,
 ) : SpeechRecognizerEngine {
     private val lock = Any()
-    private val pcm = ArrayList<Short>(SAMPLE_RATE * 10)
+
+    // 以 ShortArray 而非 ArrayList<Short> 保存 PCM：60 秒上限會累積 96 萬個樣本，
+    // boxed Short 的暫時配置超過 20 MB，且在記憶體最緊的轉寫時刻造成 GC 壓力。
+    private var pcm = ShortArray(0)
+
+    /** 已使用的樣本數；`pcm.size` 是配置大小，兩者不可混用。 */
+    private var used = 0
 
     override fun beginSession() {
-        synchronized(lock) { pcm.clear() }
+        synchronized(lock) { reset() }
     }
 
     override fun accept(frame: AudioFrame): String? {
         synchronized(lock) {
-            val remaining = maxBufferSeconds * SAMPLE_RATE - pcm.size
-            if (remaining > 0) {
-                val samples = frame.samples
-                pcm.addAll(samples.take(remaining))
-            }
+            val samples = frame.samples
+            val remaining = maxBufferSeconds * SAMPLE_RATE - used
+            if (remaining <= 0 || samples.isEmpty()) return@synchronized
+            val copied = minOf(samples.size, remaining)
+            if (used + copied > pcm.size) pcm = pcm.copyOf(capacityFor(used + copied))
+            samples.copyInto(pcm, destinationOffset = used, startIndex = 0, endIndex = copied)
+            used += copied
         }
         return null
     }
 
+    private fun reset() {
+        pcm = ShortArray(0)
+        used = 0
+    }
+
+    /** 以倍增方式取得下一個緩衝大小，避免每個 frame 都重新配置。 */
+    private fun capacityFor(required: Int): Int {
+        var capacity = pcm.size.coerceAtLeast(MIN_CAPACITY_SAMPLES)
+        while (capacity < required) capacity *= 2
+        return capacity
+    }
+
     override fun finish(): AsrResult {
+        // 交出目前的樣本並清空緩衝，呼叫端可安全持有 snapshot。
         val snapshot = synchronized(lock) {
-            pcm.toShortArray().also { pcm.clear() }
+            val data = pcm.copyOf(used)
+            reset()
+            data
         }
         if (snapshot.isEmpty()) throw IllegalStateException("沒有可辨識的語音")
         val audioDurationMs = snapshot.size * 1_000L / SAMPLE_RATE
@@ -62,7 +85,7 @@ class CloudSpeechRecognizerEngine(
     }
 
     override fun cancel() {
-        synchronized(lock) { pcm.clear() }
+        synchronized(lock) { reset() }
         cancelActiveRequest()
     }
 
@@ -76,6 +99,9 @@ class CloudSpeechRecognizerEngine(
     companion object {
         const val SAMPLE_RATE = 16000
         const val MAX_BUFFER_SECONDS = 60
+
+        /** 初始緩衝 2 秒；不足時倍增，上限受 [MAX_BUFFER_SECONDS] 約束。 */
+        private const val MIN_CAPACITY_SAMPLES = SAMPLE_RATE * 2
 
         internal fun pcmToWav(samples: ShortArray, sampleRate: Int = SAMPLE_RATE): ByteArray {
             val dataBytes = samples.size * 2

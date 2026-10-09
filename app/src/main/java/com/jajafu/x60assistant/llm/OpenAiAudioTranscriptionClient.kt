@@ -39,7 +39,8 @@ class OpenAiAudioTranscriptionClient(
     private val client = clientBuilder
         .connectTimeout(settings.connectTimeoutSeconds.toLong(), TimeUnit.SECONDS)
         .readTimeout(settings.readTimeoutSeconds.toLong(), TimeUnit.SECONDS)
-        .callTimeout(0, TimeUnit.MILLISECONDS)
+        // 非串流的整句上傳：總逾時與讀取逾時一致，避免慢速回應無上限佔住執行緒。
+        .callTimeout(settings.readTimeoutSeconds.toLong(), TimeUnit.SECONDS)
         .retryOnConnectionFailure(false)
         .build()
     private val activeCall = AtomicReference<Call?>(null)
@@ -97,10 +98,23 @@ class OpenAiAudioTranscriptionClient(
         activeCall.getAndSet(null)?.cancel()
     }
 
-    private fun parseText(body: String): String = try {
-        json.parseToJsonElement(body).jsonObject["text"]?.jsonPrimitive?.content.orEmpty()
-    } catch (error: Throwable) {
-        throw LlmException(LlmErrorCode.RESPONSE_INVALID, message = "JSON 回應格式無效", cause = error)
+    /**
+     * Provider 回應缺少 `text` 時必須視為錯誤。
+     *
+     * 若靜默回傳空字串，[com.jajafu.x60assistant.orchestration.VoiceOrchestrator] 會記成
+     * `ASR_NO_RESULT` 而回到 idle，使用者只會覺得「沒有語音」，無法區分 Provider
+     * 回應格式改變與自己真的沒說話。
+     */
+    private fun parseText(body: String): String {
+        val text = try {
+            json.parseToJsonElement(body).jsonObject["text"]?.jsonPrimitive?.content.orEmpty()
+        } catch (error: Exception) {
+            throw LlmException(LlmErrorCode.RESPONSE_INVALID, message = "JSON 回應格式無效", cause = error)
+        }
+        if (text.isBlank()) {
+            throw LlmException(LlmErrorCode.RESPONSE_INVALID, message = "Audio Provider 回應缺少 text 欄位")
+        }
+        return text
     }
 
     private fun mapHttpError(status: Int): LlmException = when (status) {
