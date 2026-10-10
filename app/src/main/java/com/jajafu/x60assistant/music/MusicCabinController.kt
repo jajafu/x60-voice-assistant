@@ -126,15 +126,16 @@ class MusicCabinController(
                     ?: return@withTimeoutOrNull false
                 val component = ComponentName(appContext, MusicCabinFavoriteListenerService::class.java)
                 val sessions = manager.getActiveSessions(component)
-                val picked = ActiveSessionPicker.playing(
-                    sessions.map {
-                        ActiveSessionSnapshot(
-                            it.packageName,
-                            it.playbackState?.state ?: PlaybackState.STATE_NONE,
-                        )
-                    },
-                ) ?: return@withTimeoutOrNull false
-                val token = sessions.firstOrNull { it.packageName == picked.packageName }?.sessionToken
+                // snapshots 與 sessions 同順序：用索引取 token，避免同套件多 session 時拿到錯誤的那一台。
+                val snapshots = sessions.map {
+                    ActiveSessionSnapshot(
+                        it.packageName,
+                        it.playbackState?.state ?: PlaybackState.STATE_NONE,
+                    )
+                }
+                val pickedIndex = ActiveSessionPicker.playingIndex(snapshots)
+                    ?: return@withTimeoutOrNull false
+                val token = sessions.getOrNull(pickedIndex)?.sessionToken
                     ?: return@withTimeoutOrNull false
                 val controller = MediaController(appContext, token)
                 if (!supports(controller.playbackState, PlaybackState.ACTION_PAUSE)) {
