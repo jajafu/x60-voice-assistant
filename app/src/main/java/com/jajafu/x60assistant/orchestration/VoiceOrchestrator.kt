@@ -82,6 +82,11 @@ class VoiceOrchestrator(
     private val reminderExecutor: ReminderActionExecutor? = null,
     private val alarmExecutor: AlarmActionExecutor? = null,
     private val navigationExecutor: NavigationActionExecutor? = null,
+    /**
+     * 背景導航時帶出目的地，由服務掛到常駐通知的「開啟地圖」按鈕。
+     * 點按鈕屬於使用者操作，系統允許開地圖；車機上比另發通知可靠。
+     */
+    private val onBackgroundNavigation: ((String) -> Unit)? = null,
     private val volumeExecutor: VolumeActionExecutor? = null,
     private val transcriptCorrector: TranscriptCorrector? = null,
     speechOutput: SpeechOutputEngine? = null,
@@ -494,6 +499,12 @@ class VoiceOrchestrator(
                 throw cancelled
             } catch (_: Exception) {
                 NavigationActionResult("導航操作失敗，請再試一次。", NavigationLaunchMode.FAILED)
+            }
+            if (response.mode == NavigationLaunchMode.NOTIFICATION && response.launchIntent != null) {
+                when (command) {
+                    is NavigationCommand.Navigate ->
+                        runCatching { onBackgroundNavigation?.invoke(command.destination) }
+                }
             }
             if (isActive) emit(Command.NavigationActionReady(response))
         }

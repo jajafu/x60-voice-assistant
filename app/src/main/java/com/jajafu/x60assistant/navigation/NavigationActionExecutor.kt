@@ -1,12 +1,15 @@
 package com.jajafu.x60assistant.navigation
 
 import android.content.Context
+import android.content.Intent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 data class NavigationActionResult(
     val message: String,
     val mode: NavigationLaunchMode,
+    /** 背景開啟失敗時待用的路線 Intent；直接開啟成功或找不到 App 時為 null。 */
+    val launchIntent: Intent? = null,
 )
 
 /**
@@ -34,6 +37,10 @@ class NavigationActionExecutor(
         }
     }
 
+    /** 背景導航用：重組待開啟的路線 Intent，掛到服務常駐通知的按鈕。找不到 App 回 null。 */
+    fun routeIntent(destination: String): Intent? =
+        catalog.find(selectedPackageName)?.buildIntent(destination)
+
     private fun navigate(destination: String): NavigationActionResult {
         val app = catalog.find(selectedPackageName) ?: run {
             val name = selectedAppName.ifBlank { "地圖 App" }
@@ -42,11 +49,12 @@ class NavigationActionExecutor(
                 mode = NavigationLaunchMode.NOT_FOUND,
             )
         }
-        val mode = NavigationAppLauncher(appContext, app.packageName, app.appName)
+        val launch = NavigationAppLauncher(appContext, app.packageName, app.appName)
             .openRoutePreview(app, destination)
         return NavigationActionResult(
-            message = NavigationReplyFormatter.routePreview(mode, app.appName, destination),
-            mode = mode,
+            message = NavigationReplyFormatter.routePreview(launch.mode, app.appName, destination),
+            mode = launch.mode,
+            launchIntent = launch.launchIntent,
         )
     }
 }

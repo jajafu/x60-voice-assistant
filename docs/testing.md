@@ -10,7 +10,14 @@
 .\gradlew.bat assembleDebug
 ```
 
-Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD endpoint/timeout、模型 ID/SHA、URL 正規化、SSE/`[DONE]`、HTTP retry、MockWebServer、AES-GCM round trip、secret redaction、Markdown/SpeechSegmenter、Follow Up monotonic timeout、Audio recovery threshold、Boot reminder policy 與安全診斷匯出。
+Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD endpoint/timeout、模型 ID/SHA、URL 正規化、SSE/`[DONE]`、HTTP retry、MockWebServer、AES-GCM round trip、secret redaction、Markdown/SpeechSegmenter、Follow Up monotonic timeout、Audio recovery threshold、Boot reminder policy、安全診斷匯出與車機音樂 session 選擇（`ActiveSessionPicker`）。
+
+## 車機背景操作驗收（Issue #27，待方易通 7862／Android 10 實車驗收）
+
+1. 背景「導航到台北101」：聽到「已備好…請點服務通知上的「開啟地圖」」後，點常駐通知的「開啟地圖」，Google 地圖到前景顯示路線；回到 idle 後按鈕消失。
+2. 地圖導航中再叫「導航到 xxx」：記錄 Google 地圖是否直接換成新路線（需實測，不預設結果）。
+3. 背景播歌時叫小助手：音樂暫停（不再只變小聲），對話結束後恢復；通知存取權未授權時維持舊行為（duck），不假稱暫停。
+4. 以上皆須記錄車機型號、Android 版本、地圖／音樂 App 版本、APK HEAD 與 SHA-256；MockWebServer 不能取代實車。
 
 ## 雲端語音 spike 驗收（待真實 Provider／X60）
 
