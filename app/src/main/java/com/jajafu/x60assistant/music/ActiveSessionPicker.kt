@@ -20,4 +20,13 @@ object ActiveSessionPicker {
     fun playing(sessions: List<ActiveSessionSnapshot>): ActiveSessionSnapshot? =
         sessions.firstOrNull { it.state == PlaybackState.STATE_PLAYING }
             ?: sessions.firstOrNull { it.state == PlaybackState.STATE_BUFFERING }
+
+    /**
+     * 是否有其他正在播放的 session。
+     *
+     * 呼叫端僅在已持有的 fallback 為 PAUSED 時使用，因此任何 PLAYING／BUFFERING
+     * 必然屬於另一個 session／播放器；此時不得自動恢復舊的那一台，避免兩台疊播。
+     */
+    fun hasPlaying(sessions: List<ActiveSessionSnapshot>): Boolean =
+        sessions.any { it.state == PlaybackState.STATE_PLAYING || it.state == PlaybackState.STATE_BUFFERING }
 }
