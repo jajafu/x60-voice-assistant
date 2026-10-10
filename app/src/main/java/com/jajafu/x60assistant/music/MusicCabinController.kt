@@ -6,6 +6,7 @@ import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.browse.MediaBrowser
 import android.media.session.MediaController
+import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
@@ -55,10 +56,18 @@ class MusicCabinController(
     private val appLauncher = MusicAppLauncher(appContext, musicPackageName, musicAppName)
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
 
+    /** 經 fallback 暫停的實際播放 session；resume 只對同一台做，避免誤開別的播放器。 */
+    private var fallbackSession: MediaController? = null
+
     override suspend fun pauseForVoice(): Boolean = withContext(Dispatchers.Main.immediate) {
         // 沒播音樂就不綁 MusicCabin 服務，省掉一次無用的 MediaBrowser 連線。
         if (audioManager?.isMusicActive == false) return@withContext false
-        try {
+        if (pauseConfiguredApp()) return@withContext true
+        pauseActiveSession()
+    }
+
+    private suspend fun pauseConfiguredApp(): Boolean {
+        return try {
             withTimeoutOrNull(VOICE_CONTROL_TIMEOUT_MS) {
                 val browser = connect()
                 try {
@@ -83,8 +92,62 @@ class MusicCabinController(
         }
     }
 
+    /**
+     * 設定裡的 App 連不上時的車機 fallback：對實際在播的 session 下暫停。
+     *
+     * 車機原生播放器多半不公開 `MediaBrowserService`，只能走這條路。
+     * 需要通知存取權；沒授權就回 false 維持舊行為（TTS duck），不假稱已暫停。
+     * 只有確認進 PAUSED 才算成功並記住 controller；直接停掉或不理的播放器不碰，
+     * 避免結束後誤把別的聲音打開。
+     */
+    private suspend fun pauseActiveSession(): Boolean {
+        if (!MusicCabinFavoriteAccess.isGranted(appContext)) return false
+        return try {
+            withTimeoutOrNull(VOICE_CONTROL_TIMEOUT_MS) {
+                val manager = appContext.getSystemService(MediaSessionManager::class.java)
+                    ?: return@withTimeoutOrNull false
+                val component = ComponentName(appContext, MusicCabinFavoriteListenerService::class.java)
+                val sessions = manager.getActiveSessions(component)
+                val picked = ActiveSessionPicker.playing(
+                    sessions.map {
+                        ActiveSessionSnapshot(
+                            it.packageName,
+                            it.playbackState?.state ?: PlaybackState.STATE_NONE,
+                        )
+                    },
+                ) ?: return@withTimeoutOrNull false
+                val token = sessions.firstOrNull { it.packageName == picked.packageName }?.sessionToken
+                    ?: return@withTimeoutOrNull false
+                val controller = MediaController(appContext, token)
+                if (!supports(controller.playbackState, PlaybackState.ACTION_PAUSE)) {
+                    return@withTimeoutOrNull false
+                }
+                controller.transportControls.pause()
+                val paused = awaitState(controller, PAUSE_CONFIRM_TIMEOUT_MS) {
+                    it?.state == PlaybackState.STATE_PAUSED
+                }
+                if (paused) {
+                    fallbackSession = controller
+                    true
+                } else {
+                    false
+                }
+            } ?: false
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            fallbackSession = null
+            false
+        }
+    }
+
     override suspend fun resumeAfterVoice(): Boolean = withContext(Dispatchers.Main.immediate) {
-        try {
+        if (resumeConfiguredApp()) return@withContext true
+        resumeActiveSession()
+    }
+
+    private suspend fun resumeConfiguredApp(): Boolean {
+        return try {
             withTimeoutOrNull(VOICE_CONTROL_TIMEOUT_MS) {
                 val browser = connect()
                 try {
@@ -104,6 +167,28 @@ class MusicCabinController(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** 只恢復經 fallback 暫停的那一台；它已經不在 PAUSED 就當沒這回事。 */
+    private suspend fun resumeActiveSession(): Boolean {
+        val controller = fallbackSession ?: return false
+        return try {
+            withTimeoutOrNull(VOICE_CONTROL_TIMEOUT_MS) {
+                if (controller.playbackState?.state != PlaybackState.STATE_PAUSED) {
+                    fallbackSession = null
+                    return@withTimeoutOrNull false
+                }
+                controller.transportControls.play()
+                awaitState(controller, RESUME_CONFIRM_TIMEOUT_MS) {
+                    it?.state == PlaybackState.STATE_PLAYING
+                }
+            } ?: false
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            fallbackSession = null
             false
         }
     }
