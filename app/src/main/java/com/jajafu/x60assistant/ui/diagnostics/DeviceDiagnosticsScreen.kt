@@ -773,7 +773,7 @@ private fun SettingsPage(
                 )
                 if (draft.musicPackageName.isNotBlank()) {
                     AppDetailText(
-                        "首次使用請開啟音樂 App，依畫面完成它需要的授權，並手動播放一首歌。一般播放控制不需要通知存取權。",
+                        "首次使用請開啟音樂 App，依畫面完成它需要的授權，並手動播放一首歌。一般播放控制不需要通知存取權；但在車機等連不上音樂 App 時，暫停／恢復需改用系統播放清單，同樣需要通知存取權，未授權時無法暫停。",
                     )
                     OutlinedButton(
                         onClick = { onOpenMusicApp(draft.musicPackageName, draft.musicAppName) },
