@@ -75,6 +75,10 @@ class VoiceForegroundService : Service() {
     private var orchestrator: VoiceOrchestrator? = null
     private var audioCapture: AudioCaptureEngine? = null
     private var healthJob: Job? = null
+    private var navExecutorForService: NavigationActionExecutor? = null
+
+    /** 背景導航待開啟的路線 Intent；掛在常駐通知的「開啟地圖」按鈕，回到 idle 即清除。 */
+    @Volatile private var pendingMapIntent: Intent? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var activeWakePhrase = AssistantSettings.DEFAULT_WAKE_PHRASE
 
@@ -281,10 +285,11 @@ class VoiceForegroundService : Service() {
                         catalog = NavigationAppCatalog(applicationContext),
                         selectedPackageName = settings.navPackageName,
                         selectedAppName = settings.navAppName.ifBlank { "地圖 App" },
-                    )
+                    ).also { navExecutorForService = it }
                 } else {
                     null
                 },
+                onBackgroundNavigation = ::offerMapDestination,
                 volumeExecutor = if (settings.voiceVolumeControl) {
                     AndroidVolumeActionExecutor(context = applicationContext)
                 } else {
@@ -371,6 +376,10 @@ class VoiceForegroundService : Service() {
                     getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(state))
                     lastState = state
                 }
+                if (state == VoiceState.IDLE_KWS && pendingMapIntent != null) {
+                    pendingMapIntent = null
+                    getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(state))
+                }
                 if (audioCapture?.isStalled(SystemClock.elapsedRealtime()) == true) {
                     orchestrator?.onAudioFailure(VoiceErrorCode.AUDIO_READ_STALLED, "no-frame-over-3000ms")
                 }
@@ -421,6 +430,8 @@ class VoiceForegroundService : Service() {
             orchestrator = null
             audioCapture = null
             wakeLock = null
+            navExecutorForService = null
+            pendingMapIntent = null
             result
         }
         healthJob?.cancel()
@@ -455,6 +466,21 @@ class VoiceForegroundService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
+    /**
+     * 背景導航的接線：把路線 Intent 掛到常駐通知的「開啟地圖」按鈕。
+     *
+     * 點按鈕屬於使用者操作，系統允許開地圖；車機前景是 car launcher 時，
+     * 這比另發一則通知可靠（常駐通知本來就在）。
+     */
+    private fun offerMapDestination(destination: String) {
+        val intent = navExecutorForService?.routeIntent(destination) ?: return
+        pendingMapIntent = intent
+        runCatching {
+            val state = orchestrator?.state?.value ?: VoiceState.EXECUTING_ACTION
+            getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(state))
+        }
+    }
+
     private fun buildNotification(state: VoiceState): Notification {
         val openPendingIntent = PendingIntent.getActivity(
             this,
@@ -476,7 +502,7 @@ class VoiceForegroundService : Service() {
             VoiceState.SPEAKING -> notificationAction(ACTION_SILENCE, REQUEST_SILENCE, "閉嘴")
             else -> notificationAction(ACTION_PAUSE, REQUEST_PAUSE, "暫停")
         }
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.notification_title_m1))
             .setContentText(notificationText(state))
@@ -488,7 +514,19 @@ class VoiceForegroundService : Service() {
             .setSilent(true)
             .addAction(R.drawable.ic_notification, primaryAction.first, primaryAction.second)
             .addAction(R.drawable.ic_stop, getString(R.string.stop_service), stopPendingIntent)
-            .build()
+        pendingMapIntent?.let { mapIntent ->
+            builder.addAction(
+                R.drawable.ic_notification,
+                "開啟地圖",
+                PendingIntent.getActivity(
+                    this,
+                    REQUEST_MAP,
+                    mapIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+        }
+        return builder.build()
     }
 
     private fun notificationAction(action: String, requestCode: Int, label: String): Pair<String, PendingIntent> =
@@ -525,5 +563,6 @@ class VoiceForegroundService : Service() {
         private const val REQUEST_RESUME = 13
         private const val REQUEST_CANCEL = 14
         private const val REQUEST_SILENCE = 15
+        private const val REQUEST_MAP = 16
     }
 }
