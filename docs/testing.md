@@ -12,6 +12,14 @@
 
 Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD endpoint/timeout、模型 ID/SHA、URL 正規化、SSE/`[DONE]`、HTTP retry、MockWebServer、AES-GCM round trip、secret redaction、Markdown/SpeechSegmenter、Follow Up monotonic timeout、Audio recovery threshold、Boot reminder policy 與安全診斷匯出。
 
+## 雲端語音 spike 驗收（待真實 Provider／X60）
+
+1. 在診斷頁確認 LLM Provider 與 Audio Provider 的 Base URL／Key 分開保存；未設定 Audio URL／Key 時，即使雲端開關開啟也維持本機 X-ASR／TTS，不影響既有 LLM。
+2. 以「測試雲端 TTS」確認草稿中的 Model、Voice 與獨立 Audio Base URL／Key 被使用；播放期間停止服務或再次說喚醒詞，確認請求與播放可取消。若 Audio Provider 忽略 `response_format=wav`，應在送出播放前顯示「未回傳 WAV（Content-Type／檔頭）」，而不是 `MediaPlayer 1/-2147483648`。
+3. 開啟 Whisper 雲端 ASR 且完成 Audio 設定後說出一般問句，確認 KWS／VAD 仍在本機，VAD 結束才上傳整段 WAV；停止服務時確認上傳請求不需等待完整 read timeout。
+4. 實際 Provider、費用、網路錯誤、鎖屏與真人語音結果須記錄 Provider、vivo X60、APK HEAD 與證據；MockWebServer／合成語音只能作自動化測試，不能取代真機驗收。
+5. `CloudTtsEngine` 的媒體播放生命週期（`MediaPlayer`、Audio Focus、取消後回收暫存檔）依賴 Android 框架，未有 JVM 測試；須以上述真機項目覆蓋，並確認不支援語速／音調的解碼器仍能正常播放整句。
+
 rc22 另包含 Orchestrator 跨元件回歸測試：重複取消、暫停後取消、過期回答事件、辨識未完成時關閉／取消父 scope、第一句在串流結束前朗讀、長回答及音樂拒絕補救。JVM 以可控制的 engine、音訊來源及同步阻塞辨識替身驗證生命週期，診斷使用測試 clock shim，不能替代 native 或 Android 實機結果。另測試 12 段背壓、取消清空、網路失敗不補讀半句、逾期一次性／每日／每週提醒，以及鬧鐘 TTS 靜音／恢復。
 
 rc23 新增回答期間 KWS 插話測試：再次收到喚醒詞會取消舊串流及 TTS、播放「我在」並回到 `LISTENING`，且不重複暫停或遺失原本應恢復的音樂狀態。回答自身包含或近似喚醒詞造成誤觸是已接受風險，實際喇叭音量下的喚醒率仍須以 X60 真人語音驗收。

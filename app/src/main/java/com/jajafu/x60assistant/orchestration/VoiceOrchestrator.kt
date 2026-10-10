@@ -956,6 +956,7 @@ class VoiceOrchestrator(
         wakeJob?.cancel()
         runCatching { llm?.cancel() }
         runCatching { speechOutput?.stop() }
+        runCatching { asr.cancelActiveRequest() }
         job?.join() // Native decode is synchronous: cancellation alone does not finish it.
         wakeJob?.join()
     }
@@ -972,6 +973,7 @@ class VoiceOrchestrator(
         commands.close()
         runCatching { llm?.cancel() }
         runCatching { speechOutput?.stop() }
+        runCatching { asr.cancelActiveRequest() }
         // This scope must outlive Service.onDestroy, without blocking Android's main thread.
         CoroutineScope(Dispatchers.Default).launch {
             try {
