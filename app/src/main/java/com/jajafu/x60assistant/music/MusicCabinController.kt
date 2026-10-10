@@ -60,9 +60,18 @@ class MusicCabinController(
     private var fallbackSession: MediaController? = null
 
     override suspend fun pauseForVoice(): Boolean = withContext(Dispatchers.Main.immediate) {
-        // 沒播音樂就不綁 MusicCabin 服務，省掉一次無用的 MediaBrowser 連線。
-        if (audioManager?.isMusicActive == false) {
+        // 已持有 fallback 暫停時（例如 TTS 結束進 Follow Up 再次呼叫），保留引用並直接回 false。
+        // 已暫停的音樂會讓 isMusicActive 回 false；若走到下方清空，就會導致結束後無法恢復。
+        fallbackSession?.let { held ->
+            if (runCatching { held.playbackState?.state }.getOrNull() == PlaybackState.STATE_PAUSED) {
+                return@withContext false
+            }
+            // 持有但已不在 PAUSED（使用者手動恢復或 session 失效）：丟掉舊引用，重新判斷。
             fallbackSession = null
+        }
+        // 沒播音樂就不綁 MusicCabin 服務，省掉一次無用的 MediaBrowser 連線。
+        // （已持有的 PAUSED 已在上方提前返回，此處不再清空，避免誤刪。）
+        if (audioManager?.isMusicActive == false) {
             return@withContext false
         }
         if (pauseConfiguredApp()) {
@@ -190,6 +199,8 @@ class MusicCabinController(
                 if (controller.playbackState?.state != PlaybackState.STATE_PAUSED) {
                     return@withTimeoutOrNull false
                 }
+                // 對話期間使用者改播另一台時放棄自動恢復，避免兩台疊播。
+                if (hasOtherPlaying()) return@withTimeoutOrNull false
                 controller.transportControls.play()
                 awaitState(controller, RESUME_CONFIRM_TIMEOUT_MS) {
                     it?.state == PlaybackState.STATE_PLAYING
@@ -202,6 +213,32 @@ class MusicCabinController(
         } finally {
             // 不論成功、逾時或已被使用者手動恢復，都不再持有，避免之後誤開別的聲音。
             fallbackSession = null
+        }
+    }
+
+    /**
+     * 是否有其他播放器正在播放。
+     *
+     * 呼叫端已確認持有的 fallback 為 PAUSED，因此任何 PLAYING／BUFFERING 必然屬於
+     * 另一個 session。TTS 不建立 MediaSession，不會在此誤判；無通知存取權時退回
+     * AudioManager.isMusicActive 啟發式（同樣僅在持有為 PAUSED 時解讀為他台在播）。
+     */
+    private fun hasOtherPlaying(): Boolean {
+        if (MusicCabinFavoriteAccess.isGranted(appContext)) {
+            val snapshots = runCatching {
+                val manager = appContext.getSystemService(MediaSessionManager::class.java)
+                    ?: return audioManager?.isMusicActive == true
+                val component = ComponentName(appContext, MusicCabinFavoriteListenerService::class.java)
+                manager.getActiveSessions(component).map {
+                    ActiveSessionSnapshot(
+                        it.packageName,
+                        it.playbackState?.state ?: PlaybackState.STATE_NONE,
+                    )
+                }
+            }.getOrNull() ?: return audioManager?.isMusicActive == true
+            return ActiveSessionPicker.hasPlaying(snapshots)
+        } else {
+            return audioManager?.isMusicActive == true
         }
     }
 

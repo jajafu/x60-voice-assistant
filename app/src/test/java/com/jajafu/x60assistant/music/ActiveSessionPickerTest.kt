@@ -38,4 +38,30 @@ class ActiveSessionPickerTest {
         assertNull(ActiveSessionPicker.playing(sessions))
         assertNull(ActiveSessionPicker.playing(emptyList()))
     }
+
+    @Test
+    fun `hasPlaying is true only for playing or buffering`() {
+        assertEquals(
+            true,
+            ActiveSessionPicker.hasPlaying(
+                listOf(
+                    ActiveSessionSnapshot("held.app", PlaybackState.STATE_PAUSED),
+                    ActiveSessionSnapshot("other.app", PlaybackState.STATE_PLAYING),
+                ),
+            ),
+        )
+        assertEquals(
+            true,
+            ActiveSessionPicker.hasPlaying(
+                listOf(ActiveSessionSnapshot("other.app", PlaybackState.STATE_BUFFERING)),
+            ),
+        )
+        assertEquals(
+            false,
+            ActiveSessionPicker.hasPlaying(
+                listOf(ActiveSessionSnapshot("held.app", PlaybackState.STATE_PAUSED)),
+            ),
+        )
+        assertEquals(false, ActiveSessionPicker.hasPlaying(emptyList()))
+    }
 }
