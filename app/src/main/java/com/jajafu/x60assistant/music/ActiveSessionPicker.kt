@@ -18,8 +18,18 @@ data class ActiveSessionSnapshot(
 /** 從使用中的 sessions 選一個下暫停：PLAYING 优先，其次 BUFFERING；其餘不動。 */
 object ActiveSessionPicker {
     fun playing(sessions: List<ActiveSessionSnapshot>): ActiveSessionSnapshot? =
-        sessions.firstOrNull { it.state == PlaybackState.STATE_PLAYING }
-            ?: sessions.firstOrNull { it.state == PlaybackState.STATE_BUFFERING }
+        playingIndex(sessions)?.let(sessions::get)
+
+    /**
+     * 被選中 session 的索引，而非只回套件名。
+     *
+     * 同一套件可能有多個 session（例如一個已暫停、一個在播）；只回套件名，
+     * 呼叫端再用套件名取第一個 token 會拿到錯誤的那一個。回索引可讓呼叫端
+     * 直接對同一位置的 framework session 取 token，保證暫停與恢復的是同一台。
+     */
+    fun playingIndex(sessions: List<ActiveSessionSnapshot>): Int? =
+        sessions.indexOfFirst { it.state == PlaybackState.STATE_PLAYING }.takeIf { it >= 0 }
+            ?: sessions.indexOfFirst { it.state == PlaybackState.STATE_BUFFERING }.takeIf { it >= 0 }
 
     /**
      * 是否有其他正在播放的 session。

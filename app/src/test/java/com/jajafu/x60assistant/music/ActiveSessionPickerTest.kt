@@ -64,4 +64,16 @@ class ActiveSessionPickerTest {
         )
         assertEquals(false, ActiveSessionPicker.hasPlaying(emptyList()))
     }
+
+    @Test
+    fun `playingIndex points at the playing session when one package has two sessions`() {
+        val sessions = listOf(
+            ActiveSessionSnapshot("same.app", PlaybackState.STATE_PAUSED),
+            ActiveSessionSnapshot("same.app", PlaybackState.STATE_PLAYING),
+        )
+
+        assertEquals(1, ActiveSessionPicker.playingIndex(sessions))
+        assertEquals(PlaybackState.STATE_PLAYING, ActiveSessionPicker.playing(sessions)?.state)
+        assertNull(ActiveSessionPicker.playingIndex(emptyList()))
+    }
 }
