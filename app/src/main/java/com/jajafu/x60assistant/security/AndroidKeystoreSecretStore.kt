@@ -14,25 +14,26 @@ import javax.crypto.SecretKey
 
 class AndroidKeystoreSecretStore(
     context: Context,
+    private val scope: Scope = Scope.LLM,
     private val codec: AesGcmCodec = AesGcmCodec(),
 ) : SecretStore {
     private val secretDirectory = File(context.filesDir, "secrets")
-    private val secretFile = File(secretDirectory, "llm_api_key.v1.json")
+    private val secretFile = File(secretDirectory, scope.fileName)
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = false }
 
     override fun saveApiKey(value: CharArray) {
         require(value.isNotEmpty())
         val plaintext = value.concatToString().toByteArray(Charsets.UTF_8)
         try {
-            val encrypted = codec.encrypt(getOrCreateKey(), plaintext, ASSOCIATED_DATA)
+            val encrypted = codec.encrypt(getOrCreateKey(), plaintext, scope.associatedData)
             val document = SecretDocument(
                 version = FORMAT_VERSION,
-                keyAlias = KEY_ALIAS,
+                keyAlias = scope.keyAlias,
                 iv = Base64.encodeToString(encrypted.iv, Base64.NO_WRAP),
                 ciphertext = Base64.encodeToString(encrypted.ciphertext, Base64.NO_WRAP),
             )
             secretDirectory.mkdirs()
-            val temporary = File(secretDirectory, "llm_api_key.tmp")
+            val temporary = File(secretDirectory, scope.tempFileName)
             temporary.writeText(json.encodeToString(document), Charsets.UTF_8)
             check(temporary.renameTo(secretFile) || temporary.copyTo(secretFile, overwrite = true).also { temporary.delete() }.exists())
         } finally {
@@ -44,14 +45,14 @@ class AndroidKeystoreSecretStore(
     override fun readApiKey(): CharArray? {
         if (!secretFile.isFile) return null
         val document = json.decodeFromString<SecretDocument>(secretFile.readText(Charsets.UTF_8))
-        require(document.version == FORMAT_VERSION && document.keyAlias == KEY_ALIAS)
+        require(document.version == FORMAT_VERSION && document.keyAlias == scope.keyAlias)
         val plaintext = codec.decrypt(
             getOrCreateKey(),
             EncryptedPayload(
                 Base64.decode(document.iv, Base64.NO_WRAP),
                 Base64.decode(document.ciphertext, Base64.NO_WRAP),
             ),
-            ASSOCIATED_DATA,
+            scope.associatedData,
         )
         return try {
             plaintext.toString(Charsets.UTF_8).toCharArray()
@@ -76,11 +77,11 @@ class AndroidKeystoreSecretStore(
 
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        (keyStore.getKey(scope.keyAlias, null) as? SecretKey)?.let { return it }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE).run {
             init(
                 KeyGenParameterSpec.Builder(
-                    KEY_ALIAS,
+                    scope.keyAlias,
                     KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
                 )
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -102,8 +103,27 @@ class AndroidKeystoreSecretStore(
 
     companion object {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-        private const val KEY_ALIAS = "x60-assistant-llm-api-key-v1"
         private const val FORMAT_VERSION = 1
-        private val ASSOCIATED_DATA = "com.jajafu.x60assistant:llm-api-key:v1".toByteArray()
+    }
+
+    enum class Scope(
+        val fileName: String,
+        val tempFileName: String,
+        val keyAlias: String,
+        val associatedData: ByteArray,
+    ) {
+        // Keep these LLM values unchanged so existing users retain their stored key.
+        LLM(
+            fileName = "llm_api_key.v1.json",
+            tempFileName = "llm_api_key.tmp",
+            keyAlias = "x60-assistant-llm-api-key-v1",
+            associatedData = "com.jajafu.x60assistant:llm-api-key:v1".toByteArray(),
+        ),
+        AUDIO(
+            fileName = "audio_api_key.v1.json",
+            tempFileName = "audio_api_key.tmp",
+            keyAlias = "x60-assistant-audio-api-key-v1",
+            associatedData = "com.jajafu.x60assistant:audio-api-key:v1".toByteArray(),
+        ),
     }
 }

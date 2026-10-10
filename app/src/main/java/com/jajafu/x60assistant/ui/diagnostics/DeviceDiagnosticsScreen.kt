@@ -96,7 +96,8 @@ fun DeviceDiagnosticsScreen(
     serviceRunning: Boolean,
     errorMessage: String?,
     assistantSettings: AssistantSettings,
-    maskedApiKey: String,
+    maskedLlmApiKey: String,
+    maskedAudioApiKey: String,
     settingsMessage: String?,
     testingConnection: Boolean,
     onPrimaryAction: () -> Unit,
@@ -105,10 +106,11 @@ fun DeviceDiagnosticsScreen(
     onOpenExactAlarmSettings: () -> Unit,
     onOpenBatterySettings: () -> Unit,
     onRefresh: () -> Unit,
-    onSaveSettings: (AssistantSettings, String) -> Unit,
+    onSaveSettings: (AssistantSettings, String, String) -> Unit,
     onTestConnection: (AssistantSettings, String) -> Unit,
-    onDeleteApiKey: () -> Unit,
-    onTestTts: (AssistantSettings) -> Unit,
+    onDeleteLlmApiKey: () -> Unit,
+    onDeleteAudioApiKey: () -> Unit,
+    onTestTts: (AssistantSettings, String) -> Unit,
     onExportDiagnostics: () -> Unit,
     onClearPrivateData: () -> Unit,
     showExactAlarmOnboarding: Boolean,
@@ -172,13 +174,16 @@ fun DeviceDiagnosticsScreen(
             AppSection.MODELS -> ModelsPage(
                 modifier = Modifier.padding(scaffoldPadding),
                 saved = assistantSettings,
-                maskedApiKey = maskedApiKey,
+                maskedLlmApiKey = maskedLlmApiKey,
+                maskedAudioApiKey = maskedAudioApiKey,
                 message = settingsMessage,
                 testingConnection = testingConnection,
                 enabled = !serviceRunning,
                 onSave = onSaveSettings,
                 onTestConnection = onTestConnection,
-                onDeleteApiKey = onDeleteApiKey,
+                onDeleteLlmApiKey = onDeleteLlmApiKey,
+                onDeleteAudioApiKey = onDeleteAudioApiKey,
+                onTestTts = onTestTts,
             )
 
             AppSection.SETTINGS -> if (showDiagnostics) DiagnosticsPage(
@@ -476,20 +481,25 @@ private fun ConversationBubble(label: String, text: String, user: Boolean) {
 private fun ModelsPage(
     modifier: Modifier,
     saved: AssistantSettings,
-    maskedApiKey: String,
+    maskedLlmApiKey: String,
+    maskedAudioApiKey: String,
     message: String?,
     testingConnection: Boolean,
     enabled: Boolean,
-    onSave: (AssistantSettings, String) -> Unit,
+    onSave: (AssistantSettings, String, String) -> Unit,
     onTestConnection: (AssistantSettings, String) -> Unit,
-    onDeleteApiKey: () -> Unit,
+    onDeleteLlmApiKey: () -> Unit,
+    onDeleteAudioApiKey: () -> Unit,
+    onTestTts: (AssistantSettings, String) -> Unit,
 ) {
     // 不以 saved 為 remember key：設定流每次發布都是新物件，否則外部更新會清掉整份草稿。
     var draft by remember { mutableStateOf(saved) }
     var lastLoaded by remember { mutableStateOf(saved) }
     // API Key 只寫不讀，刻意不隨設定流重載，避免蓋掉使用者正在輸入的新 Key。
-    var apiKey by remember { mutableStateOf("") }
-    var revealKey by remember { mutableStateOf(false) }
+    var llmApiKey by remember { mutableStateOf("") }
+    var audioApiKey by remember { mutableStateOf("") }
+    var revealLlmKey by remember { mutableStateOf(false) }
+    var revealAudioKey by remember { mutableStateOf(false) }
     LaunchedEffect(saved) {
         // 只有在使用者尚未改動時才重新載入，避免編輯到一半被外部更新還原。
         if (saved != lastLoaded && draft == lastLoaded) {
@@ -506,7 +516,7 @@ private fun ModelsPage(
         item {
             Text("模型", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "設定 LLM 服務；本機語音辨識固定使用內建 X-ASR。首次啟動語音服務時會解壓模型，請預留約 175 MB 空間。",
+                "設定 LLM 服務；語音辨識預設使用內建 X-ASR（首次啟動語音服務時會解壓模型，請預留約 175 MB 空間），可在下方開啟雲端語音 spike。",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -521,18 +531,18 @@ private fun ModelsPage(
                 SettingsField("Model", draft.model, enabled) { draft = draft.copy(model = it) }
                 SettingsField("Endpoint", draft.endpoint, enabled) { draft = draft.copy(endpoint = it) }
                 OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
+                    value = llmApiKey,
+                    onValueChange = { llmApiKey = it },
                     enabled = enabled,
-                    label = { Text("API Key（目前：$maskedApiKey）") },
+                    label = { Text("LLM API Key（目前：$maskedLlmApiKey）") },
                     singleLine = true,
-                    visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    visualTransformation = if (revealLlmKey) VisualTransformation.None else PasswordVisualTransformation(),
                     supportingText = { Text("留白會保留現有 Key；Key 不寫入 Log 或診斷。") },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
-                ToggleRow("暫時顯示新輸入的 Key", revealKey, enabled) { revealKey = it }
+                ToggleRow("暫時顯示新輸入的 LLM Key", revealLlmKey, enabled) { revealLlmKey = it }
                 Button(
-                    onClick = { onTestConnection(draft.normalized(), apiKey) },
+                    onClick = { onTestConnection(draft.normalized(), llmApiKey) },
                     enabled = enabled && !testingConnection && draft.baseUrl.isNotBlank() && draft.model.isNotBlank(),
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
                 ) {
@@ -540,10 +550,10 @@ private fun ModelsPage(
                     else Text("測試 LLM 連線")
                 }
                 TextButton(
-                    onClick = onDeleteApiKey,
-                    enabled = enabled && maskedApiKey != "未設定",
+                    onClick = onDeleteLlmApiKey,
+                    enabled = enabled && maskedLlmApiKey != "未設定",
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(48.dp),
-                ) { Text("刪除 API Key") }
+                ) { Text("刪除 LLM API Key") }
                 ToggleRow("ASR 同音校正（LLM）", draft.llmCorrectionEnabled, enabled) {
                     draft = draft.copy(llmCorrectionEnabled = it)
                 }
@@ -554,13 +564,66 @@ private fun ModelsPage(
                 )
             }
         }
+        item {
+            SectionCard("雲端語音（spike）") {
+                SettingsField("Audio Base URL（獨立於 LLM）", draft.audioBaseUrl, enabled) {
+                    draft = draft.copy(audioBaseUrl = it)
+                }
+                OutlinedTextField(
+                    value = audioApiKey,
+                    onValueChange = { audioApiKey = it },
+                    enabled = enabled,
+                    label = { Text("Audio API Key（目前：$maskedAudioApiKey）") },
+                    singleLine = true,
+                    visualTransformation = if (revealAudioKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    supportingText = { Text("供雲端 TTS／Whisper 使用；留白會保留現有 Key。") },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+                ToggleRow("暫時顯示新輸入的 Audio Key", revealAudioKey, enabled) {
+                    revealAudioKey = it
+                }
+                TextButton(
+                    onClick = onDeleteAudioApiKey,
+                    enabled = enabled && maskedAudioApiKey != "未設定",
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                ) { Text("刪除 Audio API Key") }
+                ToggleRow("雲端 TTS", draft.cloudTtsEnabled, enabled) {
+                    draft = draft.copy(cloudTtsEnabled = it)
+                }
+                SettingsField("雲端 TTS Model", draft.cloudTtsModel, enabled) {
+                    draft = draft.copy(cloudTtsModel = it)
+                }
+                SettingsField("雲端 TTS Voice", draft.cloudTtsVoice, enabled) {
+                    draft = draft.copy(cloudTtsVoice = it)
+                }
+                ToggleRow("Whisper 雲端 ASR", draft.cloudAsrEnabled, enabled) {
+                    draft = draft.copy(cloudAsrEnabled = it)
+                }
+                SettingsField("雲端 ASR Model", draft.cloudAsrModel, enabled) {
+                    draft = draft.copy(cloudAsrModel = it)
+                }
+                SettingsField("雲端 ASR 語言（留白自動判斷）", draft.cloudAsrLanguage, enabled) {
+                    draft = draft.copy(cloudAsrLanguage = it)
+                }
+                OutlinedButton(
+                    onClick = { onTestTts(draft.normalized(), audioApiKey) },
+                    enabled = enabled && draft.cloudTtsEnabled,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
+                ) { Text("測試雲端 TTS") }
+                Text(
+                    "Audio Provider 與 LLM 分開；未設定 Audio URL／Key 時維持本機 X-ASR 與系統 TTS。開關開啟且設定完整後，問題音訊才會整句上傳 Whisper，回答文字才會送雲端 TTS；喚醒與 VAD 永遠維持本機。儲存後請停止再重新啟動語音服務；測試按鈕會直接使用此處草稿。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         item {
             Button(
-                onClick = { onSave(draft.normalized(), apiKey) },
+                onClick = { onSave(draft.normalized(), llmApiKey, audioApiKey) },
                 enabled = enabled,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-            ) { Text("儲存 LLM 設定") }
+            ) { Text("儲存 Provider 設定") }
         }
     }
 }
@@ -571,8 +634,8 @@ private fun SettingsPage(
     saved: AssistantSettings,
     message: String?,
     enabled: Boolean,
-    onSave: (AssistantSettings, String) -> Unit,
-    onTestTts: (AssistantSettings) -> Unit,
+    onSave: (AssistantSettings, String, String) -> Unit,
+    onTestTts: (AssistantSettings, String) -> Unit,
     compatibleMusicApps: List<MusicAppOption>,
     onOpenMusicApp: (String, String) -> Unit,
     compatibleNavApps: List<NavigationAppOption>,
@@ -828,7 +891,11 @@ private fun SettingsPage(
                     enabled = enabled,
                 )
                 Text(
-                    "音量套用到 TTS 引擎，部分引擎可能忽略。1.00 是引擎預設值，超過會放大且可能破音。",
+                    if (draft.cloudTtsEnabled) {
+                        "雲端 TTS 會在 WAV 播放前套用 0.00–2.00 增益；超過 1.00 可能破音。"
+                    } else {
+                        "音量套用到 TTS 引擎，部分引擎可能忽略。1.00 是引擎預設值，超過會放大且可能破音。"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -837,7 +904,7 @@ private fun SettingsPage(
                 Text("音高 ${String.format(Locale.ROOT, "%.1f", draft.pitch)}")
                 Slider(draft.pitch, { draft = draft.copy(pitch = it) }, valueRange = 0.5f..2.0f, enabled = enabled)
                 OutlinedButton(
-                    onClick = { onTestTts(numberFields.applyTo(draft).normalized()) },
+                    onClick = { onTestTts(numberFields.applyTo(draft).normalized(), "") },
                     enabled = enabled,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
                 ) { Text("測試語音") }
@@ -937,7 +1004,7 @@ private fun SettingsPage(
 
         item {
             Button(
-                onClick = { onSave(numberFields.applyTo(draft).normalized(), "") },
+                onClick = { onSave(numberFields.applyTo(draft).normalized(), "", "") },
                 enabled = enabled && wakeError == null && wakeAcknowledgementError == null && numberFields.allValid,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
             ) { Text("儲存設定") }

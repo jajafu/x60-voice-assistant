@@ -3,9 +3,10 @@
 - 麥克風只能由可見 Activity 中的使用者按下啟動按鈕後開啟。
 - BootReceiver 只顯示「點擊以恢復」提醒；不從開機、Alarm、Accessibility、Overlay 或背景自動建立 microphone FGS。
 - `AudioRecord` 的 PCM16 frame 先進入記憶體中的 50-frame 有界 queue。X-ASR 會將當次語句的 PCM 另在記憶體中保留至 VAD 結束（設定上限 60 秒）供整句辨識。音訊不寫入檔案、資料庫、Logcat 或診斷記錄。
-- 只有本機 ASR 的文字會送到使用者自行設定的 OpenAI-compatible HTTPS Provider；PCM、keyword audio 與診斷不會上傳。
+- 本機指令路由優先處理辨識文字，未命中的一般問答才會送到使用者自行設定的 OpenAI-compatible HTTPS Provider；本機 PCM、keyword audio 與診斷不會上傳。
+- 雲端語音 spike 是例外且預設關閉：開啟雲端 ASR 且 Audio Provider 設定完整後，當次語句的整段 WAV 會上傳到獨立 Audio Provider 的 `/audio/transcriptions`；開啟雲端 TTS 且設定完整後，回答文字會送到 `/audio/speech` 換回音訊。兩者皆需網路且會產生用量費用；喚醒詞偵測、VAD 與預設的 X-ASR 維持本機、不上傳。
 - 音樂播放請求若進入 LLM 且回覆表示無法播放，App 會在本機檢查回覆中的歌手或歌曲名稱並嘗試交給已選音樂 App；不會為此另外發送 LLM 請求。
-- API Key 使用 Android Keystore 不可匯出 AES-GCM key 加密；App Private Storage 只含 version、alias、IV 與 ciphertext。
+- LLM API Key 與 Audio API Key 分別使用 Android Keystore 不可匯出 AES-GCM key 加密；App Private Storage 只含 version、alias、IV 與 ciphertext。
 - Transcript、回答及最近對話不寫入 DataStore；停止 process 即消失。設定頁可清除 Key、設定與目前記憶體診斷。
 - 排程提醒是例外：提醒文字、觸發時間與隨機 ID 會保存在 App 的 device-protected private storage，讓重新開機後能補排程；內容不會送到 LLM 或其他網路服務，觸發後即刪除，也可由設定頁的清除功能一併刪除。
 - 音樂 App 選擇器只在本機查詢宣告公開媒體瀏覽服務的已安裝 App；保存所選 App 的顯示名稱、套件名稱與服務類別，不上傳安裝清單。

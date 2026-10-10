@@ -34,7 +34,24 @@ data class AssistantSettings(
     val speechRate: Float = 1.0f,
     val pitch: Float = 1.0f,
     val connectionVerified: Boolean = false,
+    val cloudTtsEnabled: Boolean = DEFAULT_CLOUD_TTS_ENABLED,
+    val cloudTtsModel: String = DEFAULT_CLOUD_TTS_MODEL,
+    val cloudTtsVoice: String = DEFAULT_CLOUD_TTS_VOICE,
+    val cloudAsrEnabled: Boolean = DEFAULT_CLOUD_ASR_ENABLED,
+    val cloudAsrModel: String = DEFAULT_CLOUD_ASR_MODEL,
+    val cloudAsrLanguage: String = "",
+    val audioBaseUrl: String = "",
 ) {
+    /**
+     * 雲端語音是否可建立。音訊 Provider 有自己的 Base URL 與 API Key；完整 URL／Endpoint
+     * 驗證由雲端語音設定驗證器負責。未完成設定時維持本機引擎。
+     * Model 欄位在 [normalized] 已回填預設值，不會是空白。
+     */
+    fun cloudTtsReady(hasAudioApiKey: Boolean): Boolean =
+        cloudTtsEnabled && hasAudioApiKey && audioBaseUrl.isNotBlank()
+
+    fun cloudAsrReady(hasAudioApiKey: Boolean): Boolean =
+        cloudAsrEnabled && hasAudioApiKey && audioBaseUrl.isNotBlank()
     fun normalized(): AssistantSettings = copy(
         wakePhrase = wakePhrase.trim().ifBlank { DEFAULT_WAKE_PHRASE }.take(MAX_WAKE_PHRASE_LENGTH),
         wakeAcknowledgement = wakeAcknowledgement.trim()
@@ -62,6 +79,11 @@ data class AssistantSettings(
         ttsVolume = ttsVolume.coerceIn(TTS_VOLUME_RANGE),
         speechRate = speechRate.coerceIn(SPEECH_RATE_RANGE),
         pitch = pitch.coerceIn(PITCH_RANGE),
+        cloudTtsModel = cloudTtsModel.trim().ifBlank { DEFAULT_CLOUD_TTS_MODEL }.take(MAX_CLOUD_IDENTIFIER_LENGTH),
+        cloudTtsVoice = cloudTtsVoice.trim().ifBlank { DEFAULT_CLOUD_TTS_VOICE }.take(MAX_CLOUD_IDENTIFIER_LENGTH),
+        cloudAsrModel = cloudAsrModel.trim().ifBlank { DEFAULT_CLOUD_ASR_MODEL }.take(MAX_CLOUD_IDENTIFIER_LENGTH),
+        cloudAsrLanguage = cloudAsrLanguage.trim().take(MAX_CLOUD_IDENTIFIER_LENGTH),
+        audioBaseUrl = audioBaseUrl.trim(),
     )
 
     companion object {
@@ -96,12 +118,25 @@ data class AssistantSettings(
         const val DEFAULT_LLM_CORRECTION_ENABLED = true
 
         /**
-         * TTS 輸出的增益，套用到 TextToSpeech.Engine.KEY_PARAM_VOLUME。
-         * 1.0 是引擎預設值；Android 標示範圍為 0.0–1.0，超過 1.0 是否放大取決於引擎，
-         * 可能破音或被忽略，因此預設維持 1.0 以維持既有行為。
+         * TTS 輸出的增益。系統 TTS 套用到 TextToSpeech.Engine.KEY_PARAM_VOLUME；
+         * 雲端 WAV TTS 在播放前套用 PCM 增益。1.0 是引擎預設值，超過 1.0 可能破音，
+         * 因此預設維持 1.0 以維持既有行為。
          */
         const val DEFAULT_TTS_VOLUME = 1.0f
         const val MAX_TTS_IDENTIFIER_LENGTH = 200
+
+        /**
+         * 雲端語音 spike 設定。開關預設全關，既有行為維持純本機；
+         * TTS／Whisper 使用獨立的 Audio Base URL 與 API Key。
+         * TTS 單次上限 4096 字元依 OpenAI `/audio/speech` 文件。
+         */
+        const val DEFAULT_CLOUD_TTS_ENABLED = false
+        const val DEFAULT_CLOUD_TTS_MODEL = "gpt-4o-mini-tts"
+        const val DEFAULT_CLOUD_TTS_VOICE = "alloy"
+        const val DEFAULT_CLOUD_ASR_ENABLED = false
+        const val DEFAULT_CLOUD_ASR_MODEL = "whisper-1"
+        const val MAX_CLOUD_IDENTIFIER_LENGTH = 100
+        const val CLOUD_TTS_MAX_CHARS = 4096
 
         /**
          * 喚醒詞開啟新一輪時會清除對話歷史，只有這個視窗內的追問才帶著上一輪。

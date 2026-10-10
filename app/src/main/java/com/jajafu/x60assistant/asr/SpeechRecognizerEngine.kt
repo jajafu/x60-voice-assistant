@@ -7,6 +7,8 @@ interface SpeechRecognizerEngine : AutoCloseable {
     fun beginSession()
     fun accept(frame: AudioFrame): String?
     fun finish(): AsrResult
+    /** Cancels only an in-flight blocking request, without interrupting native decode. */
+    fun cancelActiveRequest() = Unit
     fun cancel()
     override fun close()
 }
