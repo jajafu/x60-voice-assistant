@@ -66,6 +66,42 @@ class MusicCabinVoiceRepliesTest {
         assertFalse(result.confirmedPlayback)
     }
 
+    @Test fun `mismatched artist without message names the fallback track`() {
+        val result = MusicCabinVoiceReplies.forCommand(
+            MusicCommand.PlayArtist("周杰倫"),
+            ok("played", title = "吻別", artist = "張學友", artistMatched = false),
+            "MusicCabin",
+        )
+        assertEquals("沒找到周杰倫的歌，播放最相近的張學友的《吻別》。", result.message)
+        assertFalse(result.confirmedPlayback)
+    }
+
+    @Test fun `now playing without message uses the returned title`() {
+        assertEquals(
+            "這首歌是周杰倫唱的晴天。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.NowPlaying,
+                ok("now_playing", title = "晴天", artist = "周杰倫"),
+                "MusicCabin",
+            ).message,
+        )
+    }
+
+    @Test fun `unknown repeat mode does not claim a specific state`() {
+        assertEquals(
+            "已送出全部循環設定，請到 MusicCabin 確認結果。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.RepeatAll, ok("repeat"), "MusicCabin",
+            ).message,
+        )
+        assertEquals(
+            "查不到目前的循環模式，請到 MusicCabin 確認。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.RepeatState, ok("repeat"), "MusicCabin",
+            ).message,
+        )
+    }
+
     @Test fun `resume from empty queue reports the favorites fallback as favorites`() {
         val result = MusicCabinVoiceReplies.forCommand(
             MusicCommand.Play,

@@ -155,9 +155,14 @@ object MusicCabinVoiceReplies {
                 else MusicReplyFormatter.confirmedPlayback(command, result.title, result.artist)
             }
             is MusicCommand.PlayArtist -> {
-                // 沒對上歌手就播了最相關的一首：直接念對方那句說明，不假裝播對。
-                if (result.title == null || !result.artistMatched) speakNow(result, appName)
-                else MusicReplyFormatter.confirmedPlayback(command, result.title, result.artist)
+                // 沒對上歌手但有播歌：有說明就念說明，沒有才自己組一句，不假裝播對也不說沒在播。
+                if (result.title != null && result.artistMatched) {
+                    MusicReplyFormatter.confirmedPlayback(command, result.title, result.artist)
+                } else if (result.title != null && result.message.isBlank()) {
+                    MusicActionResult(
+                        "沒找到${command.artist}的歌，播放最相近的${trackName(result.title, result.artist)}。",
+                    )
+                } else speakNow(result, appName)
             }
             MusicCommand.PlayFavorites -> {
                 if (result.title == null) speakNow(result, appName)
@@ -179,14 +184,18 @@ object MusicCabinVoiceReplies {
             }
             MusicCommand.Pause ->
                 MusicActionResult("好的，已暫停音樂。")
-            MusicCommand.NowPlaying ->
-                speakNow(result, appName)
+            MusicCommand.NowPlaying -> {
+                // 有歌名但沒附說明時用歌名組回覆，不要說無法讀取。
+                if (result.title != null && result.message.isBlank()) {
+                    MusicActionResult(MusicReplyFormatter.currentTrack(result.title, result.artist))
+                } else speakNow(result, appName)
+            }
             MusicCommand.SaveCurrent ->
                 MusicActionResult(if (result.status == "already_liked") "已經收藏過了" else "收藏成功")
             MusicCommand.RemoveCurrent ->
                 MusicActionResult(if (result.status == "already_unliked") "這首歌尚未收藏。" else "已取消")
             MusicCommand.RepeatOne, MusicCommand.RepeatOff, MusicCommand.RepeatAll ->
-                MusicActionResult(repeatSetReply(result.mode))
+                MusicActionResult(repeatSetReply(command, result.mode))
             MusicCommand.RepeatState ->
                 MusicActionResult(repeatStateReply(result.mode))
             MusicCommand.Open -> error("Open uses the app launcher, not voice control")
@@ -216,15 +225,28 @@ object MusicCabinVoiceReplies {
         return MusicActionResult("目前無法讀取$appName 的歌曲資訊。")
     }
 
-    private fun repeatSetReply(mode: String?): String = when (mode) {
+    private fun repeatSetReply(command: MusicCommand, mode: String?): String = when (mode) {
         "one" -> "已開啟單曲循環。"
         "all" -> "已開啟全部循環。"
-        else -> "已取消單曲循環。"
+        "off" -> "已取消單曲循環。"
+        // 模式不明時不猜是開還是關，只說已送出、請到 App 確認。
+        else -> when (command) {
+            MusicCommand.RepeatAll -> "已送出全部循環設定，請到 MusicCabin 確認結果。"
+            MusicCommand.RepeatOne -> "已送出單曲循環設定，請到 MusicCabin 確認結果。"
+            else -> "已送出取消循環設定，請到 MusicCabin 確認結果。"
+        }
     }
 
     private fun repeatStateReply(mode: String?): String = when (mode) {
         "one" -> "目前是單曲循環。"
         "all" -> "目前是全部循環。"
-        else -> "目前沒有開循環。"
+        "off" -> "目前沒有開循環。"
+        else -> "查不到目前的循環模式，請到 MusicCabin 確認。"
+    }
+
+    private fun trackName(title: String, artist: String?): String {
+        val cleanTitle = title.trim()
+        val cleanArtist = artist?.trim()?.takeIf { it.isNotEmpty() } ?: return "《$cleanTitle》"
+        return "${cleanArtist}的《$cleanTitle》"
     }
 }
