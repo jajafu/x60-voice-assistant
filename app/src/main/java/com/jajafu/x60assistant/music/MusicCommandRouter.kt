@@ -9,10 +9,13 @@ sealed interface MusicCommand {
     data object NowPlaying : MusicCommand
     data object RepeatOne : MusicCommand
     data object RepeatOff : MusicCommand
+    data object RepeatAll : MusicCommand
+    data object RepeatState : MusicCommand
     data object SaveCurrent : MusicCommand
     data object RemoveCurrent : MusicCommand
     data object PlayFavorites : MusicCommand
     data class SearchAndPlay(val query: String) : MusicCommand
+    data class PlayArtist(val artist: String) : MusicCommand
 }
 
 /** Only explicit, low-risk requests for the selected music app are handled locally. */
@@ -40,6 +43,17 @@ object MusicCommandRouter {
         "停止單曲循環播放", "不要單曲循環", "不要再單曲循環",
         "取消這首歌的循環", "取消循環播放這首歌",
         "不要重複播放這首歌", "恢復正常播放",
+        "關閉循環", "关闭循环", "取消循環", "取消循环", "不要循環", "不要循环",
+    )
+    private val repeatAllRequests = setOf(
+        "全部循環", "全部循环", "開啟全部循環", "开启全部循环",
+        "設成全部循環", "设成全部循环", "設為全部循環", "设为全部循环",
+        "循環播放全部", "循环播放全部", "全部重播", "全部重複播放",
+    )
+    private val repeatStateRequests = setOf(
+        "循環模式是什麼", "循环模式是什么", "現在是什麼循環模式", "现在是什么循环模式",
+        "目前循環模式", "目前循环模式", "查詢循環模式", "查询循环模式",
+        "循環狀態", "循环状态",
     )
     private val songPrefixes = listOf(
         "我想要聽", "我想要听", "我想聽", "我想听", "我要聽", "我要听",
@@ -70,9 +84,12 @@ object MusicCommandRouter {
         val repeatRequest = withoutApp.replace(Regex("\\s+"), "")
             .replace('这', '這').replace('单', '單').replace('环', '環')
             .replace('开', '開').replace('启', '啟').replace('设', '設')
-            .replace('关', '關').replace('复', '復')
+            .replace('关', '關').replace('复', '復').replace('么', '麼')
+            .replace('询', '詢').replace('态', '態')
         if (repeatRequest in repeatOneRequests) return MusicCommand.RepeatOne
         if (repeatRequest in repeatOffRequests) return MusicCommand.RepeatOff
+        if (repeatRequest in repeatAllRequests) return MusicCommand.RepeatAll
+        if (repeatRequest in repeatStateRequests) return MusicCommand.RepeatState
         if (withoutApp.contains("不要") || withoutApp.contains("別") ||
             withoutApp.contains("别")
         ) return null
@@ -107,9 +124,27 @@ object MusicCommandRouter {
         val query = phrase.removePrefix(prefix).trim()
             .removePrefix("一下").removePrefix("一首").trim()
             .removeSuffix("這首歌").removeSuffix("这首歌").trim()
+        artistOnly(query)?.let { return MusicCommand.PlayArtist(it) }
         if (query.length !in 2..100 || query.contains("怎麼") || query.contains("怎么") ||
             query.contains("為什麼") || query.contains("为什么")
         ) return null
         return MusicCommand.SearchAndPlay(query.replaceFirst("的", " ").trim())
+    }
+
+    /**
+     * 「想聽周杰倫的歌」這類只講歌手的要求：結尾是「的歌／的歌曲」且前面是短名字，
+     * 就照歌手播，不當成歌名找。結尾是歌名（例如「周杰倫的晴天」）的不受影響。
+     */
+    private fun artistOnly(query: String): String? {
+        val artist = when {
+            query.endsWith("的歌曲") -> query.dropLast(3)
+            query.endsWith("的歌") -> query.dropLast(2)
+            else -> return null
+        }.trim()
+        if (artist.length !in 2..30 || artist.contains("收藏") || artist.contains("喜愛") ||
+            artist.contains("喜歡") || artist.contains("音乐") || artist.contains("音樂") ||
+            artist.contains("歌曲")
+        ) return null
+        return artist
     }
 }

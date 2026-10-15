@@ -43,7 +43,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - 非敏感設定使用 DataStore；API Key 由 Android Keystore AES-GCM 加密；提醒由裝置內儲存與 Android alarm 排程，重開機或時間變動後補排程。
 - KWS／VAD／ASR 模型本機執行；X-ASR 壓縮檔由 `scripts/prepare-bundled-xasr.ps1` 放進被 Git 忽略的 APK assets，建置與首次啟動時依現有程式校驗 SHA256，解壓至 App 私有空間。App 不再提供 ASR 模型下載／選擇；舊設定改用 X-ASR，既有模型檔不自動刪除。模型 binary 不進 Git。
 - 一般問答由使用者在 App 設定的 OpenAI 相容 HTTPS endpoint 處理，沿用 LLM Base URL／Model／Endpoint／Key；雲端 TTS／Whisper 另使用 Audio Base URL／Key。未提供對應 API Key 時不能宣稱真實 Provider 已驗收。
-- 選定的播放器以 Android 媒體服務／MediaSession 控制；MusicCabin 收藏與循環另需使用者授予通知存取。裝置提醒使用系統鬧鐘與通知。
+- 選定的播放器以 Android 媒體服務／MediaSession 控制；MusicCabin 走公開語音通道（有序廣播），收藏與循環改由音樂 App 的隱私開關管，不再要求小助手的通知存取。通知存取只留給車機 fallback（實際在播的是另一台時暫停）。
 - 語音導航以 Intent 開啟使用者選定的地圖 App 到路線預覽頁，不查詢任何雲端地理編碼服務。
 
 ## 需保持相容的介面／資料
@@ -51,7 +51,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - `com.jajafu.x60assistant` application ID、最低／目標 SDK、`arm64-v8a`、錄音格式與 foreground service 啟動／停止規則不可無意改動。
 - DataStore 設定、Keystore 密文、提醒持久化格式與 X-ASR 模型包 ID／SHA256 需在變更時檢查升級相容；舊版 ASR 選擇遷移及既有檔案保留行為見 `README.md`、`docs/model-packs.md`。
 - OpenAI 相容端點使用可設定 Base URL／Model／Endpoint 及 SSE；Release 僅 HTTPS，Debug HTTP 僅限明列本機位址。
-- 音樂控制依對方公開媒體能力；不能將發出指令一概表述為已播放。MusicCabin 喜愛清單播放另依 rc19 已記錄例外，詳見 `docs/known-issues.md`。
+- 音樂控制依對方公開能力；不能將發出指令一概表述為已播放。MusicCabin 走語音通道，按回傳的狀態說話（rc19 的喜愛清單例外自 1.0.5 退役，詳見 `docs/known-issues.md`）。
 - 診斷不得輸出 PCM、完整逐字稿、回答、API Key 或敏感 URL 部分；模型授權與分發限制依 `docs/model-packs.md`。
 
 ## 測試方式
