@@ -428,6 +428,7 @@ class MusicCabinController(
      * 舊版沒有這個通道時提示更新，不走回舊連線（Issue #29 已確認）。
      */
     private suspend fun executeViaVoiceControl(command: MusicCommand): MusicActionResult {
+        // 沒安裝走啟動引導：找不到 App 會直接回 NOT_FOUND 訊息，不會真的連上舊路。
         if (!isInstalled()) return launchForPlaybackSetup(command)
         val (voiceCommand, query) = MusicCabinVoiceControl.requestFor(command)
         val result = try {
