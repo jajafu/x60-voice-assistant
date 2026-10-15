@@ -783,8 +783,8 @@ private fun SettingsPage(
                     }
                     if (draft.musicPackageName == "com.jajafu.musiccabin") {
                         Text(
-                            if (musicCabinFavoriteAccessGranted) "MusicCabin 收藏與單曲循環控制：通知存取權已開啟。"
-                            else "語音收藏及單曲循環需要通知存取權；授權後小幫手才能送出指令。此權限也允許小幫手讀取其他通知。",
+                            if (musicCabinFavoriteAccessGranted) "MusicCabin 收藏與循環改由音樂 App 的隱私設定管理，不需通知存取權；此權限只留給車機連不上播放器時的備用暫停，且開啟後小幫手可讀取其他通知。"
+                            else "語音收藏及循環改由 MusicCabin 的隱私設定管理，不需通知存取權；只有車機連不上播放器時的備用暫停才需要，此權限也允許小幫手讀取其他通知。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 12.dp),
@@ -793,7 +793,7 @@ private fun SettingsPage(
                             OutlinedButton(
                                 onClick = onOpenMusicCabinFavoriteAccess,
                                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
-                            ) { Text("開啟 MusicCabin 控制所需的通知存取權") }
+                            ) { Text("開啟車機備用暫停所需的通知存取權") }
                         }
                     }
                 }
