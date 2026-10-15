@@ -16,6 +16,10 @@ class MusicHoldPolicyTest {
             MusicCommand.SearchAndPlay("晴天"),
             musicAlreadyHeld = false,
         ))
+        assertTrue(MusicHoldPolicy.shouldPauseAfterAction(
+            MusicCommand.PlayArtist("周杰倫"),
+            musicAlreadyHeld = false,
+        ))
     }
 
     @Test

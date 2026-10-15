@@ -9,7 +9,7 @@ internal object MusicHoldPolicy {
     ): Boolean = when (command) {
         MusicCommand.Pause, MusicCommand.Open -> false
         MusicCommand.Play, MusicCommand.PlayFavorites, MusicCommand.Next, MusicCommand.Previous,
-        is MusicCommand.SearchAndPlay -> true
+        is MusicCommand.SearchAndPlay, is MusicCommand.PlayArtist -> true
         else -> musicAlreadyHeld
     }
 }

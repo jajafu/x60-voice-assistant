@@ -90,6 +90,25 @@ class MusicCommandRouterTest {
         assertNull(MusicCommandRouter.parse("這首歌為什麼好聽？"))
     }
 
+    @Test fun `routes artist only requests to play artist`() {
+        assertEquals(MusicCommand.PlayArtist("周杰倫"), MusicCommandRouter.parse("想聽周杰倫的歌"))
+        assertEquals(MusicCommand.PlayArtist("周杰倫"), MusicCommandRouter.parse("放周杰倫的歌"))
+        assertEquals(MusicCommand.PlayArtist("周杰倫"), MusicCommandRouter.parse("請播放周杰倫的歌曲"))
+        assertEquals(
+            MusicCommand.SearchAndPlay("周杰倫 晴天"),
+            MusicCommandRouter.parse("播放周杰倫的晴天"),
+        )
+        assertEquals(MusicCommand.PlayFavorites, MusicCommandRouter.parse("播放喜歡的歌"))
+    }
+
+    @Test fun `routes repeat all state and plain off requests`() {
+        assertEquals(MusicCommand.RepeatAll, MusicCommandRouter.parse("全部循環"))
+        assertEquals(MusicCommand.RepeatAll, MusicCommandRouter.parse("開啟全部循環"))
+        assertEquals(MusicCommand.RepeatState, MusicCommandRouter.parse("循環模式是什麼"))
+        assertEquals(MusicCommand.RepeatState, MusicCommandRouter.parse("現在是什麼循環模式"))
+        assertEquals(MusicCommand.RepeatOff, MusicCommandRouter.parse("關閉循環"))
+    }
+
     @Test fun `routes single song repeat commands without treating them as song searches`() {
         val enable = listOf(
             "單曲循環", "請幫我開啟單曲循環", "重複播放這首歌",

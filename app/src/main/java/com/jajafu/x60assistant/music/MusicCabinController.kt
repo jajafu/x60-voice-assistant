@@ -51,10 +51,21 @@ class MusicCabinController(
     private val musicPackageName: String = DEFAULT_PACKAGE_NAME,
     private val musicServiceName: String = DEFAULT_SERVICE_NAME,
     private val musicAppName: String = "MusicCabin",
+    voiceSender: VoiceControlSender? = null,
 ) : MusicActionExecutor {
     private val appContext = context.applicationContext
     private val appLauncher = MusicAppLauncher(appContext, musicPackageName, musicAppName)
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
+    private val voiceControl: VoiceControlSender by lazy {
+        voiceSender ?: OrderedBroadcastVoiceControlSender(appContext, musicPackageName)
+    }
+
+    /**
+     * MusicCabin（含 .gms／.debug 變體）走公開語音通道，不再用媒體連線；
+     * 其他播放器與車機 fallback 維持舊路。
+     */
+    private val isVoiceControlPackage: Boolean =
+        musicPackageName == DEFAULT_PACKAGE_NAME || musicPackageName.startsWith("$DEFAULT_PACKAGE_NAME.")
 
     /** 經 fallback 暫停的實際播放 session；resume 只對同一台做，避免誤開別的播放器。 */
     private var fallbackSession: MediaController? = null
@@ -74,11 +85,29 @@ class MusicCabinController(
         if (audioManager?.isMusicActive == false) {
             return@withContext false
         }
+        if (isVoiceControlPackage) return@withContext pauseMusicCabinForVoice()
         if (pauseConfiguredApp()) {
             fallbackSession = null
             return@withContext true
         }
         pauseActiveSession()
+    }
+
+    /**
+     * 語音對話期間把 MusicCabin 暫停；對方沒在播（實際是別台在響）才沿用車機 fallback，
+     * 被隱私開關擋下或出錯就回 false，讓 TTS 用 duck，不假稱已暫停。
+     */
+    private suspend fun pauseMusicCabinForVoice(): Boolean {
+        val result = try {
+            voiceControl.send(MusicCabinVoiceControl.COMMAND_PAUSE, null, VOICE_PAUSE_TIMEOUT_MS)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return false
+        }
+        if (result.ok) return true
+        if (result.status == "no_song") return pauseActiveSession()
+        return false
     }
 
     private suspend fun pauseConfiguredApp(): Boolean {
@@ -164,7 +193,19 @@ class MusicCabinController(
     override suspend fun resumeAfterVoice(): Boolean = withContext(Dispatchers.Main.immediate) {
         // 這輪暫停的是 fallback 那台，就只恢復它；設定裡的 App 沒被我們暫停，不能順手打開。
         if (fallbackSession != null) return@withContext resumeActiveSession()
+        if (isVoiceControlPackage) return@withContext resumeMusicCabinAfterVoice()
         resumeConfiguredApp()
+    }
+
+    /** 只在剛才暫停成功後呼叫；隊列還在所以不會誤觸空隊列播喜愛。 */
+    private suspend fun resumeMusicCabinAfterVoice(): Boolean {
+        return try {
+            voiceControl.send(MusicCabinVoiceControl.COMMAND_PLAY, null, VOICE_RESUME_TIMEOUT_MS).ok
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private suspend fun resumeConfiguredApp(): Boolean {
@@ -245,6 +286,7 @@ class MusicCabinController(
 
     override suspend fun stopForClose(): Boolean = withContext(Dispatchers.Main.immediate) {
         if (fallbackSession != null) return@withContext stopFallbackSession()
+        if (isVoiceControlPackage) return@withContext stopMusicCabin()
         try {
             withTimeoutOrNull(VOICE_CONTROL_TIMEOUT_MS) {
                 val browser = connect()
@@ -321,6 +363,31 @@ class MusicCabinController(
         }
     }
 
+    /** 「關閉音樂」走停止命令（清單留著）；本來就沒播也算達到目的。 */
+    private suspend fun stopMusicCabin(): Boolean {
+        return try {
+            val result = voiceControl.send(MusicCabinVoiceControl.COMMAND_STOP, null, VOICE_STOP_TIMEOUT_MS)
+            result.ok || result.status == "no_song"
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isInstalled(): Boolean = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            appContext.packageManager.getApplicationInfo(
+                musicPackageName,
+                android.content.pm.PackageManager.ApplicationInfoFlags.of(0),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            appContext.packageManager.getApplicationInfo(musicPackageName, 0)
+        }
+        true
+    }.getOrDefault(false)
+
     override suspend fun execute(command: MusicCommand): MusicActionResult = withContext(Dispatchers.Main.immediate) {
         if (command == MusicCommand.Open) {
             return@withContext MusicAppLaunchReplyFormatter.explicitOpen(
@@ -328,13 +395,17 @@ class MusicCabinController(
                 musicAppName,
             )
         }
+        if (isVoiceControlPackage) return@withContext executeViaVoiceControl(command)
         try {
             executeConnected(command)
         } catch (_: TimeoutCancellationException) {
-            if (command == MusicCommand.RepeatOne || command == MusicCommand.RepeatOff) {
+            if (command == MusicCommand.RepeatOne || command == MusicCommand.RepeatOff ||
+                command == MusicCommand.RepeatAll || command == MusicCommand.RepeatState
+            ) {
                 MusicActionResult("循環設定沒有確認成功，請再試一次。")
             } else if (command == MusicCommand.SaveCurrent || command == MusicCommand.RemoveCurrent ||
-                command == MusicCommand.PlayFavorites) {
+                command == MusicCommand.PlayFavorites
+            ) {
                 MusicActionResult("MusicCabin 喜愛清單操作等太久，請到 App 確認結果。")
             } else launchForPlaybackSetup(command)
         } catch (cancelled: CancellationException) {
@@ -342,12 +413,34 @@ class MusicCabinController(
         } catch (_: SecurityException) {
             MusicActionResult("音樂 App 拒絕了控制要求。")
         } catch (_: Exception) {
-            if (command == MusicCommand.RepeatOne || command == MusicCommand.RepeatOff) {
+            if (command == MusicCommand.RepeatOne || command == MusicCommand.RepeatOff ||
+                command == MusicCommand.RepeatAll || command == MusicCommand.RepeatState
+            ) {
                 MusicActionResult("無法確認循環設定，沒有回報成功。")
             } else if (command == MusicCommand.SaveCurrent || command == MusicCommand.RemoveCurrent) {
                 MusicActionResult("無法確認 MusicCabin 收藏狀態，請到 App 確認結果。")
             } else launchForPlaybackSetup(command)
         }
+    }
+
+    /**
+     * MusicCabin 走公開語音通道：一次廣播、對方回什麼就說什麼。
+     * 舊版沒有這個通道時提示更新，不走回舊連線（Issue #29 已確認）。
+     */
+    private suspend fun executeViaVoiceControl(command: MusicCommand): MusicActionResult {
+        if (!isInstalled()) return launchForPlaybackSetup(command)
+        val (voiceCommand, query) = MusicCabinVoiceControl.requestFor(command)
+        val result = try {
+            voiceControl.send(voiceCommand, query)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return MusicActionResult("音樂操作失敗，請再試一次。")
+        }
+        if (!result.ok && (result.status == "no_receiver" || result.status == "timeout")) {
+            return MusicActionResult("MusicCabin 太舊沒有語音控制，請更新 MusicCabin 後再試。")
+        }
+        return MusicCabinVoiceReplies.forCommand(command, result, musicAppName)
     }
 
     private suspend fun executeConnected(command: MusicCommand): MusicActionResult =
@@ -364,11 +457,13 @@ class MusicCabinController(
         if (command == MusicCommand.NowPlaying) {
             return MusicActionResult("目前無法讀取$musicAppName 的歌曲資訊。")
         }
-        if (command == MusicCommand.RepeatOne || command == MusicCommand.RepeatOff) {
+        if (command == MusicCommand.RepeatOne || command == MusicCommand.RepeatOff ||
+            command == MusicCommand.RepeatAll || command == MusicCommand.RepeatState
+        ) {
             return MusicActionResult("目前無法連接$musicAppName，循環設定沒有變更。")
         }
         if (command !is MusicCommand.Play && command !is MusicCommand.SearchAndPlay &&
-            command != MusicCommand.PlayFavorites
+            command !is MusicCommand.PlayArtist && command != MusicCommand.PlayFavorites
         ) {
             return MusicActionResult("還沒連上$musicAppName，請先播放一首歌。")
         }
@@ -418,7 +513,9 @@ class MusicCabinController(
         val state = controller.playbackState
         val controls = controller.transportControls
         when (command) {
-            MusicCommand.RepeatOne, MusicCommand.RepeatOff -> return setRepeatMode(command)
+            MusicCommand.RepeatOne, MusicCommand.RepeatOff, MusicCommand.RepeatAll ->
+                return setRepeatMode(command)
+            MusicCommand.RepeatState -> return readRepeatState()
             MusicCommand.NowPlaying -> {
                 if (state?.state !in setOf(
                         PlaybackState.STATE_PLAYING,
@@ -475,30 +572,50 @@ class MusicCabinController(
                 else MusicActionResult("已送出切歌指令，但還沒確認曲目變更。")
             }
             is MusicCommand.SearchAndPlay -> {
-                if (!supports(state, PlaybackState.ACTION_PLAY_FROM_SEARCH)) {
-                    return MusicActionResult("$musicAppName 沒有提供語音搜尋播放介面。")
-                }
-                val oldId = controller.metadata?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)
-                val oldTitle = controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
-                controls.playFromSearch(command.query, Bundle.EMPTY)
-                val playing = awaitState(controller, SEARCH_WAIT_MS) {
-                    val currentId = controller.metadata?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)
-                    val currentTitle = controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
-                    it?.state == PlaybackState.STATE_PLAYING && currentTitle != null &&
-                        (currentId != oldId || currentTitle != oldTitle)
-                }
-                return if (playing) nowPlaying(command, controller.metadata)
-                else MusicActionResult("$musicAppName 尚未找到並開始播放這首歌，請在 App 中確認搜尋結果。")
+                return searchAndPlay(controller, command, command.query)
+            }
+            is MusicCommand.PlayArtist -> {
+                return searchAndPlay(controller, command, command.artist)
             }
             MusicCommand.Open -> error("Handled before connecting")
         }
+    }
+
+    /** 舊路（非 MusicCabin 播放器）：歌手播就當成用歌手名搜尋播放。 */
+    private suspend fun searchAndPlay(
+        controller: MediaController,
+        command: MusicCommand,
+        query: String,
+    ): MusicActionResult {
+        val state = controller.playbackState
+        val controls = controller.transportControls
+        if (!supports(state, PlaybackState.ACTION_PLAY_FROM_SEARCH)) {
+            return MusicActionResult("$musicAppName 沒有提供語音搜尋播放介面。")
+        }
+        val oldId = controller.metadata?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)
+        val oldTitle = controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+        controls.playFromSearch(query, Bundle.EMPTY)
+        val playing = awaitState(controller, SEARCH_WAIT_MS) {
+            val currentId = controller.metadata?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)
+            val currentTitle = controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+            it?.state == PlaybackState.STATE_PLAYING && currentTitle != null &&
+                (currentId != oldId || currentTitle != oldTitle)
+        }
+        return if (playing) nowPlaying(command, controller.metadata)
+        else MusicActionResult("$musicAppName 尚未找到並開始播放這首歌，請在 App 中確認搜尋結果。")
     }
 
     private suspend fun setRepeatMode(command: MusicCommand): MusicActionResult {
         if (musicPackageName == DEFAULT_PACKAGE_NAME && !MusicCabinFavoriteAccess.isGranted(appContext)) {
             return MusicActionResult("單曲循環需要通知存取權，請到小助手的音樂 App 設定開啟。")
         }
-        val target = if (command == MusicCommand.RepeatOne) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        val target = when (command) {
+            MusicCommand.RepeatOne -> Player.REPEAT_MODE_ONE
+            MusicCommand.RepeatAll -> Player.REPEAT_MODE_ALL
+            else -> Player.REPEAT_MODE_OFF
+        }
+        // 全部循環經自訂切換最多轉三段（單曲→關→全部），單曲／關兩段就夠。
+        val maxSteps = if (target == Player.REPEAT_MODE_ALL) 3 else 2
         val token = SessionToken(appContext, ComponentName(musicPackageName, musicServiceName))
         val future = Media3Controller.Builder(appContext, token).buildAsync()
         try {
@@ -513,7 +630,7 @@ class MusicCabinController(
                 if (controller.isCommandAvailable(Player.COMMAND_SET_REPEAT_MODE)) {
                     controller.repeatMode = target
                 } else {
-                    repeat(2) {
+                    repeat(maxSteps) {
                         if (controller.repeatMode == target) return@repeat
                         val previous = controller.repeatMode
                         val result = awaitFuture(controller.sendCustomCommand(customToggle, Bundle.EMPTY))
@@ -539,10 +656,32 @@ class MusicCabinController(
                 }
             } == true
             return MusicActionResult(if (confirmed) {
-                if (target == Player.REPEAT_MODE_ONE) "已開啟單曲循環。" else "已取消單曲循環。"
+                if (target == Player.REPEAT_MODE_ONE) "已開啟單曲循環。"
+                else if (target == Player.REPEAT_MODE_ALL) "已開啟全部循環。"
+                else "已取消單曲循環。"
             } else {
                 "循環設定沒有確認成功，請再試一次。"
             })
+        } finally {
+            Media3Controller.releaseFuture(future)
+        }
+    }
+
+    /** 舊路（非 MusicCabin 播放器）：直接讀目前的循環模式，不切換。 */
+    private suspend fun readRepeatState(): MusicActionResult {
+        val token = SessionToken(appContext, ComponentName(musicPackageName, musicServiceName))
+        val future = Media3Controller.Builder(appContext, token).buildAsync()
+        return try {
+            val controller = awaitFuture(future)
+            when (controller.repeatMode) {
+                Player.REPEAT_MODE_ONE -> MusicActionResult("目前是單曲循環。")
+                Player.REPEAT_MODE_ALL -> MusicActionResult("目前是全部循環。")
+                else -> MusicActionResult("目前沒有開循環。")
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            MusicActionResult("目前無法查詢循環模式。")
         } finally {
             Media3Controller.releaseFuture(future)
         }
@@ -730,6 +869,9 @@ class MusicCabinController(
         private const val CONNECTION_AND_ACTION_TIMEOUT_MS = 30_000L
         private const val APP_LAUNCH_RETRY_DELAY_MS = 1_500L
         private const val VOICE_CONTROL_TIMEOUT_MS = 2_000L
+        private const val VOICE_PAUSE_TIMEOUT_MS = 4_000L
+        private const val VOICE_RESUME_TIMEOUT_MS = 6_000L
+        private const val VOICE_STOP_TIMEOUT_MS = 6_000L
         private const val PAUSE_CONFIRM_TIMEOUT_MS = 900L
         private const val RESUME_CONFIRM_TIMEOUT_MS = 1_500L
         private const val PLAYBACK_WAIT_MS = 4_000L

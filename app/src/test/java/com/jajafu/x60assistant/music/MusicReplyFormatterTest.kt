@@ -50,6 +50,18 @@ class MusicReplyFormatterTest {
     }
 
     @Test
+    fun `artist request names the confirmed track naturally`() {
+        val result = MusicReplyFormatter.confirmedPlayback(
+            MusicCommand.PlayArtist("周杰倫"),
+            "晴天",
+            "周杰倫",
+        )
+
+        assertEquals("好的，正在播放周杰倫的《晴天》。", result.message)
+        assertEquals("好的，準備播放周杰倫的《晴天》。", result.deferredMessage)
+    }
+
+    @Test
     fun `music app launch replies explain the safe foreground path`() {
         assertEquals(
             "已為你打開MusicCabin。",

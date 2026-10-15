@@ -463,7 +463,7 @@ class VoiceOrchestrator(
             keepMusicPausedAfterSession = true
         } else if (command == MusicCommand.Play || command == MusicCommand.PlayFavorites ||
             command == MusicCommand.Next || command == MusicCommand.Previous ||
-            command is MusicCommand.SearchAndPlay
+            command is MusicCommand.SearchAndPlay || command is MusicCommand.PlayArtist
         ) {
             keepMusicPausedAfterSession = false
         }

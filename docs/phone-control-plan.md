@@ -48,12 +48,12 @@
 
 指令使用封閉的型別，例如 `OpenApp(appId)`、`MediaPlay(appId)`、`MediaPause(appId)`、`MediaNext(appId)`、`PlaySong(appId, title, artist?)`。未來若用 LLM 協助理解長句，它只能產出候選型別與欄位；`ActionPolicy` 必須再比對允許的 App／動作、參數與使用情境。不得把 LLM 文字當成 shell 指令、Intent 字串或畫面座標直接執行。一般問答內容也不得觸發手機動作。
 
-`ActionExecutor` 在現有服務生命週期內工作，動作有逾時、取消及單次請求 ID。它只回報 `success`、`needs_user_action`、`unsupported` 或 `failed` 等可驗證結果；TTS 在結果確認後才說「已播放」。**MusicCabin 的「播放喜愛清單」是例外**：使用者於 rc18 真機實測歌曲已播放、事後媒體狀態確認卻誤報失敗，因此從 rc19 起在清單非空且播放器宣告支援播放指令後，送出 `playFromMediaId` 即回覆「正在播放喜愛歌曲」，不再檢查狀態、歌曲 ID 或佇列。這是刻意取捨，code review 不應恢復該項確認；收藏／取消收藏仍需確認喜愛清單已變更。記錄動作類型、目標 App、結果與錯誤碼，不記完整歌曲語句或螢幕文字。
+`ActionExecutor` 在現有服務生命週期內工作，動作有逾時、取消及單次請求 ID。它只回報 `success`、`needs_user_action`、`unsupported` 或 `failed` 等可驗證結果；TTS 在結果確認後才說「已播放」。**MusicCabin 的「播放喜愛清單」曾是例外**：使用者於 rc18 真機實測歌曲已播放、事後媒體狀態確認卻誤報失敗，因此從 rc19 起送出即回覆（詳見 `docs/known-issues.md`）。**1.0.5（Issue #29）起此例外退役**：新版 MusicCabin 語音通道有明確回傳，改為按回傳說話。記錄動作類型、目標 App、結果與錯誤碼，不記完整歌曲語句或螢幕文字。
 
 ### 4.2 執行能力的優先順序
 
 1. **標準 Android Intent**：開啟已選 App 或已驗證的搜尋／播放入口。查詢特定 App 時只宣告必要的 `<queries>`；找不到目標時回報並提供設定入口。
-2. **MediaSession 控制**：MusicCabin 首先透過其對外公開的 MediaBrowserService 連接到指定套件，再用 `MediaController.TransportControls` 執行播放、暫停、上一首、下一首。執行前檢查該 session 公告的 `PlaybackState` 動作，通常於執行後觀察狀態變化；「播放喜愛清單」採上段所記錄的例外。MusicCabin 的收藏切換是受信任控制端專用的自訂指令，使用者須額外啟用小助手的通知存取權；這項授權可隨時撤銷。日後若要控制其他未公開媒體服務的 App，也可評估使用 `MediaSessionManager.getActiveSessions()`。[Android MediaSessionManager](https://developer.android.com/reference/android/media/session/MediaSessionManager)、[TransportControls](https://developer.android.com/reference/android/media/session/MediaController.TransportControls)
+2. **MediaSession 控制**：非 MusicCabin 播放器透過其對外公開的 MediaBrowserService 連接到指定套件，再用 `MediaController.TransportControls` 執行播放、暫停、上一首、下一首。MusicCabin 自 1.0.5 起改走公開語音通道（有序廣播），不再經這條路；收藏切換也不再經受信任控制端自訂指令，改由音樂 App 隱私開關管，通知存取只留給車機 fallback。日後若要控制其他未公開媒體服務的 App，也可評估使用 `MediaSessionManager.getActiveSessions()`。[Android MediaSessionManager](https://developer.android.com/reference/android/media/session/MediaSessionManager)、[TransportControls](https://developer.android.com/reference/android/media/session/MediaController.TransportControls)
 3. **搜尋並播放**：先探測選定 App 是否支援 `MediaController.TransportControls.playFromSearch()`，或 Android 的 `MEDIA_PLAY_FROM_SEARCH` Intent；兩者都要在 X60 與該 App 版本上實測。支援搜尋結果不等於已開始播放，必須確認播放器狀態與曲目。若不支援，再評估該服務公開且授權可用的官方 API／深層連結。[Android 常見 Intent](https://developer.android.com/guide/components/intents-common)
 4. **App 專用 UI 自動化**：只在上述入口不可用、且使用者確實需要該 App 流程時，為單一 App 製作可關閉的適配器。使用 Android Accessibility Service 的節點文字／語義定位與 `performAction()`；不以固定座標作主要定位方式。每一步檢查目前 App、畫面與目標節點，遇到登入、驗證碼、付款、權限對話框或畫面不符立即停止。使用者需在系統設定手動啟用，且限已解鎖、螢幕可見的情境。[Android 無障礙服務](https://developer.android.com/guide/topics/ui/accessibility/views/service)
 
@@ -65,7 +65,7 @@
 
 ## 5. 權限、風險與使用者控制
 
-- 初版只要求執行某類能力所必需的權限。MusicCabin 的一般播放與喜愛清單瀏覽不需要通知監聽或無障礙服務；收藏與取消收藏才需使用者授予通知存取。音量不宣告 Accessibility Service。
+- 初版只要求執行某類能力所必需的權限。MusicCabin 走語音通道：一般播放、喜愛清單、查歌、循環都不需要通知監聽或無障礙服務；收藏與取消收藏改由音樂 App 隱私開關管。通知存取只留給車機 fallback。音量不宣告 Accessibility Service。
 - 設定頁顯示目前選定的音樂 App、通知存取狀態、可用的操作，以及可隨時關閉手機操作的總開關。
 - 開啟 App、播放、暫停、切歌可直接執行；傳訊、撥號、購買、刪除資料及修改安全設定應另訂逐項確認流程，在本期一律不執行。
 - 不自動解鎖、不輸入密碼、不使用 root、ADB 或 overlay 規避 Android 限制。第三方 App 的訂閱、地區、登入和內容授權可能使搜尋或播放失敗，需回報真實狀態。
