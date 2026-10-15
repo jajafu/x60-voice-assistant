@@ -100,6 +100,25 @@ class MusicCabinVoiceRepliesTest {
         )
     }
 
+    @Test fun `old app without channel prompts an update`() {
+        assertEquals(
+            "MusicCabin 太舊沒有語音控制，請更新 MusicCabin 後再試。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.Play,
+                failed("no_receiver"),
+                "MusicCabin",
+            ).message,
+        )
+        assertEquals(
+            "MusicCabin 太舊沒有語音控制，請更新 MusicCabin 後再試。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.SearchAndPlay("晴天"),
+                failed("timeout"),
+                "MusicCabin",
+            ).message,
+        )
+    }
+
     @Test fun `failures speak the channel message and denials guide to settings`() {
         assertEquals(
             "歌名找不到。",

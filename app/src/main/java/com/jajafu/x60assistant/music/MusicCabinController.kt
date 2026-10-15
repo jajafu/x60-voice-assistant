@@ -437,9 +437,6 @@ class MusicCabinController(
         } catch (_: Exception) {
             return MusicActionResult("音樂操作失敗，請再試一次。")
         }
-        if (!result.ok && (result.status == "no_receiver" || result.status == "timeout")) {
-            return MusicActionResult("MusicCabin 太舊沒有語音控制，請更新 MusicCabin 後再試。")
-        }
         return MusicCabinVoiceReplies.forCommand(command, result, musicAppName)
     }
 

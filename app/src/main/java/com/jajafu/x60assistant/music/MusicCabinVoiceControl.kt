@@ -194,6 +194,10 @@ object MusicCabinVoiceReplies {
     }
 
     private fun failure(command: MusicCommand, result: VoiceControlResult, appName: String): MusicActionResult {
+        // 對方沒有接收器或逾時：代表是沒有語音通道的舊版，提示更新（Issue #29 不走回舊連線）。
+        if (result.status == "no_receiver" || result.status == "timeout") {
+            return MusicActionResult("$appName 太舊沒有語音控制，請更新 $appName 後再試。")
+        }
         if (result.status == "denied") {
             return MusicActionResult(
                 if (command == MusicCommand.SaveCurrent || command == MusicCommand.RemoveCurrent) {
