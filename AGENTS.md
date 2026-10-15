@@ -1,4 +1,4 @@
-# AI 協作規則：小助手 X60 Voice Assistant
+# AI 協作規則：小助手 Voice Assistant
 
 本專案只有一位人類開發者。使用者本人決定需求與取捨、核准實作範圍、檢查結果並合併 PR；AI Agent 可以分析、修改、測試及提出審查意見，不得代替使用者做最終合併決定。既有 Issue／PR 不追溯改寫；從下一個 Issue 起採用本流程。
 
@@ -14,7 +14,7 @@
 必要驗證：
 
 - 程式變更執行 `.\gradlew.bat test`、`.\gradlew.bat lint`、`.\gradlew.bat assembleDebug`；需先依 `README.md` 準備模型資產。
-- 涉及音訊、權限、音樂或提醒時，依 `docs/testing.md` 與相關真機紀錄核對適用的 vivo X60 手動項目；未執行不得寫成通過。
+- 涉及音訊、權限、音樂或提醒時，依 `docs/testing.md` 與相關真機紀錄核對適用的測試手機手動項目；未執行不得寫成通過。
 
 額外規則：
 
@@ -32,9 +32,9 @@
 3. 用 `docs/ISSUE_PLAN_TEMPLATE.md` 寫出與風險相稱的 Plan。使用者在 Issue 留言或目前對話明確要求按該範圍實作，才算核准；只要求分析不算核准。記錄核准來源，不得由 AI 假造。
 4. 修改前檢查 `git status --short --branch`、目前分支與 `git worktree list`，再執行 `git fetch origin`。新 Issue 從最新 `origin/main` 建立分支；既有 PR 沿用其來源分支並核對遠端來源／目標。僅當本機 `main` 乾淨、沒有未推送 commit 且只是落後時才 fast-forward 同步。遇到未提交變更、未推送 commit、分歧、認證或遠端問題時保留現況並回報；不得自動 commit、stash、rebase、強制移動或丟棄內容。不得直接在主要分支開發正式功能。流程範本升級不切換分支。
 5. 只改核准範圍；執行相關測試與必要驗證。回報實際命令、結果及未執行原因，不能把未測試寫成通過。
-6. 按 `docs/DEVELOPMENT.md` 判斷產品版本，核對 `app/build.gradle.kts` 的 `versionName`／`versionCode`、App 診斷顯示與相關文件；`TEMPLATE_VERSION.md` 只記錄流程範本版本。Android 行為變更且有對應 APK 時，若有相容的專用 MuMu 執行個體，依 `docs/ANDROID_MUMU_SMOKE.md` 檢查安裝及開啟；未執行就記錄原因，MuMu 不取代 X60 真機驗收。
+6. 按 `docs/DEVELOPMENT.md` 判斷產品版本，核對 `app/build.gradle.kts` 的 `versionName`／`versionCode`、App 診斷顯示與相關文件；`TEMPLATE_VERSION.md` 只記錄流程範本版本。Android 行為變更且有對應 APK 時，若有相容的專用 MuMu 執行個體，依 `docs/ANDROID_MUMU_SMOKE.md` 檢查安裝及開啟；未執行就記錄原因，MuMu 不取代測試手機真機驗收。
 7. 將已通過快速檢查且可驗證的版本提交並推送到 Issue 分支，建立關聯 Issue 的 Draft PR。既有必要的 PR 前 `assembleDebug` 保留；建立 Draft PR 後核對 APK 對應的 commit 與建置輸入仍符合目前 PR HEAD。
-8. 人工驗收以 Draft PR 目前 HEAD 為準。Android 測試記錄受測 commit、APK SHA-256、package、`versionName`／`versionCode`；MuMu 記錄相容執行個體與安裝／啟動結果，X60 功能驗收依 `docs/testing.md` 記錄裝置及證據。此專案沒有 Preview／部署產物，相關欄位寫「不適用：Android App 以 APK 驗收」。PR HEAD 或影響 APK／行為的建置輸入改變，舊人工驗收失效；若 commit、輸入和產物未變，不因 PR 描述或 Draft／Ready 狀態改變而重建。
+8. 人工驗收以 Draft PR 目前 HEAD 為準。Android 測試記錄受測 commit、APK SHA-256、package、`versionName`／`versionCode`；MuMu 記錄相容執行個體與安裝／啟動結果，測試手機功能驗收依 `docs/testing.md` 記錄裝置及證據。此專案沒有 Preview／部署產物，相關欄位寫「不適用：Android App 以 APK 驗收」。PR HEAD 或影響 APK／行為的建置輸入改變，舊人工驗收失效；若 commit、輸入和產物未變，不因 PR 描述或 Draft／Ready 狀態改變而重建。
 9. 驗收完成後將 PR 標為 Ready，說明改動、產品版本決定、HEAD、APK 識別方式、驗證與風險。重要或高風險變更可請另一個 AI 模型或 Agent 審查；沒有實際執行就不要宣稱已獨立審查。
 10. 由使用者本人看 Diff、測試和風險後決定是否合併；AI 不自行 Merge。GitHub PR 在網站或 `gh` 合併會更新遠端主要分支，這是正常流程。
 11. 得知 PR 已在遠端合併後，執行 `git fetch origin` 並核對合併結果；本機 `main` 可安全 fast-forward 時同步到 `origin/main`。無法安全同步就回報狀態，下一個 Issue 仍從最新遠端主要分支建立。不得為了同步而在本機重複合併或 push。

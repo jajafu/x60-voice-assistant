@@ -19,19 +19,19 @@ Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD 
 3. 背景播歌時叫小助手：音樂暫停（不再只變小聲），對話結束後恢復；通知存取權未授權時維持舊行為（duck），不假稱暫停。
 4. 以上皆須記錄車機型號、Android 版本、地圖／音樂 App 版本、APK HEAD 與 SHA-256；MockWebServer 不能取代實車。
 
-## 雲端語音 spike 驗收（待真實 Provider／X60）
+## 雲端語音 spike 驗收（待真實 Provider／測試手機）
 
 1. 在診斷頁確認 LLM Provider 與 Audio Provider 的 Base URL／Key 分開保存；未設定 Audio URL／Key 時，即使雲端開關開啟也維持本機 X-ASR／TTS，不影響既有 LLM。
 2. 以「測試雲端 TTS」確認草稿中的 Model、Voice 與獨立 Audio Base URL／Key 被使用；播放期間停止服務或再次說喚醒詞，確認請求與播放可取消。若 Audio Provider 忽略 `response_format=wav`，應在送出播放前顯示「未回傳 WAV（Content-Type／檔頭）」，而不是 `MediaPlayer 1/-2147483648`。
 3. 開啟 Whisper 雲端 ASR 且完成 Audio 設定後說出一般問句，確認 KWS／VAD 仍在本機，VAD 結束才上傳整段 WAV；停止服務時確認上傳請求不需等待完整 read timeout。
-4. 實際 Provider、費用、網路錯誤、鎖屏與真人語音結果須記錄 Provider、vivo X60、APK HEAD 與證據；MockWebServer／合成語音只能作自動化測試，不能取代真機驗收。
+4. 實際 Provider、費用、網路錯誤、鎖屏與真人語音結果須記錄 Provider、測試手機、APK HEAD 與證據；MockWebServer／合成語音只能作自動化測試，不能取代真機驗收。
 5. `CloudTtsEngine` 的媒體播放生命週期（`MediaPlayer`、Audio Focus、取消後回收暫存檔）依賴 Android 框架，未有 JVM 測試；須以上述真機項目覆蓋，並確認不支援語速／音調的解碼器仍能正常播放整句。
 
 rc22 另包含 Orchestrator 跨元件回歸測試：重複取消、暫停後取消、過期回答事件、辨識未完成時關閉／取消父 scope、第一句在串流結束前朗讀、長回答及音樂拒絕補救。JVM 以可控制的 engine、音訊來源及同步阻塞辨識替身驗證生命週期，診斷使用測試 clock shim，不能替代 native 或 Android 實機結果。另測試 12 段背壓、取消清空、網路失敗不補讀半句、逾期一次性／每日／每週提醒，以及鬧鐘 TTS 靜音／恢復。
 
-rc23 新增回答期間 KWS 插話測試：再次收到喚醒詞會取消舊串流及 TTS、播放「我在」並回到 `LISTENING`，且不重複暫停或遺失原本應恢復的音樂狀態。回答自身包含或近似喚醒詞造成誤觸是已接受風險，實際喇叭音量下的喚醒率仍須以 X60 真人語音驗收。
+rc23 新增回答期間 KWS 插話測試：再次收到喚醒詞會取消舊串流及 TTS、播放「我在」並回到 `LISTENING`，且不重複暫停或遺失原本應恢復的音樂狀態。回答自身包含或近似喚醒詞造成誤觸是已接受風險，實際喇叭音量下的喚醒率仍須以測試手機真人語音驗收。
 
-## rc23 回答中喚醒的 X60 驗收（待真機驗收）
+## rc23 回答中喚醒的測試手機驗收（待真機驗收）
 
 1. 讓 Provider 產生至少 30 秒的回答；朗讀中正常音量說「小助手」，確認舊回答立即停止、播放一次「我在」，接著可說出並辨識新問題。
 2. 在第一個 token 尚未送達的 `THINKING` 階段說「小助手」，確認舊請求取消且同樣進入新一輪聆聽。
@@ -39,7 +39,7 @@ rc23 新增回答期間 KWS 插話測試：再次收到喚醒詞會取消舊串�
 4. 連續插話 10 次，確認只有一個 AudioRecord，沒有舊回答續播、重複「我在」、殘留 HTTP 或 TTS queue。
 5. 讓回答文字包含「小助手」，記錄是否自行觸發；此風險已接受，不以 AEC 或抑制窗阻止。
 
-## rc22 五項修正的 X60 回歸（待真機驗收）
+## rc22 五項修正的測試手機回歸（待真機驗收）
 
 1. 在 X-ASR 辨識中反覆停止服務及重新啟動，確認沒有 native crash、殘留錄音或舊回答；記錄釋放完成時間。
 2. 快速連按通知「取消／閉嘴」，以及暫停後送出舊取消操作；不應崩潰或自行恢復錄音。
@@ -47,7 +47,7 @@ rc23 新增回答期間 KWS 插話測試：再次收到喚醒詞會取消舊串�
 4. 對一次性與重複提醒，讓系統延遲送達後先回到 App，再確認補響一次且重複提醒保留下一次；重開機／時區變動亦需測試。
 5. 鬧鐘朗讀中喚醒助理，以及喚醒後等待超過 30 秒，確認鈴聲與提醒語音均暫停；互動結束恢復，關閉鬧鐘後不再播報。
 
-## X60 測試前記錄
+## 測試手機測試前記錄
 
 每輪都記錄 App version、Git commit、APK SHA256、model ID／archive SHA256、Android、OriginOS Build、充電狀態、電量、電池溫度、thermal status、Wi-Fi、開始／結束時間、Audio Error、Dropped Frame 與 Service Uptime。
 
@@ -59,7 +59,7 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 
 ## 話題邊界與 Follow Up 視窗（rc25，待真機驗收）
 
-喚醒詞開啟新一輪時清空對話歷史，只有同一輪 Follow Up 視窗（預設 3 秒，可調 0–30）內的追問才帶著上一輪。需在 vivo X60 搭配真實 Provider 驗收：
+喚醒詞開啟新一輪時清空對話歷史，只有同一輪 Follow Up 視窗（預設 3 秒，可調 0–30）內的追問才帶著上一輪。需在測試手機搭配真實 Provider 驗收：
 
 1. 喚醒問一個話題 A（例：「BLACKPINK 是哪一年出道的」），等回答完畢，**不要**在 3 秒內追問，確認診斷頁狀態回到 `IDLE_KWS`。
 2. 重新說喚醒詞問不相關的 B（例：「明天台北天氣如何」），確認回答針對 B，且診斷頁 LLM 完成記錄的 `length`／`hash` 對應的是 B 的回答而非 A 的續篇。若診斷頁允許查看，逐字稿應只有 B。
@@ -71,7 +71,7 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 
 ## 音訊失敗時的結束順序（rc26，待真機驗收）
 
-音訊失敗時必須先停掉 LLM 串流與 TTS，再恢復本輪暫停的音樂，避免音樂先恢復、舊回答的最後一句才補上。需在 vivo X60 搭配真實 Provider 驗收：
+音訊失敗時必須先停掉 LLM 串流與 TTS，再恢復本輪暫停的音樂，避免音樂先恢復、舊回答的最後一句才補上。需在測試手機搭配真實 Provider 驗收：
 
 1. 播放音樂中喚醒小助手，問一個會產生多句回答的問題，確認音樂在「我在」之前就暫停、回答完畢後音樂才恢復。
 2. 在 TTS 朗讀到一半時製造音訊失敗（可用 `adb shell` 讓另一個 App 佔用麥克風，或在 `docs/troubleshooting.md` 既有方式下觸發），確認順序是：舊回答**立刻停止** → 短暫恢復 → 再重新聆聽，而不是先恢復音樂再補完回答。
@@ -81,7 +81,7 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 
 ## TTS 音量與引擎／音調選擇（rc27，待真機驗收）
 
-設定 →「語音與追問」新增 TTS 引擎選擇、TTS 音調選擇與 TTS 音量滑桿。需在 vivo X60 驗收：
+設定 →「語音與追問」新增 TTS 引擎選擇、TTS 音調選擇與 TTS 音量滑桿。需在測試手機驗收：
 
 1. 確認設定頁顯示裝置上的 TTS 引擎清單，且「系統預設」項與系統「文字轉語音輸出」頁面一致。
 2. 選擇某個引擎後，音調清單會重新載入；確認清單有顯示語言，並標示「離線」或「需要網路」。
@@ -114,7 +114,7 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 
 ### 功能步驟（**本輪尚未執行**）
 
-設定 →「語音調音量」預設開啟。需在 vivo X60 驗收：
+設定 →「語音調音量」預設開啟。需在測試手機驗收：
 
 1. 先記錄基準值：`adb shell dumpsys audio` 讀 `STREAM_MUSIC` 的目前級別與上限。本輪 smoke 已在該機讀到 `Max: 15`，`docs/decision-log.md` rc27 曾寫的「10/15」指目前 10 格、上限 15 格，語意已釐清；功能測試前仍須重新讀取當下值。
 2. 相對調整：說「聲音小一點」，確認音量降一格並聽到小助手的回報；連續 10 次確認每次只動一格。
@@ -191,16 +191,16 @@ X60 重新連接後，先安裝本節 APK，再執行 `scripts/start-x60-volume-
 
 ## ADB 證據
 
-所有指令都必須指定實體 X60 serial，避免誤用已連線模擬器：
+所有指令都必須指定實體測試手機 serial，避免誤用已連線模擬器：
 
 ```powershell
 $adb = "$env:ANDROID_HOME\platform-tools\adb.exe"
 $serial = "9654983303001DD"
 
-& $adb -s $serial shell dumpsys activity services com.jajafu.x60assistant
-& $adb -s $serial shell cmd appops get com.jajafu.x60assistant RECORD_AUDIO
-& $adb -s $serial shell dumpsys audio | Select-String 'com.jajafu.x60assistant|VOICE_RECOGNITION' -Context 1,2
-& $adb -s $serial shell dumpsys power | Select-String 'com.jajafu.x60assistant:VoiceKws'
+& $adb -s $serial shell dumpsys activity services com.va.voiceassistant
+& $adb -s $serial shell cmd appops get com.va.voiceassistant RECORD_AUDIO
+& $adb -s $serial shell dumpsys audio | Select-String 'com.va.voiceassistant|VOICE_RECOGNITION' -Context 1,2
+& $adb -s $serial shell dumpsys power | Select-String 'com.va.voiceassistant:VoiceKws'
 & $adb -s $serial shell dumpsys battery | Select-String 'status:|level:|temperature:'
 & $adb -s $serial shell dumpsys thermalservice
 ```
