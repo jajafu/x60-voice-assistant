@@ -52,9 +52,9 @@ sherpa runtime repository 的 Apache-2.0 不應自動推定為 model weights 的
 | Pack | Archive / file | Bytes | SHA256 | 用途 |
 |---|---|---:|---|---|
 | Silero VAD | `silero_vad.onnx` | 643,854 | `9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6` | APK asset，本機 VAD；上游 MIT |
-| Standard ASR | `sherpa-onnx-streaming-zipformer-ctc-zh-int8-2025-06-30.tar.bz2` | 127,965,713 | `f2ab7a5deb02717801f6a5b26c751b42f8a2db891b07f5b095e6da7442081448` | X60 預設 |
-| Moonshine v2 base zh | `sherpa-onnx-moonshine-base-zh-quantized-2026-02-27.tar.bz2` | 99,905,420 | `6495d4240f66bcdd2bbbbfefaa687c463150d467854001270934e88940b733c1` | X60 中文比較候選；整句辨識 |
-| X-ASR zh-en punct INT8 | `sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2` | 136,396,739 | `5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224` | X60 固定內建模型；句尾交付辨識結果 |
+| Standard ASR | `sherpa-onnx-streaming-zipformer-ctc-zh-int8-2025-06-30.tar.bz2` | 127,965,713 | `f2ab7a5deb02717801f6a5b26c751b42f8a2db891b07f5b095e6da7442081448` | 預設備用 |
+| Moonshine v2 base zh | `sherpa-onnx-moonshine-base-zh-quantized-2026-02-27.tar.bz2` | 99,905,420 | `6495d4240f66bcdd2bbbbfefaa687c463150d467854001270934e88940b733c1` | 中文比較候選；整句辨識 |
+| X-ASR zh-en punct INT8 | `sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2` | 136,396,739 | `5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224` | 固定內建模型；句尾交付辨識結果 |
 
 Standard pack 的 `model.int8.onnx` 為 162,290,887 bytes，SHA256 `24ffdc19ba9aaed5a6a9beaede1e087745217d82425cf4041bca0c696661801e`；`tokens.txt` SHA256 `6193c7ea1c96d0d9a1e9652789b40d13a8a913b434a5451e93158f5a09fd6652`。
 

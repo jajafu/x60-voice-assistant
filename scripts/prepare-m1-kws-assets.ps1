@@ -1,5 +1,5 @@
 param(
-    [string]$CacheDirectory = (Join-Path $env:TEMP 'x60-voice-assistant-model-cache')
+    [string]$CacheDirectory = (Join-Path $env:TEMP 'voiceassistant-model-cache')
 )
 
 $ErrorActionPreference = 'Stop'

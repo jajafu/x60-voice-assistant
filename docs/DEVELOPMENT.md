@@ -17,12 +17,12 @@
 3. 你在 Issue 留言或當次對話明確指示按 Plan 實作。AI 記錄核准來源後，修改前按「Git 同步與 PR 合併」檢查狀態、全部 worktree 並 fetch 遠端；新 Issue 從最新 `origin/main` 建立分支，既有 PR 沿用其來源分支。
 4. 在核准分支實作，先執行能及早發現問題的測試與靜態檢查。程式變更原有的 `test`、`lint`、`assembleDebug` 與模型資產準備仍是必要驗證。
 5. 將第一個可驗證版本提交並推送後建立關聯 Issue 的 Draft PR。因 `assembleDebug` 本身是必要驗證，可在 PR 前建置；Draft PR 建立後確認 APK 的來源 commit 與建置輸入符合目前 PR HEAD，輸入未變時沿用同一產物。
-6. 人工驗收以 Draft PR 目前 HEAD 為準。Android APK 記錄完整 commit、APK SHA-256、package、產品版本與建置號；X60 真機驗收依 `docs/testing.md` 記錄裝置與證據，MuMu smoke 依 `docs/ANDROID_MUMU_SMOKE.md` 記錄執行個體、Android 版本及結果。此 Repository 沒有 Preview／部署產物，寫明「不適用：Android App 以 APK 驗收」。若 HEAD 或影響行為／APK 的輸入改變，舊人工驗收失效並重新驗證；沒有改變就不因 PR 描述或狀態切換重建。
+6. 人工驗收以 Draft PR 目前 HEAD 為準。Android APK 記錄完整 commit、APK SHA-256、package、產品版本與建置號；測試手機真機驗收依 `docs/testing.md` 記錄裝置與證據，MuMu smoke 依 `docs/ANDROID_MUMU_SMOKE.md` 記錄執行個體、Android 版本及結果。此 Repository 沒有 Preview／部署產物，寫明「不適用：Android App 以 APK 驗收」。若 HEAD 或影響行為／APK 的輸入改變，舊人工驗收失效並重新驗證；沒有改變就不因 PR 描述或狀態切換重建。
 7. 驗收完成後將 PR 標為 Ready。用 `.agents/skills/review-pr/SKILL.md` 檢查重要變更；高風險時可換另一個模型或子 Agent 再看一次。你最後檢查 Diff、驗證結果與風險，決定是否合併；Issue 到合併後才關閉。
 
 ## Draft PR HEAD 與 Android 驗收
 
-Draft PR 是供人工驗收與審查的變更集合，不表示可以合併。若環境無法建立 Draft PR，先固定並記錄待提交 commit，再從該 commit 產生驗收內容；建 PR 後核對 HEAD 一致。此 Repository 沒有 Preview URL、套件發布或部署 revision；Android 可交付驗收物以 APK SHA-256 和其來源 commit 識別。X60 真機測試報告另記產品版本、模型識別與測試環境，沿用 `docs/testing.md` 的驗收門檻。
+Draft PR 是供人工驗收與審查的變更集合，不表示可以合併。若環境無法建立 Draft PR，先固定並記錄待提交 commit，再從該 commit 產生驗收內容；建 PR 後核對 HEAD 一致。此 Repository 沒有 Preview URL、套件發布或部署 revision；Android 可交付驗收物以 APK SHA-256 和其來源 commit 識別。測試手機真機測試報告另記產品版本、模型識別與測試環境，沿用 `docs/testing.md` 的驗收門檻。
 
 ## Git 同步與 PR 合併
 
@@ -39,7 +39,7 @@ PR 在遠端合併後，執行 `git fetch origin`，以 PR 狀態及遠端 `main
 
 ## 產品版本與範本版本
 
-專案目前由 `app/build.gradle.kts` 設定 `versionName = "1.0.4"`、`versionCode = 38`；診斷頁從已安裝套件讀版本。
+專案目前由 `app/build.gradle.kts` 設定 `versionName = "1.0.5"`、`versionCode = 39`；診斷頁從已安裝套件讀版本。
 
 - **開發者決定（2026-10-05）**：不再使用 `1.0.0-rcN` 候選版號，改為 `1.0.1`、`1.0.2`…依序遞增，直到另行決定。從下一個 Issue 起，Plan 記錄「產品版本需更新／不需更新／待決」及原因，PR 寫實際版本與建置號。改變 App 行為、並交付新可安裝 APK 的 Issue，預設將 `1.0.N` 與遞增的 `versionCode` 各更新一次；同一 Issue 的反覆修正不重複加版。
 - 多個 Issue 合併同批版本，或先實作而尚未交付 APK 時，在各 Plan／PR 記錄預計納入的版本與實際發版安排，由使用者決定；不自動套用泛用的 patch／minor／major 規則。未來正式版本與相容性破壞的版號、遷移方式須先由使用者決定。
@@ -53,7 +53,7 @@ PR 在遠端合併後，執行 `git fetch origin`，以 PR 狀態及遠端 `main
 
 ## Android 的 MuMu 安裝與開啟檢查
 
-Android App 行為變更時，從 Draft PR 目前 HEAD 依專案既有命令建置或取得 APK；本機 MuMuPlayer 與專用相容測試執行個體可用才按 [`ANDROID_MUMU_SMOKE.md`](ANDROID_MUMU_SMOKE.md) 覆蓋安裝與開啟。本專案 APK 僅封裝 `arm64-v8a`，先核對執行個體的 ABI／Android 版本；MuMu smoke 不能替代 `docs/testing.md` 要求的 vivo X60 真人語音、鎖屏或長時間驗收。
+Android App 行為變更時，從 Draft PR 目前 HEAD 依專案既有命令建置或取得 APK；本機 MuMuPlayer 與專用相容測試執行個體可用才按 [`ANDROID_MUMU_SMOKE.md`](ANDROID_MUMU_SMOKE.md) 覆蓋安裝與開啟。本專案 APK 僅封裝 `arm64-v8a`，先核對執行個體的 ABI／Android 版本；MuMu smoke 不能替代 `docs/testing.md` 要求的測試手機真人語音、鎖屏或長時間驗收。
 
 若本次沒有 APK、MuMu 不可用或相容性未確認，在 PR 寫「未執行」和原因；不因流程範本升級而建 APK、啟動／清除模擬器或宣稱測試通過。
 

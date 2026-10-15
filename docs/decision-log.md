@@ -120,6 +120,13 @@
 
 - 依使用者要求移除 ADB shell helper（含 `VolumeAdbShellBridge`、`VolumeAdbShellDaemon`、`VolumeShellProtocol`、啟動／停止腳本與診斷頁 helper 狀態），回到純 `AudioManager` 方案：相對調整用 `adjustStreamVolume(STREAM_MUSIC, ±1)`，絕對音量用 `setStreamVolume()`。
 - 診斷頁保留「音量指令／音量實測」（current／target／readBack／max／applied／fixed＋path），未生效時仍如實回報。
+## 1.0.5（2026-10-15，Issue #29）
+
+- **開發者決定（範圍）**：MusicCabin 走新的公開語音通道（有序廣播），一次呼叫、對方回什麼就說什麼。舊媒體連線只留給非 MusicCabin 播放器與車機 fallback；舊版 MusicCabin 沒有新通道時提示更新，不留舊路備用（本對話已確認）。
+- 新增 `PlayArtist`（只講歌手）、`RepeatAll`（全部循環）、`RepeatState`（查循環模式）三種本機指令；「想聽周杰倫的歌」這類結尾是「的歌／的歌曲」的短名字走歌手播，結尾是歌名的不受影響。
+- 收藏／循環不再要求小助手的通知權限，改由音樂 App 的隱私開關管；被擋下時指引用戶去音樂 App 開設定。rc19「喜愛清單送出就不檢查」的例外在新通道退役：改播、收藏、循環都有明確回傳才說成功。
+- 暫停／恢復／關閉音樂同樣走通道；空隊列按播放時對方改播喜愛，回話照喜愛的說法。
+- 版號 `1.0.5`／`versionCode 39`。`test`、`lint`、`assembleDebug` 通過；X60 真機語音驗收待補做。
 ## 1.0.1（2026-10-05，Issue #24）
 
 - **開發者決定（版號）**：不再使用 `1.0.0-rcN` 候選版號。從本版起為 `1.0.1`／`versionCode 35`，後續行為變更的 APK 依序為 `1.0.2`、`1.0.3`…直到另行決定。`versionCode 35` 高於各分支已用的 34（含 Issue #20 的 rc30），覆蓋安裝不會被 Android 拒絕。

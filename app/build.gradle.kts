@@ -9,21 +9,21 @@ plugins {
 }
 
 android {
-    namespace = "com.jajafu.x60assistant"
+    namespace = "com.va.voiceassistant"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.jajafu.x60assistant"
+        applicationId = "com.va.voiceassistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 38
-        versionName = "1.0.4"
+        versionCode = 39
+        versionName = "1.0.5"
 
         ndk {
             abiFilters += "arm64-v8a"
         }
 
-        testInstrumentationRunner = "com.jajafu.x60assistant.KeystoreInstrumentation"
+        testInstrumentationRunner = "com.va.voiceassistant.KeystoreInstrumentation"
         vectorDrawables.useSupportLibrary = true
     }
 
