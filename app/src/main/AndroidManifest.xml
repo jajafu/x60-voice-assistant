@@ -37,7 +37,7 @@
         android:roundIcon="@drawable/ic_launcher"
         android:supportsRtl="true"
         android:usesCleartextTraffic="false"
-        android:theme="@style/Theme.X60Assistant">
+        android:theme="@style/Theme.VoiceAssistant">
 
         <activity
             android:name=".MainActivity"

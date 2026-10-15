@@ -5,7 +5,7 @@
 - 必須從可見 Activity 按啟動，並允許麥克風及通知。Android 13 不允許 BootReceiver 或一般背景工作取得 while-in-use 麥克風。
 - 若顯示 `ASR_MODEL_INVALID`，確認 App「設定 → 本機語音辨識」選用的模型是否顯示「已下載並驗證」；可按該模型的下載或重新下載按鈕。也可執行 `prepare-m2-model-packs.ps1 -Pack standard|moonshine|xasr -InstallToDevice -Serial <serial>`。SHA 不符時 App 會刻意拒絕載入。
 - 模型下載鎖屏後仍可繼續；允許通知時會顯示進度。網路中斷會等待連線並自動續傳；若顯示「下載暫停」，回到「設定 → 本機語音辨識」按「繼續下載」。已下載的部分保存在 App 私有儲存空間；清除 App 資料或解除安裝會失去該進度。若伺服器不支援 Range，App 會從頭下載並重新校驗。
-- vivo 請人工允許自啟動、背景高耗電，並在最近任務鎖定 App。Android 電池最佳化白名單不是 OEM 保活保證。
+- 部分廠牌（如 vivo）請人工允許自啟動、背景高耗電，並在最近任務鎖定 App。Android 電池最佳化白名單不是 OEM 保活保證。
 
 ## 喚醒或辨識不準
 

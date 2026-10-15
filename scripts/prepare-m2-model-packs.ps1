@@ -1,13 +1,13 @@
 param(
     [ValidateSet('standard', 'moonshine', 'xasr', 'all')]
     [string]$Pack = 'standard',
-    [string]$CacheDirectory = (Join-Path $env:TEMP 'x60-voice-assistant-asr-cache'),
+    [string]$CacheDirectory = (Join-Path $env:TEMP 'voiceassistant-asr-cache'),
     [string]$Serial = '',
     [switch]$InstallToDevice
 )
 
 $ErrorActionPreference = 'Stop'
-$packageName = 'com.jajafu.x60assistant'
+$packageName = 'com.va.voiceassistant'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $vadAssetDirectory = Join-Path $repositoryRoot 'app\src\main\assets\models\vad'
 $vadUrl = 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx'
@@ -100,7 +100,7 @@ foreach ($packName in $selected) {
         if ($LASTEXITCODE -ne 0) { throw 'run-as failed; install the debuggable APK first.' }
         foreach ($entry in $metadata.Files.GetEnumerator()) {
             $sourcePath = Join-Path $modelDirectory $entry.Key
-            $temporaryPath = "/data/local/tmp/x60-$($packName)-$($entry.Key)"
+            $temporaryPath = "/data/local/tmp/va-$($packName)-$($entry.Key)"
             & $adb -s $Serial push $sourcePath $temporaryPath
             if ($LASTEXITCODE -ne 0) { throw "adb push failed for $($entry.Key)" }
             & $adb -s $Serial shell run-as $packageName cp $temporaryPath "files/model-packs/asr/$($metadata.Id)/$($entry.Key)"

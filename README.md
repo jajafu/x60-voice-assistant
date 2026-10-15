@@ -1,6 +1,6 @@
-# 小助手 X60 Voice Assistant
+# 小助手 Voice Assistant
 
-Android 13／vivo X60 的本機喚醒語音助理 release candidate。使用者必須在可見 Activity 明確啟動 microphone foreground service；之後流程為：
+通用本機喚醒語音助理 release candidate（Android 13 以上手機）。使用者必須在可見 Activity 明確啟動 microphone foreground service；之後流程為：
 
 `小助手 → 喚醒回覆 → VAD → 本機 ASR → OpenAI-compatible SSE → 完整句 TTS → Follow Up`
 
@@ -52,23 +52,23 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Release variant 未配
 7. 如需雲端語音，在「模型」頁另設定 Audio Base URL／Audio API Key，再個別開啟雲端 TTS 或 Whisper；未完成 Audio 設定時維持本機 X-ASR／TTS，不會改動 LLM Provider。
 8. 在「對話」按「啟動語音助理」。啟動後會顯示即時逐字稿與回答；設定變更需先停止服務。
 9. 回答不合用時直接再說「小助手」；目前回答會立即停止，接著播放「我在」，即可重新提問。也可從通知按「閉嘴」取消；回答結束後的 Follow Up 期間可直接追問。
-10. 依畫面指引設定 vivo 自啟動、背景高耗電、最近任務加鎖；Android 電池白名單不等同 OEM 保活保證。
+10. 依畫面指引設定自啟動、背景高耗電、最近任務加鎖；Android 電池白名單不等同廠商保活保證。
 
-## 音樂 App 語音控制（X60 試用）
+## 音樂 App 語音控制
 
 預設沿用 MusicCabin；也可在「設定 → 音樂 App」從手機已安裝且公開媒體瀏覽服務的播放器中選擇，或關閉音樂控制。畫面顯示 App 名稱，內部保存套件名稱與媒體服務 ID；因此不依賴可能重複或變更的顯示名稱。選好並儲存後重新啟動語音服務生效。
 
 可說「播放音樂」、「暫停音樂」、「下一首」、「上一首」，或用「幫我放晴天」、「我想聽晴天」、「來首晴天」、「播放周杰倫的晴天」等方式點歌。這些指令由本機規則判斷，不需設定 LLM；未匹配的自由說法仍不會自動操作手機。說「打開音樂 App」或所選 App 名稱時，小助手會顯示通知，點擊並解鎖後開啟播放器；鎖屏時不會強制彈出畫面。
 
-MusicCabin 可說「收藏」或「取消收藏」，操作目前播放的歌曲；成功時分別回覆「收藏成功」與「已取消」。已收藏時再說「收藏」，小助手會回覆「已經收藏過了」，不會反向取消。說「播放音樂收藏」或「播放喜愛歌曲」會從 MusicCabin 的喜愛清單開始播放；送出播放指令後不再等待歌曲／清單狀態確認，因為實測已播放仍會誤報未確認。收藏變更及單曲循環需先在「設定 → 音樂 App」開啟小助手的通知存取權；一般播放控制及讀取喜愛清單不需要。若 MusicCabin 未回報明確結果，小助手不會宣稱收藏成功。
+MusicCabin 可說「收藏」或「取消收藏」，操作目前播放的歌曲；成功時分別回覆「收藏成功」與「已取消」。已收藏時再說「收藏」，小助手會回覆「已經收藏過了」，不會反向取消。說「播放音樂收藏」或「播放喜愛歌曲」會從 MusicCabin 的喜愛清單開始播放，並按語音通道的回傳說話。收藏變更需先在 MusicCabin 的「設定 → 隱私 → 語音控制」開啟外部收藏；一般播放控制不需要小助手的通知存取權。若 MusicCabin 未回報明確結果，小助手不會宣稱收藏成功。
 
-可說「單曲循環」或「重複播放這首歌」設定單曲循環；說「取消單曲循環」會改為不循環。小助手會讀回播放器的循環模式，確認後才回覆成功。MusicCabin 的循環控制需在設定中開啟小助手的通知存取權；尚待 X60 真機驗證。
+可說「單曲循環」或「重複播放這首歌」設定單曲循環，說「全部循環」設為全部循環，說「取消單曲循環」會改為不循環，也可問「循環模式是什麼」查詢現況。小助手直接指定模式並按回傳說話，不需要小助手的通知存取權；真機驗證待補。
 
 播放成功時，小助手直接用歌名回覆，例如「好的，準備播放周杰倫的《晴天》。」；切歌時會說「好的，下一首是……，稍後播放。」成功回覆不再以播放器名稱開頭。若播放器沒有回報歌名，則只說「準備播放音樂」，不猜測曲目。
 
-喚醒小助手時，若 MusicCabin 正在播放，會先暫停，讓它收清楚指令；一般語音互動結束（含 Follow Up 等候逾時）後恢復播放。若指令是暫停或關閉音樂，就維持暫停；下一首／上一首造成播放器自行續播時，小助手會再次暫停到互動結束。這項 MediaSession 暫停、切歌、恢復與真人說「下一首」的基本流程已在 X60 真機測試；無指令逾時及喚醒後的暫停延遲仍待驗收。
+喚醒小助手時，若 MusicCabin 正在播放，會先暫停，讓它收清楚指令；一般語音互動結束（含 Follow Up 等候逾時）後恢復播放。若指令是暫停或關閉音樂，就維持暫停；下一首／上一首造成播放器自行續播時，小助手會再次暫停到互動結束。這項 MediaSession 暫停、切歌、恢復與真人說「下一首」的基本流程已在測試手機真機測試；無指令逾時及喚醒後的暫停延遲仍待驗收。
 
-小助手透過 MusicCabin 對外提供的媒體服務控制播放；收藏變更另需使用者啟用通知存取權，不需要無障礙權限。詳見 [規劃書](docs/phone-control-plan.md) 與 [真機短測紀錄](docs/test-reports/musiccabin-2026-09-23-vivo-x60.md)。
+小助手透過 MusicCabin 公開語音通道控制播放；收藏變更需在 MusicCabin 隱私設定開啟外部收藏，不需要無障礙權限，也不需要小助手的通知存取權。詳見 [規劃書](docs/phone-control-plan.md) 與 [真機短測紀錄](docs/test-reports/musiccabin-2026-09-23-vivo-x60.md)。
 
 ## 本機排程提醒
 
@@ -90,8 +90,8 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 ## AI 開發流程
 
-Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.2` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.5` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
 
 從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 
-產品候選版號與流程範本版本分開管理；Issue 的產品版本決定及可選工作日誌見 [開發流程](docs/DEVELOPMENT.md)。開始修改前先檢查工作樹與全部 worktree、`git fetch origin`，新 Issue 從最新 `origin/main` 開始；遠端 PR 合併後再安全同步本機 `main`。Android 行為變更透過 Draft PR 的目前 HEAD 對應 APK commit 與 SHA-256 做人工驗收；MuMu 安裝與啟動檢查依 [smoke test](docs/ANDROID_MUMU_SMOKE.md) 記錄，不能替代 X60 真機驗收。單純升級流程範本不改 App 版號或建立 APK。
+產品候選版號與流程範本版本分開管理；Issue 的產品版本決定及可選工作日誌見 [開發流程](docs/DEVELOPMENT.md)。開始修改前先檢查工作樹與全部 worktree、`git fetch origin`，新 Issue 從最新 `origin/main` 開始；遠端 PR 合併後再安全同步本機 `main`。Android 行為變更透過 Draft PR 的目前 HEAD 對應 APK commit 與 SHA-256 做人工驗收；MuMu 安裝與啟動檢查依 [smoke test](docs/ANDROID_MUMU_SMOKE.md) 記錄，不能替代測試手機真機驗收。單純升級流程範本不改 App 版號或建立 APK。
