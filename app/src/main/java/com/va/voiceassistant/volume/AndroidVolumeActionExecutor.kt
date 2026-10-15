@@ -9,8 +9,8 @@ import kotlinx.coroutines.withContext
 /**
  * 在 [AudioManager.STREAM_MUSIC] 上執行語音音量指令。
  *
- * 只動媒體音量：鈴聲與通知音訊流不納入本輪，避免撞上 vivo 的勿擾模式。
- * 音樂與小助手的 TTS 共用這個音量級別（`docs/decision-log.md` rc27 的 vivo X60 實測），
+ * 只動媒體音量：鈴聲與通知音訊流不納入本輪，避免撞上部分 OEM 的勿擾模式。
+ * 音樂與小助手的 TTS 共用這個音量級別（`docs/decision-log.md` rc27 的測試手機實測），
  * 因此使用者說「小聲一點」時，小助手自己的回話也會一起變小聲，這是已知取捨。
  *
  * 相對調整（`Up`／`Down`）用 [AudioManager.adjustStreamVolume] 走一格；

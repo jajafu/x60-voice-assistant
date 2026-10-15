@@ -1460,7 +1460,7 @@ private fun DiagnosticsPage(
             SectionCard("背景與電源") {
                 StatusRow("Android 電池最佳化", device.ignoringBatteryOptimizations, "已忽略", "最佳化中")
                 Text(
-                    "vivo 自啟動、後台高耗電與最近任務加鎖仍需手動確認。",
+                    "自啟動、後台高耗電與最近任務加鎖仍需手動確認（部分廠牌另有自啟動管理）。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),

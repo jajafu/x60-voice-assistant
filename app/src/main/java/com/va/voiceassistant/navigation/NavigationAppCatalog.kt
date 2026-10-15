@@ -8,7 +8,7 @@ import androidx.core.net.toUri
 /**
  * 地圖 App 開啟目的地的 URI 策略。
  *
- * 各家地圖對同一個目的地字串的落點不同，這是 2026-09-30 在 vivo X60（Android 13）實測的結果，
+ * 各家地圖對同一個目的地字串的落點不同，這是 2026-09-30 在測試手機（當時為 vivo X60，Android 13）實測的結果，
  * 不是文件推論：
  *
  * - [HTTPS_DIRECTIONS]：`https://www.google.com/maps/dir/?api=1&destination=<地點>` 直達路線預覽頁，

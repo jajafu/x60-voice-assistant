@@ -66,7 +66,7 @@ MusicCabin 可說「收藏」或「取消收藏」，操作目前播放的歌曲
 
 播放成功時，小助手直接用歌名回覆，例如「好的，準備播放周杰倫的《晴天》。」；切歌時會說「好的，下一首是……，稍後播放。」成功回覆不再以播放器名稱開頭。若播放器沒有回報歌名，則只說「準備播放音樂」，不猜測曲目。
 
-喚醒小助手時，若 MusicCabin 正在播放，會先暫停，讓它收清楚指令；一般語音互動結束（含 Follow Up 等候逾時）後恢復播放。若指令是暫停或關閉音樂，就維持暫停；下一首／上一首造成播放器自行續播時，小助手會再次暫停到互動結束。這項 MediaSession 暫停、切歌、恢復與真人說「下一首」的基本流程已在 X60 真機測試；無指令逾時及喚醒後的暫停延遲仍待驗收。
+喚醒小助手時，若 MusicCabin 正在播放，會先暫停，讓它收清楚指令；一般語音互動結束（含 Follow Up 等候逾時）後恢復播放。若指令是暫停或關閉音樂，就維持暫停；下一首／上一首造成播放器自行續播時，小助手會再次暫停到互動結束。這項 MediaSession 暫停、切歌、恢復與真人說「下一首」的基本流程已在測試手機真機測試；無指令逾時及喚醒後的暫停延遲仍待驗收。
 
 小助手透過 MusicCabin 公開語音通道控制播放；收藏變更需在 MusicCabin 隱私設定開啟外部收藏，不需要無障礙權限，也不需要小助手的通知存取權。詳見 [規劃書](docs/phone-control-plan.md) 與 [真機短測紀錄](docs/test-reports/musiccabin-2026-09-23-vivo-x60.md)。
 
@@ -90,7 +90,7 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 ## AI 開發流程
 
-Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.2` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.5` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
 
 從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 

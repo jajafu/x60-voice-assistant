@@ -112,7 +112,9 @@ class AndroidKeystoreSecretStore(
         val keyAlias: String,
         val associatedData: ByteArray,
     ) {
-        // Keep these LLM values unchanged so existing users retain their stored key.
+        // These values are scoped to the renamed app (com.va.voiceassistant).
+        // Changing applicationId installs as a new app, so keys stored under the
+        // old app are not carried over and must be re-entered.
         LLM(
             fileName = "llm_api_key.v1.json",
             tempFileName = "llm_api_key.tmp",

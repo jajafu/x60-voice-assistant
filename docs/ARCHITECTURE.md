@@ -20,7 +20,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 
 `ConversationHistory` 只保存在 process 記憶體，容量由 `contextTurns` 決定。喚醒詞開啟新一輪（由 `IDLE_KWS` 進入的 `WakeDetected`）時先清空歷史，因此只有同一輪 Follow Up 視窗（`followUpSeconds`，預設 3 秒）內、不必再說喚醒詞的追問才帶著上一輪上下文。回答期間插話的喚醒詞不清空，但該輪回答已被取消、不會寫入歷史。`contextTurns` 因此只影響同一個連續話題內的輪數，跨喚醒詞不保留。
 
-`TtsEngineCatalog` 讀取裝置上的 TTS 引擎與 voice。設定頁只顯示中文 voice（引擎若無中文則顯示全部），排序為繁中優先、離線優先、名稱，並與 `AndroidTtsEngine` 的自動選擇共用同一套規則。繁中判斷同時支援以書寫系統（`zh-Hant`）與以地區（`zh-TW`／`zh-HK`／`zh-MO`）標記的 locale，因為 vivo 引擎回報的是前者。引擎本身仍保有全部 voice，App 不會要求引擎刪除。
+`TtsEngineCatalog` 讀取裝置上的 TTS 引擎與 voice。設定頁只顯示中文 voice（引擎若無中文則顯示全部），排序為繁中優先、離線優先、名稱，並與 `AndroidTtsEngine` 的自動選擇共用同一套規則。繁中判斷同時支援以書寫系統（`zh-Hant`）與以地區（`zh-TW`／`zh-HK`／`zh-MO`）標記的 locale，因為部分引擎（如 vivo）回報的是前者。引擎本身仍保有全部 voice，App 不會要求引擎刪除。
 
 - `app/src/main/java/com/va/voiceassistant/`：Activity、UI 與 Android 應用入口。
 - `service/`、`audio/`、`orchestration/`：前景服務、單一音訊來源、狀態機與恢復策略。
@@ -35,7 +35,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 
 ## PR 驗收產物識別
 
-人工驗收的來源是 Draft PR 目前 HEAD。Android 可安裝驗收產物以完整 commit 和 APK SHA-256 對應，並記錄 package、`versionName`／`versionCode` 及測試裝置；X60 功能證據依 `docs/testing.md` 記錄模型識別、裝置狀態與執行結果。此 Repository 沒有 Preview 網站、套件發布或部署 revision。`assembleDebug` 是既有必要驗證，可在 PR 前建置；建立 Draft PR 後要確認來源 commit 與建置輸入仍符合 HEAD，受測內容未變則沿用該產物。
+人工驗收的來源是 Draft PR 目前 HEAD。Android 可安裝驗收產物以完整 commit 和 APK SHA-256 對應，並記錄 package、`versionName`／`versionCode` 及測試裝置；測試手機功能證據依 `docs/testing.md` 記錄模型識別、裝置狀態與執行結果。此 Repository 沒有 Preview 網站、套件發布或部署 revision。`assembleDebug` 是既有必要驗證，可在 PR 前建置；建立 Draft PR 後要確認來源 commit 與建置輸入仍符合 HEAD，受測內容未變則沿用該產物。
 
 ## 資料與外部整合
 
@@ -63,6 +63,6 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 ## 已知風險
 
 - 真實 Provider 需使用者在 App 內提供私人設定；現有 MockWebServer 結果不能替代真實服務驗收。
-- vivo 背景保活、長時間鎖屏、真人語音與部分 MusicCabin 操作仍須依 `docs/testing.md`、`docs/known-issues.md` 完成驗收。
+- 手機背景保活、長時間鎖屏、真人語音與部分 MusicCabin 操作仍須依 `docs/testing.md`、`docs/known-issues.md` 完成驗收。
 - 模型來源／授權與含模型 APK 分發受 `docs/model-packs.md`、`docs/decision-log.md` 限制。
 - Release variant 尚未配置正式簽章，不可將 `assembleRelease` 產物當作正式可發行版本。

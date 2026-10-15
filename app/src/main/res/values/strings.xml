@@ -20,13 +20,13 @@
     <string name="battery_optimization">電池最佳化</string>
     <string name="not_optimized">已忽略</string>
     <string name="optimized">最佳化中</string>
-    <string name="battery_settings_explanation">此狀態只反映 Android 標準電源白名單；vivo 自啟動、後台高耗電與最近任務加鎖仍需手動確認。</string>
+    <string name="battery_settings_explanation">此狀態只反映 Android 標準電源白名單；自啟動、後台高耗電與最近任務加鎖仍需手動確認（部分廠牌另有自啟動管理）。</string>
     <string name="open_battery_settings">開啟系統電池最佳化</string>
     <string name="device_title">裝置與系統</string>
     <string name="device_model">製造商與型號</string>
     <string name="android_version">Android 版本</string>
     <string name="api_level">API Level</string>
-    <string name="system_build">系統 Build / OriginOS 顯示版本</string>
+    <string name="system_build">系統 Build／系統版本</string>
     <string name="abis">支援 ABI</string>
     <string name="total_memory">總記憶體</string>
     <string name="available_memory">可用記憶體</string>

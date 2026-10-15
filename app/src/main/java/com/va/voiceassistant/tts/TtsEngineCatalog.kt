@@ -112,7 +112,7 @@ class TtsEngineCatalog(context: Context) {
         /**
          * 只顯示中文 voice。
          *
-         * 裝置上的引擎常回報數十個語言（vivo X60 實測有 30 個以上），但小助手只需要繁中與
+         * 裝置上的引擎常回報數十個語言（測試手機實測曾有 30 個以上，例如 vivo X60），但小助手只需要繁中與
          * 簡中。引擎無法要求刪除 voice，因此這裡只縮限**設定頁顯示的清單**；引擎仍保有全部
          * voice，萬一中文語音損壞仍可由系統層改用其他語言。
          *
@@ -146,7 +146,7 @@ private val TRADITIONAL_REGIONS = setOf("TW", "HK", "MO")
 /**
  * 繁中優先、離線優先，再依名稱。
  *
- * 繁中的判斷同時支援以書寫系統（zh-Hant）與以地區（zh-TW）標記的 locale：vivo 引擎回報的
+ * 繁中的判斷同時支援以書寫系統（zh-Hant）與以地區（zh-TW）標記的 locale：部分引擎（如 vivo）回報的
  * 是 `zh-Hant`，若只比對 country 會永遠落空而退到「任何中文」。
  */
 private val voiceOptionOrder = compareBy<TtsVoiceOption>(
