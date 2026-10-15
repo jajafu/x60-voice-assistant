@@ -27,22 +27,28 @@ jobs:
       - name: Restore release keystore
         shell: powershell
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          if ([string]::IsNullOrEmpty($env:ANDROID_KEYSTORE_BASE64)) {
-            throw "Missing secret ANDROID_KEYSTORE_BASE64. Upload the release keystore first (see docs/release-signing.md)."
+          if ([string]::IsNullOrEmpty($env:RELEASE_KEYSTORE_BASE64)) {
+            throw "Missing secret RELEASE_KEYSTORE_BASE64. Upload the release keystore first (see docs/release-signing.md)."
           }
-          $bytes = [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64)
-          [IO.File]::WriteAllBytes("$env:GITHUB_WORKSPACE\release.keystore", $bytes)
+          $bytes = [Convert]::FromBase64String($env:RELEASE_KEYSTORE_BASE64)
+          [IO.File]::WriteAllBytes("$env:GITHUB_WORKSPACE\app\ci-release.keystore", $bytes)
 
       - name: Build signed release APK
         shell: powershell
         env:
-          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}\release.keystore
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          RELEASE_KEYSTORE_PATH: ${{ github.workspace }}\app\ci-release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: .\gradlew.bat assembleRelease
+
+      - name: Discard restored keystore
+        if: always()
+        shell: powershell
+        run: |
+          Remove-Item -Force -ErrorAction SilentlyContinue "$env:GITHUB_WORKSPACE\app\ci-release.keystore"
 
       - name: Show APK checksum
         shell: powershell
