@@ -98,7 +98,7 @@ data class AssistantSettings(
         const val DEFAULT_MUSIC_SERVICE_NAME = "com.metrolist.music.playback.MusicService"
 
         /**
-         * 導航 App 預設為 Google 地圖。已於 2026-09-30 於 vivo X60（Android 13）確認
+         * 導航 App 預設為 Google 地圖。已於 2026-09-30 於測試手機（當時為 vivo X60，Android 13）確認
          * `https://www.google.com/maps/dir/?api=1&destination=<地點>` 可直達路線預覽頁。
          * 高德地圖（`androidamap://route/plan/?dname=`）已實測可用但需多一次選點，尚未納入本輪。
          */

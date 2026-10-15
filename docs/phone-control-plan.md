@@ -9,13 +9,13 @@
 
 第一輪交付以音樂為樣板，但架構應能容納「開啟 App」、「媒體控制」、「系統允許的操作」與「特定 App 的操作介面」。**不承諾任意 App 的任意畫面都能由語音自動點擊**；每個 App、動作及鎖屏情境都要單獨驗證。付款、傳送訊息、撥號及變更系統安全設定不在第一輪自動執行範圍。
 
-本文件是現有 [主規格書](../../vivo-x60-voice-assistant-spec.md) 的後續擴充提案。原規格將音樂服務排除在第一版外，也禁止用 Accessibility Service 繞過 Android 限制；本案不改寫已完成的第一版需求。Issue #20 曾加入音量無障礙 fallback 與 ADB shell helper，但前者在 X60 鎖屏實測失敗，後者已依使用者要求移除；目前回到純 `AudioManager` 方案。
+本文件是現有 [主規格書](../../vivo-x60-voice-assistant-spec.md) 的後續擴充提案。原規格將音樂服務排除在第一版外，也禁止用 Accessibility Service 繞過 Android 限制；本案不改寫已完成的第一版需求。Issue #20 曾加入音量無障礙 fallback 與 ADB shell helper，但前者在測試手機（歷史機型 vivo X60）鎖屏實測失敗，後者已依使用者要求移除；目前回到純 `AudioManager` 方案。
 
 ## 2. 現有基礎與待補缺口
 
 目前鏈路是「喚醒 → 本機 ASR → LLM → TTS → 追問」。`VoiceOrchestrator.handleTranscriptReady()` 雖會進入 `ROUTING` 狀態，但隨即檢查 LLM 設定並把文字送往遠端；還沒有本機動作路由、手機動作執行器或成功驗證。Manifest 也未宣告通知監聽或無障礙服務。
 
-現有 X60 測試報告確認 APK 可安裝、服務與錄音資源能啟停；真實 Provider、完整端到端問答、8/24 小時及部分鎖屏測試仍待驗收。新功能應以現有可用的語音管線為基礎，避免把「程式編譯通過」當作「長時間鎖屏可操作」。
+現有測試手機測試報告確認 APK 可安裝、服務與錄音資源能啟停；真實 Provider、完整端到端問答、8/24 小時及部分鎖屏測試仍待驗收。新功能應以現有可用的語音管線為基礎，避免把「程式編譯通過」當作「長時間鎖屏可操作」。
 
 ## 3. 使用情境與預期結果
 
@@ -27,11 +27,11 @@
 | 「播放周杰倫的晴天」 | 在指定音樂 App 搜尋並嘗試直接播放 | 僅在該 App 實測支援搜尋播放介面時宣稱「已播放」；否則開啟搜尋結果或回報不支援 |
 | 「打開設定」 | 開啟標準 Android 設定入口 | 鎖屏與背景啟動限制同樣適用；不自動修改設定 |
 
-首個目標 App 已由使用者指定為 MusicCabin。X60 上安裝的是 FOSS Release `13.7.13`，套件 `com.jajafu.musiccabin`；另有 GMS 變體 `com.jajafu.musiccabin.gms`，本輪不混用。後續若加入其他音樂 App，再增加使用者可選的預設播放器設定。
+首個目標 App 已由使用者指定為 MusicCabin。測試手機上安裝的是 FOSS Release `13.7.13`，套件 `com.jajafu.musiccabin`；另有 GMS 變體 `com.jajafu.musiccabin.gms`，本輪不混用。後續若加入其他音樂 App，再增加使用者可選的預設播放器設定。
 
 ### MusicCabin 的已確認介面
 
-2026-09-23 於 X60（Android 13）確認 APK 可安裝並啟動，啟動後系統出現 `com.jajafu.musiccabin` 的 MediaSession。對應 [v13.7.13 原始碼](https://github.com/jajafu/MusicCabin/tree/v13.7.13-car) 宣告對外可連接的 `MediaLibraryService`／`MediaBrowserService`，並在媒體回呼中處理 `searchQuery`。小助手已直接連上此媒體服務；真機短測確認「晴天」可搜尋播放，並通過播放、暫停、下一首及上一首控制。這不需要跨 App 通知監聽權限。真人語音、熄屏及多首歌曲正確率仍待驗收。手機上已允許 MusicCabin 發送通知，以便顯示播放控制。
+2026-09-23 於測試手機（當時為 vivo X60，Android 13）確認 APK 可安裝並啟動，啟動後系統出現 `com.jajafu.musiccabin` 的 MediaSession。對應 [v13.7.13 原始碼](https://github.com/jajafu/MusicCabin/tree/v13.7.13-car) 宣告對外可連接的 `MediaLibraryService`／`MediaBrowserService`，並在媒體回呼中處理 `searchQuery`。小助手已直接連上此媒體服務；真機短測確認「晴天」可搜尋播放，並通過播放、暫停、下一首及上一首控制。這不需要跨 App 通知監聽權限。真人語音、熄屏及多首歌曲正確率仍待驗收。手機上已允許 MusicCabin 發送通知，以便顯示播放控制。
 
 ## 4. 技術方案
 
@@ -61,7 +61,7 @@
 
 ### 4.3 音訊與對話狀態
 
-執行手機動作時新增可觀察的 `EXECUTING_ACTION` 階段，並明確定義取消、逾時、失敗後回到 `IDLE_KWS` 或 `FOLLOW_UP`。喚醒確認後先記錄 MusicCabin 是否正在播放，若正在播放就暫停，並在語音互動及 Follow Up 等候期間保持暫停；回到待命時才恢復。使用者明確要求暫停／停止時取消自動恢復；下一首／上一首若使播放器自動續播，需再次暫停。語音提示與 TTS 仍使用現有 Audio Focus。X60 已驗證媒體服務可暫停、切歌與恢復，音樂外放時 KWS／ASR 喚醒率仍待真人語音驗收。取消回答不應被誤解為「暫停音樂」，兩個命令應分開。
+執行手機動作時新增可觀察的 `EXECUTING_ACTION` 階段，並明確定義取消、逾時、失敗後回到 `IDLE_KWS` 或 `FOLLOW_UP`。喚醒確認後先記錄 MusicCabin 是否正在播放，若正在播放就暫停，並在語音互動及 Follow Up 等候期間保持暫停；回到待命時才恢復。使用者明確要求暫停／停止時取消自動恢復；下一首／上一首若使播放器自動續播，需再次暫停。語音提示與 TTS 仍使用現有 Audio Focus。測試手機已驗證媒體服務可暫停、切歌與恢復（歷史機型 vivo X60），音樂外放時 KWS／ASR 喚醒率仍待真人語音驗收。取消回答不應被誤解為「暫停音樂」，兩個命令應分開。
 
 ## 5. 權限、風險與使用者控制
 
@@ -75,7 +75,7 @@
 
 | 階段 | 交付內容 | 完成門檻 |
 | --- | --- | --- |
-| P0：X60 能力盤點與原型 | 已確認 MusicCabin FOSS `13.7.13` 可安裝、啟動並建立 session；公開 MediaBrowserService 已可連接；搜尋「晴天」及播放／切歌短測通過 | 補齊真人語音、鎖屏及不同歌曲的「MusicCabin × 動作 × 螢幕狀態」矩陣 |
+| P0：測試手機能力盤點與原型 | 已確認 MusicCabin FOSS `13.7.13` 可安裝、啟動並建立 session；公開 MediaBrowserService 已可連接；搜尋「晴天」及播放／切歌短測通過 | 補齊真人語音、鎖屏及不同歌曲的「MusicCabin × 動作 × 螢幕狀態」矩陣 |
 | P1：本機動作框架 | `ActionRouter`、型別化動作、政策檢查、結果回饋、取消／逾時；接入現有狀態機 | 不需 LLM 即可解析基本指令；一般問題仍正常問答；否定句與模糊句不誤觸操作；單元測試覆蓋指令與拒絕路徑 |
 | P2：開啟 App 與媒體控制 | 使用者選擇預設音樂 App、Intent 啟動、通知存取引導、MediaSession 播放／暫停／切歌 | 測試手機亮屏 30 次受支援操作至少 27 次成功；鎖屏中的既有 session 控制另測 30 次，受支援操作至少 27 次成功；不可用或不支援時 100% 不虛報成功 |
 | P3：指定歌曲 | 歌曲／歌手擷取、可用的 `playFromSearch()` 或播放 Intent、結果驗證；對一個選定 App 做完整適配 | 20 條含中文歌手／歌名的測試語句，逐條記錄「實際播對」、「只開搜尋頁」及「失敗」；只有實際播對才回報完成。是否可設定成功率門檻依 P0 能力盤點決定 |
@@ -93,7 +93,7 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 
 ### 8.1 各 URI 策略的實測結果
 
-2026-09-30 於 X60（Android 13）先後完成 Google 地圖 `26.39.04` 與高德地圖 `10.25.0.3203` 的首次設定，再實測各 URI 落點。結果顯示**不能用同一套 Intent 對待兩家地圖**：
+2026-09-30 於測試手機（當時為 vivo X60，Android 13）先後完成 Google 地圖 `26.39.04` 與高德地圖 `10.25.0.3203` 的首次設定，再實測各 URI 落點。結果顯示**不能用同一套 Intent 對待兩家地圖**：
 
 | App | URI | 實測落點 | 尚需點擊 |
 | --- | --- | --- | --- |
@@ -139,7 +139,7 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 
 ### 8.5.2 技術選擇與其代價
 
-`AudioManager.setStreamVolume()` 與 `adjustStreamVolume()` 都是公開 SDK API，可在宣告 `MODIFY_AUDIO_SETTINGS` 後呼叫。vivo X60 實測曾證實兩者呼叫送達但音量沒變；目前仍回到此方案，調整後讀回實際級別，未生效時如實回報而不虛報成功。
+`AudioManager.setStreamVolume()` 與 `adjustStreamVolume()` 都是公開 SDK API，可在宣告 `MODIFY_AUDIO_SETTINGS` 後呼叫。測試手機實測曾證實兩者呼叫送達但音量沒變（歷史機型 vivo X60）；目前仍回到此方案，調整後讀回實際級別，未生效時如實回報而不虛報成功。
 
 - **相對調整**用 `adjustStreamVolume(STREAM_MUSIC, ±1)` 走一格。刻意**不用** `adjustSuggestedStreamVolume()`：它依當下有焦點的播放器決定目標 stream，沒有音訊焦點時可能落到 `STREAM_MUSIC` 以外，與本期範圍不符。
 - **絕對音量**以 `getStreamVolume()`／`getStreamMaxVolume()` 換算目標，再用 `setStreamVolume(STREAM_MUSIC, target, 0)` 一次設定，不逐格播放調整提示音。
@@ -150,14 +150,14 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 
 ### 8.5.3 已知限制
 
-- **TTS 與音樂共用 `STREAM_MUSIC`**（§3 rc27 的 X60 實測）。使用者說「小聲一點」時，小助手自己的回話也會一起變小；下限 2 格只是緩解，該下限的回話是否可聽懂未經實測。若實測不可用，才另開 Issue 評估改走 `STREAM_TTS`，本期不處理。
+- **TTS 與音樂共用 `STREAM_MUSIC`**（§3 rc27 的測試手機實測）。使用者說「小聲一點」時，小助手自己的回話也會一起變小；下限 2 格只是緩解，該下限的回話是否可聽懂未經實測。若實測不可用，才另開 Issue 評估改走 `STREAM_TTS`，本期不處理。
 - **低音量下的喚醒率未驗證**。§4.3 既有的喚醒率驗收本身就是待驗收項，音量再壓只會更差。使用者可能體感「調小之後小助手壞掉」；此取捨在設計時已知並接受。
-- **vivo／OriginOS 可能攔截背景音量變更**或另存音量曲線，必須真機驗收，不得以單元測試結論代替。
-- **未納入**：鈴聲與通知音訊流（避開 vivo 勿擾模式的行為差異）、`STREAM_TTS` 拆分、喚醒率最佳化、反向操作（「取消調高音量」）。
+- **部分 OEM 系統（如 vivo／OriginOS）可能攔截背景音量變更**或另存音量曲線，必須真機驗收，不得以單元測試結論代替。
+- **未納入**：鈴聲與通知音訊流（避開部分 OEM 勿擾模式的行為差異）、`STREAM_TTS` 拆分、喚醒率最佳化、反向操作（「取消調高音量」）。
 
-### 8.5.4 X60 路徑（2026-10-04 更新）
+### 8.5.4 測試手機音量路徑（2026-10-04 更新，歷史機型 vivo X60）
 
-X60 上 App UID 的 AudioManager 寫入曾被系統忽略；無障礙 fallback 與 ADB shell helper 方案均已依使用者要求移除。目前回到純 `AudioManager` 方案（§8.5.2），調整後讀回實際級別，未生效時如實回報。此路徑仍需 X60 真人語音驗收後才可標為通過。
+測試手機上 App UID 的 AudioManager 寫入曾被系統忽略；無障礙 fallback 與 ADB shell helper 方案均已依使用者要求移除。目前回到純 `AudioManager` 方案（§8.5.2），調整後讀回實際級別，未生效時如實回報。此路徑仍需測試手機真人語音驗收後才可標為通過。
 
 ## 9. 參考依據
 

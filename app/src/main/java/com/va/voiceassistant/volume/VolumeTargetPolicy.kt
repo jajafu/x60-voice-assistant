@@ -23,7 +23,7 @@ enum class VolumeStepDirection {
  * 決定目標音量級別的純邏輯，不碰 Android API，因此可以完整單元測試。
  *
  * 下限刻意設為 2 格：[com.va.voiceassistant.tts.AndroidTtsEngine] 的 TTS 與音樂
- * 共用 `STREAM_MUSIC`（見 `docs/decision-log.md` rc27 的 vivo X60 實測），
+ * 共用 `STREAM_MUSIC`（見 `docs/decision-log.md` rc27 的測試手機實測），
  * 壓太低會讓小助手自己的回話與喚醒提示音一起變小聲。
  */
 object VolumeTargetPolicy {
@@ -66,7 +66,7 @@ object VolumeTargetPolicy {
     /**
      * 從目前級別逐格走到 [targetIndex] 的完整路徑，不含出發點。
      *
-     * 逐格路徑在 vivo X60 上已證實無效（`adjustStreamVolume` 有呼叫但音量不動），
+     * 逐格路徑在測試手機上已證實無效（歷史機型 vivo X60：`adjustStreamVolume` 有呼叫但音量不動），
      * 因此 `AndroidVolumeActionExecutor` 目前改用 `setStreamVolume` 一次到位，不再呼叫這裡。
      * 保留此純函式與其測試，作為逐格方案的紀錄；若 setter 同樣被限制，可據此回復。
      */

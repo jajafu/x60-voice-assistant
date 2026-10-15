@@ -211,7 +211,7 @@ object M1DiagnosticsRepository {
     /**
      * 記錄一次語音音量操作的前後實測值。
      *
-     * vivo／OriginOS 上 `setStreamVolume` 可能不丟例外卻靜默失效，只看回話無法分辨
+     * 部分 OEM 系統（如 vivo／OriginOS）上 `setStreamVolume` 可能不丟例外卻靜默失效，只看回話無法分辨
      * 是寫入被丟棄還是讀回讀錯對象，因此把調整前、目標與讀回值一併留下。
      * 同時寫入 ring log，會隨診斷匯出一起帶出。
      */

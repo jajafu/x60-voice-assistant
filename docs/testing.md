@@ -85,7 +85,7 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 
 1. 確認設定頁顯示裝置上的 TTS 引擎清單，且「系統預設」項與系統「文字轉語音輸出」頁面一致。
 2. 選擇某個引擎後，音調清單會重新載入；確認清單有顯示語言，並標示「離線」或「需要網路」。
-3. **音調清單只顯示中文**（rc29）：vivo X60 的引擎回報 30 個以上語言，設定頁應只列出 `zh-Hant`／`zh-Hans` 等中文 voice，不出現 `af`、`ak`、`az` 等項目。排序第一個應為繁體中文，與未指定時的自動選擇一致。
+3. **音調清單只顯示中文**（rc29）：測試手機的引擎回報 30 個以上語言（歷史機型 vivo X60），設定頁應只列出 `zh-Hant`／`zh-Hans` 等中文 voice，不出現 `af`、`ak`、`az` 等項目。排序第一個應為繁體中文，與未指定時的自動選擇一致。
 4. 選一個語音穩定的引擎與 voice，停止並重新啟動語音服務，確認診斷頁「TTS」顯示的引擎／voice 與選擇相符。
 5. **音量驗收**：在音樂播放中把音量調到 1.50，用「測試語音」比較 1.00 與 1.50 的聲音大小；若兩個值沒有差異，代表該引擎忽略 `KEY_PARAM_VOLUME`，需如實記錄為未生效而非通過。
 6. 把音量調到 0.50 確認變小聲；調到 0 確認靜音，且畫面仍正常顯示文字。
@@ -95,7 +95,7 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 
 ### 安裝與啟動 smoke（rc30 commit `3e9b742`，已執行）
 
-`docs/ANDROID_MUMU_SMOKE.md` 的 smoke 範圍套用在實體 X60：安裝成功、從 launcher 開啟、啟動畫面可見且沒有立即崩潰。
+`docs/ANDROID_MUMU_SMOKE.md` 的 smoke 範圍套用在實體測試手機（歷史機型 vivo X60）：安裝成功、從 launcher 開啟、啟動畫面可見且沒有立即崩潰。
 
 | 項目 | 結果 |
 | --- | --- |
@@ -127,17 +127,17 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 9. 副作用：確認一次設定沒有連續逐格提示音，且不會意外拉出音量面板（目前使用 `setStreamVolume(..., flags = 0)`）。
 10. 確認一般問答不受影響：說「什麼時候音量太大」應走一般問答而非調整音量。
 11. **PR #21 code review 新增解析案例**（rc30 commit `3e9b742` 後補）：說「音量調高一格」應只調一格而非 1%；說「音量有點大」應**不動作**並照送 LLM；說「亮度調到最大」應**不動作**，不得改動媒體音量。
-12. **讀回一致性**（rc30 commit `3e9b742` 後補）：若 vivo／OriginOS 夾限音量，小助手應回報讀回的實際級別而非宣稱已調到目標。可用實體音量鍵製造不一致後再說指令觀察。
+12. **讀回一致性**（rc30 commit `3e9b742` 後補）：若測試手機 OEM 系統（如 vivo／OriginOS）夾限音量，小助手應回報讀回的實際級別而非宣稱已調到目標。可用實體音量鍵製造不一致後再說指令觀察。
 
 若指令有命中但音量未變，診斷頁的「音量實測」會顯示 `current`、`target`、`readBack`、`max`、`applied` 與 `fixed`。ADB 檢查音量 AppOp 時使用 `AUDIO_MEDIA_VOLUME`；`WRITE_MEDIA_AUDIO` 是音訊檔案寫入操作，與調整媒體音量無關。
 
-### X60 無障礙 fallback 追測（2026-10-02；端點修正後待複測）
+### 無障礙 fallback 追測（2026-10-02，歷史機型 vivo X60；端點修正後待複測）
 
 使用者已在 vivo V2046A／OriginOS 14.0 啟用無障礙服務，並回報多輪測試只有一次「音量調到 50」成功。診斷服務已收到呼叫且手勢 callback 完成；一次 100% 失敗為 `current=8 target=15 readBack=8 max=15 applied=false`，SeekBar 回報 `range=0..600 current=320 target=600 bounds=150,796,1035,850`、`setProgress=false`。實際 slider 軌道比 Accessibility bounds 左右各內縮約 36 px，因此舊端點位置落在軌道外；50% 接近中央才曾成功。已以 bounds 高度估算內縮後的軌道座標、改為 thumb 起點拖曳，新 APK 已安裝至裝置，並通過 `test lint assembleDebug`。需真人複測「調到 100」、「調到 50」、「音量大／小一點」，查看每次讀回是否等於目標；尚未完成此複測。
 
 最新一次「聲音小一點」在使用者回報的鎖屏狀態失敗；診斷為 `accessibility=TIMED_OUT trace=[not-started]`，表示設定頁滑桿事件未開始。使用者明確要求螢幕故障時仍能鎖屏操作，因此不能以解鎖螢幕當作功能解法。2026-10-02 的 X60 ADB 探測中，AppOp `AUDIO_MEDIA_VOLUME` 為 allow；`AudioManager.setStreamVolume`／`adjustStreamVolume`（含 `FLAG_SHOW_UI`）、自建本機 MediaSession、MusicCabin 與 Spotify 的本機 MediaSession 設音量後，讀值都仍為 8。Settings volume panel 在該機只顯示「音效與震動」面板，沒有滑桿。已移除曾加入的鎖屏拒絕分支；目前仍沒有找到可在該機鎖屏調整系統媒體音量的 SDK 路徑，功能未通過。
 
-### 修正版追測（2026-10-02，X60；**未通過**）
+### 修正版追測（2026-10-02，歷史機型 vivo X60；**未通過**）
 
 | 項目 | 結果 |
 | --- | --- |

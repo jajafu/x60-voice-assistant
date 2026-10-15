@@ -8,7 +8,7 @@ import org.junit.Test
 /**
  * voice 清單的篩選、排序與顯示不依賴真實 TTS 引擎，因此在 JVM 直接驗證。
  *
- * locale 樣本取自 vivo X60（Android 13）上 `com.vivo.aiservice` 的實際回報：引擎用的是
+ * locale 樣本取自測試手機（歷史機型 vivo X60，Android 13）上 `com.vivo.aiservice` 的實際回報：引擎用的是
  * **以書寫系統標記**的 `zh-Hant`／`zh-Hans`，不是以地區標記的 `zh-TW`／`zh-CN`。
  */
 class TtsEngineCatalogTest {
