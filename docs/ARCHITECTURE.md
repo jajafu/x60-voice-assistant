@@ -1,4 +1,4 @@
-# 系統現況：小助手 X60 Voice Assistant
+# 系統現況：小助手 Voice Assistant
 
 > 以目前 README、Gradle、Manifest 與程式碼為準；早期規劃文件中的未完成方案不視為已實作。
 
@@ -22,7 +22,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 
 `TtsEngineCatalog` 讀取裝置上的 TTS 引擎與 voice。設定頁只顯示中文 voice（引擎若無中文則顯示全部），排序為繁中優先、離線優先、名稱，並與 `AndroidTtsEngine` 的自動選擇共用同一套規則。繁中判斷同時支援以書寫系統（`zh-Hant`）與以地區（`zh-TW`／`zh-HK`／`zh-MO`）標記的 locale，因為 vivo 引擎回報的是前者。引擎本身仍保有全部 voice，App 不會要求引擎刪除。
 
-- `app/src/main/java/com/jajafu/x60assistant/`：Activity、UI 與 Android 應用入口。
+- `app/src/main/java/com/va/voiceassistant/`：Activity、UI 與 Android 應用入口。
 - `service/`、`audio/`、`orchestration/`：前景服務、單一音訊來源、狀態機與恢復策略。
 - `kws/`、`vad/`、`asr/`、`model/`：本機語音偵測／固定 X-ASR 辨識、APK 內建模型安裝與 SHA256 驗證；舊版下載工作保留升級相容處理。
 - `music/`、`reminder/`：媒體操作與本機提醒路由、執行與排程。
@@ -48,7 +48,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 
 ## 需保持相容的介面／資料
 
-- `com.jajafu.x60assistant` application ID、最低／目標 SDK、`arm64-v8a`、錄音格式與 foreground service 啟動／停止規則不可無意改動。
+- `com.va.voiceassistant` application ID、最低／目標 SDK、`arm64-v8a`、錄音格式與 foreground service 啟動／停止規則不可無意改動。
 - DataStore 設定、Keystore 密文、提醒持久化格式與 X-ASR 模型包 ID／SHA256 需在變更時檢查升級相容；舊版 ASR 選擇遷移及既有檔案保留行為見 `README.md`、`docs/model-packs.md`。
 - OpenAI 相容端點使用可設定 Base URL／Model／Endpoint 及 SSE；Release 僅 HTTPS，Debug HTTP 僅限明列本機位址。
 - 音樂控制依對方公開能力；不能將發出指令一概表述為已播放。MusicCabin 走語音通道，按回傳的狀態說話（rc19 的喜愛清單例外自 1.0.5 退役，詳見 `docs/known-issues.md`）。
@@ -57,8 +57,8 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 ## 測試方式
 
 - `app/src/test/` 的 JUnit、Coroutines Test 與 MockWebServer 覆蓋狀態機、指令路由、模型、SSE、密鑰與提醒等邏輯；`app/src/androidTest/` 含 Keystore 裝置測試。
-- `.\gradlew.bat test`、`.\gradlew.bat lint`、`.\gradlew.bat assembleDebug` 為程式變更的基本自動驗證；KWS 與內建 X-ASR 資產須依 `README.md` 先準備。行為變更且有對應 APK 時，按 `docs/ANDROID_MUMU_SMOKE.md` 記錄可行的安裝／啟動 smoke，仍以 X60 真機資料判定語音功能。
-- vivo X60 實機依 `docs/testing.md` 與 `docs/test-reports/` 記錄錄音、鎖屏、音樂、提醒、真實 Provider 與長時間穩定性；短測及合成音不替代正式門檻。
+- `.\gradlew.bat test`、`.\gradlew.bat lint`、`.\gradlew.bat assembleDebug` 為程式變更的基本自動驗證；KWS 與內建 X-ASR 資產須依 `README.md` 先準備。行為變更且有對應 APK 時，按 `docs/ANDROID_MUMU_SMOKE.md` 記錄可行的安裝／啟動 smoke，仍以測試手機真機資料判定語音功能。
+- 測試手機實機依 `docs/testing.md` 與 `docs/test-reports/` 記錄錄音、鎖屏、音樂、提醒、真實 Provider 與長時間穩定性；短測及合成音不替代正式門檻。
 
 ## 已知風險
 

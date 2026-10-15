@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">小助手 X60</string>
+    <string name="app_name">小助手</string>
     <string name="diagnostics_title">小助手控制中心</string>
     <string name="m0_subtitle">本機喚醒與辨識；回答只送到你設定的 OpenAI-compatible Provider。</string>
     <string name="service_status">前景服務狀態</string>

@@ -1,11 +1,11 @@
-# 小助手 X60：語音操作手機擴充規劃書
+# 小助手：語音操作手機擴充規劃書
 
 日期：2026-09-23　狀態：MusicCabin 基本控制已接入；真人語音／鎖屏驗收待完成
 更新：2026-09-30　狀態：語音導航（Google 地圖）已實作並通過 test／lint／assembleDebug；真機語音驗收待完成
 
 ## 1. 目標與產品邊界
 
-讓使用者說出「打開音樂 App」、「暫停音樂」、「下一首」或「播放周杰倫的晴天」後，小助手能在 vivo X60 上執行對應操作，並根據手機回報的狀態告知結果。後續可將同一套架構擴充到其他明確列出的手機操作。
+讓使用者說出「打開音樂 App」、「暫停音樂」、「下一首」或「播放周杰倫的晴天」後，小助手能在手機上執行對應操作，並根據手機回報的狀態告知結果。後續可將同一套架構擴充到其他明確列出的手機操作。
 
 第一輪交付以音樂為樣板，但架構應能容納「開啟 App」、「媒體控制」、「系統允許的操作」與「特定 App 的操作介面」。**不承諾任意 App 的任意畫面都能由語音自動點擊**；每個 App、動作及鎖屏情境都要單獨驗證。付款、傳送訊息、撥號及變更系統安全設定不在第一輪自動執行範圍。
 
@@ -54,7 +54,7 @@
 
 1. **標準 Android Intent**：開啟已選 App 或已驗證的搜尋／播放入口。查詢特定 App 時只宣告必要的 `<queries>`；找不到目標時回報並提供設定入口。
 2. **MediaSession 控制**：非 MusicCabin 播放器透過其對外公開的 MediaBrowserService 連接到指定套件，再用 `MediaController.TransportControls` 執行播放、暫停、上一首、下一首。MusicCabin 自 1.0.5 起改走公開語音通道（有序廣播），不再經這條路；收藏切換也不再經受信任控制端自訂指令，改由音樂 App 隱私開關管，通知存取只留給車機 fallback。日後若要控制其他未公開媒體服務的 App，也可評估使用 `MediaSessionManager.getActiveSessions()`。[Android MediaSessionManager](https://developer.android.com/reference/android/media/session/MediaSessionManager)、[TransportControls](https://developer.android.com/reference/android/media/session/MediaController.TransportControls)
-3. **搜尋並播放**：先探測選定 App 是否支援 `MediaController.TransportControls.playFromSearch()`，或 Android 的 `MEDIA_PLAY_FROM_SEARCH` Intent；兩者都要在 X60 與該 App 版本上實測。支援搜尋結果不等於已開始播放，必須確認播放器狀態與曲目。若不支援，再評估該服務公開且授權可用的官方 API／深層連結。[Android 常見 Intent](https://developer.android.com/guide/components/intents-common)
+3. **搜尋並播放**：先探測選定 App 是否支援 `MediaController.TransportControls.playFromSearch()`，或 Android 的 `MEDIA_PLAY_FROM_SEARCH` Intent；兩者都要在測試手機與該 App 版本上實測。支援搜尋結果不等於已開始播放，必須確認播放器狀態與曲目。若不支援，再評估該服務公開且授權可用的官方 API／深層連結。[Android 常見 Intent](https://developer.android.com/guide/components/intents-common)
 4. **App 專用 UI 自動化**：只在上述入口不可用、且使用者確實需要該 App 流程時，為單一 App 製作可關閉的適配器。使用 Android Accessibility Service 的節點文字／語義定位與 `performAction()`；不以固定座標作主要定位方式。每一步檢查目前 App、畫面與目標節點，遇到登入、驗證碼、付款、權限對話框或畫面不符立即停止。使用者需在系統設定手動啟用，且限已解鎖、螢幕可見的情境。[Android 無障礙服務](https://developer.android.com/guide/topics/ui/accessibility/views/service)
 
 一般 App 開啟不能保證從鎖屏中的前景服務直接彈出：Android 10 起限制背景啟動 Activity，target SDK 35 對 `PendingIntent` 也有更嚴格條件。因此鎖屏時先支援已有媒體工作階段的控制；需要開新畫面時以通知請使用者點擊並解鎖，不把「點亮／解鎖後才完成」寫成全程免手動。[Android 背景 Activity 限制](https://developer.android.com/guide/components/activities/secure-bal)
@@ -77,15 +77,15 @@
 | --- | --- | --- |
 | P0：X60 能力盤點與原型 | 已確認 MusicCabin FOSS `13.7.13` 可安裝、啟動並建立 session；公開 MediaBrowserService 已可連接；搜尋「晴天」及播放／切歌短測通過 | 補齊真人語音、鎖屏及不同歌曲的「MusicCabin × 動作 × 螢幕狀態」矩陣 |
 | P1：本機動作框架 | `ActionRouter`、型別化動作、政策檢查、結果回饋、取消／逾時；接入現有狀態機 | 不需 LLM 即可解析基本指令；一般問題仍正常問答；否定句與模糊句不誤觸操作；單元測試覆蓋指令與拒絕路徑 |
-| P2：開啟 App 與媒體控制 | 使用者選擇預設音樂 App、Intent 啟動、通知存取引導、MediaSession 播放／暫停／切歌 | X60 亮屏 30 次受支援操作至少 27 次成功；鎖屏中的既有 session 控制另測 30 次，受支援操作至少 27 次成功；不可用或不支援時 100% 不虛報成功 |
+| P2：開啟 App 與媒體控制 | 使用者選擇預設音樂 App、Intent 啟動、通知存取引導、MediaSession 播放／暫停／切歌 | 測試手機亮屏 30 次受支援操作至少 27 次成功；鎖屏中的既有 session 控制另測 30 次，受支援操作至少 27 次成功；不可用或不支援時 100% 不虛報成功 |
 | P3：指定歌曲 | 歌曲／歌手擷取、可用的 `playFromSearch()` 或播放 Intent、結果驗證；對一個選定 App 做完整適配 | 20 條含中文歌手／歌名的測試語句，逐條記錄「實際播對」、「只開搜尋頁」及「失敗」；只有實際播對才回報完成。是否可設定成功率門檻依 P0 能力盤點決定 |
 | P4：擴大手機操作 | 依需求逐一加入其他 App 或受限 UI 適配器；每個適配器有開關、畫面驗證與回歸案例 | 每個 App／動作單獨簽收；更新 App 後重新測試；未授權時不讀取畫面也不操作 |
 
-各階段都要執行 `test`、`lint`、`assembleDebug`，並記錄 APK 版本、裝置版本、音樂 App 版本及測試結果。P2／P3 必須在 vivo X60 真機驗收；模擬器、單元測試或合成語音不能取代真機。需同時測「亮屏 App 在前景」、「助理在背景但手機已解鎖」、「鎖屏且播放器已有 session」、「鎖屏且播放器未啟動」，並在音樂外放時重測喚醒和 ASR。原專案未完成的 8/24 小時及真實 Provider 驗收仍維持待辦，不因新增手機操作而視為通過。
+各階段都要執行 `test`、`lint`、`assembleDebug`，並記錄 APK 版本、裝置版本、音樂 App 版本及測試結果。P2／P3 必須在測試手機真機驗收；模擬器、單元測試或合成語音不能取代真機。需同時測「亮屏 App 在前景」、「助理在背景但手機已解鎖」、「鎖屏且播放器已有 session」、「鎖屏且播放器未啟動」，並在音樂外放時重測喚醒和 ASR。原專案未完成的 8/24 小時及真實 Provider 驗收仍維持待辦，不因新增手機操作而視為通過。
 
 ## 7. 預估工作量與決策點
 
-以一名熟悉現有 Kotlin 專案的開發者、X60 可連線測試為前提：P0 約 1–2 天，P1 約 2–4 天，P2 約 3–5 天，P3 每個音樂 App 約 3–7 天；P4 依 App 與操作流程另估。這些是規劃估算，不包含第三方服務登入／審核等待或長時間真機 soak test。
+以一名熟悉現有 Kotlin 專案的開發者、測試手機可連線測試為前提：P0 約 1–2 天，P1 約 2–4 天，P2 約 3–5 天，P3 每個音樂 App 約 3–7 天；P4 依 App 與操作流程另估。這些是規劃估算，不包含第三方服務登入／審核等待或長時間真機 soak test。
 
 MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並解鎖；既有媒體工作階段的控制及搜尋播放則以不開畫面為目標。P0 真機結果決定 P3 能否做到真正免手動指定歌曲播放；若實際播放無法完成，就將「開啟搜尋結果頁」與「自動播放」分開交付，不宣稱具備後者。
 
@@ -161,5 +161,5 @@ X60 上 App UID 的 AudioManager 寫入曾被系統忽略；無障礙 fallback �
 
 ## 9. 參考依據
 
-- 現有程式：`app/src/main/java/com/jajafu/x60assistant/orchestration/VoiceOrchestrator.kt`、`app/src/main/AndroidManifest.xml`、`docs/test-reports/m5-2026-09-22-vivo-x60.md`。
+- 現有程式：`app/src/main/java/com/va/voiceassistant/orchestration/VoiceOrchestrator.kt`、`app/src/main/AndroidManifest.xml`、`docs/test-reports/m5-2026-09-22-vivo-x60.md`。
 - Android 官方：[Package visibility](https://developer.android.com/training/package-visibility/use-cases)、[MediaSessionManager](https://developer.android.com/reference/android/media/session/MediaSessionManager)、[媒體控制](https://developer.android.com/reference/android/media/session/MediaController.TransportControls)、[常見 Intent](https://developer.android.com/guide/components/intents-common)、[背景 Activity 啟動限制](https://developer.android.com/guide/components/activities/secure-bal)、[Accessibility Service](https://developer.android.com/guide/topics/ui/accessibility/views/service)。
