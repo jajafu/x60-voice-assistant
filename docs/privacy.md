@@ -12,6 +12,6 @@
 - 音樂 App 選擇器只在本機查詢宣告公開媒體瀏覽服務的已安裝 App；保存所選 App 的顯示名稱、套件名稱與服務類別，不上傳安裝清單。
 - MusicCabin 語音收藏、取消收藏及單曲循環需使用者在系統設定中啟用小助手的通知存取權，讓 MusicCabin 將小助手視為可執行這些指令的控制端。Android 此權限同時允許讀取其他 App 通知；小助手的通知監聽服務目前不處理或保存通知內容。一般音樂播放與讀取喜愛清單不需此權限，可隨時在系統設定撤銷。
 - Ring Log 最多 200 筆、只存在 process 記憶體；欄位會移除換行並截斷為 160 字元。它只記狀態、固定錯誤碼、計數與安全原因，不記 PCM、完整 tokens、序號或 Android ID。
-- X-ASR 壓縮檔隨 APK 提供。首次啟動語音服務時，App 驗證壓縮檔與模型檔的 SHA256，然後將模型檔放進 App Private Storage；不會在執行時從網路下載模型。模型完整性檢查只讀本機檔案。
+- X-ASR 壓縮檔由使用者在「模型」頁按鈕從雲端硬碟下載（APK 不再內建）。下載時只傳輸模型壓縮檔，不上傳語音；安裝時 App 驗證壓縮檔與模型檔的 SHA256，然後將模型檔放進 App Private Storage。模型完整性檢查只讀本機檔案。App 更新檢查只讀取 GitHub release 資訊，下載的 APK 在 App 內經系統安裝程式安裝。
 - 安全診斷匯出不含 Key、Authorization、完整私人 URL、PCM、逐字稿或回答，只含 host、長度、hash、狀態、計數與錯誤碼。
 - App 強制停止後不自行復活。正常停止、錯誤與 Service 銷毀路徑會 release AudioRecord、WakeLock、sherpa handle、HTTP/SSE、TTS、Audio Focus 與所有 queue。

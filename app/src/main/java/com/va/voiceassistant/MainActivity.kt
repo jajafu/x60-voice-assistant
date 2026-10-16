@@ -24,6 +24,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.va.voiceassistant.data.AssistantSettings
 import com.va.voiceassistant.data.SettingsRepository
+import com.va.voiceassistant.asr.AsrModelPacks
+import com.va.voiceassistant.model.ModelPackManager
+import com.va.voiceassistant.model.ModelPackStatus
+import com.va.voiceassistant.model.XAsrDownloadManager
+import com.va.voiceassistant.update.AppUpdateChecker
+import com.va.voiceassistant.update.AppUpdateDownloader
+import com.va.voiceassistant.update.AppUpdateInfo
 import com.va.voiceassistant.diagnostics.DeviceDiagnostics
 import com.va.voiceassistant.diagnostics.DeviceDiagnosticsCollector
 import com.va.voiceassistant.diagnostics.M1DiagnosticsRepository
@@ -57,6 +64,7 @@ import com.va.voiceassistant.tts.TtsEngineOption
 import com.va.voiceassistant.tts.TtsVoiceOption
 import com.va.voiceassistant.ui.diagnostics.DeviceDiagnosticsScreen
 import com.va.voiceassistant.ui.theme.VoiceAssistantTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -85,6 +93,15 @@ class MainActivity : ComponentActivity() {
     private var ttsVoicesLoading by mutableStateOf(false)
     private var ttsCatalog: TtsEngineCatalog? = null
     private var ttsVoicesJob: Job? = null
+    private var asrInstalled by mutableStateOf(false)
+    private var asrStatusText by mutableStateOf("尚未檢查")
+    private var asrDownloading by mutableStateOf(false)
+    private var asrProgress by mutableStateOf(0)
+    private var xasrDownload: XAsrDownloadManager? = null
+    private var appUpdate by mutableStateOf<AppUpdateInfo?>(null)
+    private var updateDownloading by mutableStateOf(false)
+    private var updateProgress by mutableStateOf(0)
+    private var updateIgnored by mutableStateOf(false)
 
     private val diagnosticsExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain"),
@@ -163,6 +180,8 @@ class MainActivity : ComponentActivity() {
         )
         reminderManager = ReminderManager(applicationContext)
         refreshDiagnostics()
+        refreshAsrStatus(force = true)
+        if (savedInstanceState == null) checkAppUpdate()
         refreshMusicApps()
         refreshTtsEngines()
         refreshReminders()
@@ -232,6 +251,19 @@ class MainActivity : ComponentActivity() {
                     onSaveReminder = ::saveReminder,
                     onDeleteReminder = ::deleteReminder,
                     onChooseReminderSound = ::openRingtonePicker,
+                    asrInstalled = asrInstalled,
+                    asrStatusText = asrStatusText,
+                    asrDownloading = asrDownloading,
+                    asrProgress = asrProgress,
+                    onDownloadAsr = ::downloadXAsr,
+                    onCancelAsrDownload = ::cancelXAsrDownload,
+                    updateVersion = if (updateIgnored) null else appUpdate?.versionTag,
+                    updateFileSize = appUpdate?.let { formatBytes(it.sizeBytes) },
+                    updateNotes = appUpdate?.notes?.take(100),
+                    updateDownloading = updateDownloading,
+                    updateProgress = updateProgress,
+                    onDownloadUpdate = ::downloadAndInstallUpdate,
+                    onIgnoreUpdate = { updateIgnored = true },
                 )
             }
         }
@@ -242,6 +274,7 @@ class MainActivity : ComponentActivity() {
         if (::diagnosticsCollector.isInitialized) {
             ReminderScheduler(applicationContext).rescheduleAll()
             refreshDiagnostics()
+            refreshAsrStatus()
             refreshMusicApps()
             refreshMusicCabinFavoriteAccess()
             refreshReminders()
@@ -277,6 +310,10 @@ class MainActivity : ComponentActivity() {
 
     private fun requestPermissionsAndStart() {
         errorMessage = null
+        if (asrDownloading) {
+            errorMessage = "模型下載中，請等下載完成再啟動服務。"
+            return
+        }
         startAfterPermissionGrant = true
         when {
             !hasPermission(Manifest.permission.RECORD_AUDIO) ->
@@ -593,6 +630,108 @@ class MainActivity : ComponentActivity() {
             refreshReminders()
             refreshReminderSound()
         }
+    }
+
+    private var asrStatusJob: Job? = null
+    private var asrVerifiedValid = false
+
+    private fun refreshAsrStatus(force: Boolean = false) {
+        // 完整驗證要讀 175 MB；驗過且正常就沿用，只在強制或上次異常時重驗。
+        if (!force && asrVerifiedValid) return
+        asrStatusJob?.cancel()
+        // 模型檔約 175 MB，SHA 驗證放背景做，避免卡住畫面。
+        asrStatusJob = lifecycleScope.launch(Dispatchers.Default) {
+            val status: ModelPackStatus =
+                ModelPackManager(applicationContext).verifyAsrPack(AsrModelPacks.xAsr)
+            asrInstalled = status.valid
+            asrVerifiedValid = status.valid
+            asrStatusText = when {
+                status.valid -> "已下載並驗證"
+                status.reason?.startsWith("missing") == true -> "尚未下載（約 175 MB）"
+                else -> "異常：${status.reason}"
+            }
+        }
+    }
+
+    private fun downloadXAsr() {
+        if (asrDownloading) return
+        asrDownloading = true
+        asrProgress = 0
+        settingsMessage = "正在從雲端下載 X-ASR 模型，請保持 App 開啟…"
+        val manager = XAsrDownloadManager(applicationContext).also { xasrDownload = it }
+        lifecycleScope.launch {
+            runCatching {
+                manager.downloadAndInstall { progress ->
+                    if (progress >= 0) asrProgress = progress
+                    else {
+                        asrProgress = -1
+                        settingsMessage = "下載完成，正在解壓安裝…"
+                    }
+                }
+            }.onSuccess {
+                refreshAsrStatus(force = true)
+                settingsMessage = "X-ASR 模型已就緒，可以啟動服務。"
+            }.onFailure {
+                settingsMessage = "模型下載失敗：${it.message ?: it.javaClass.simpleName}"
+            }
+            asrDownloading = false
+        }
+    }
+
+    private fun cancelXAsrDownload() {
+        xasrDownload?.cancel()
+    }
+
+    private fun checkAppUpdate() {
+        lifecycleScope.launch {
+            runCatching { AppUpdateChecker.checkForUpdate(BuildConfig.VERSION_NAME) }
+                .onSuccess { appUpdate = it }
+                .onFailure { appUpdate = null }
+        }
+    }
+
+    private fun downloadAndInstallUpdate() {
+        val info = appUpdate ?: return
+        if (updateDownloading) return
+        // 先要授權再下載，避免下載完才發現不能裝、還要重下一次。
+        if (AppUpdateDownloader.needsInstallPermission(this@MainActivity)) {
+            settingsMessage = "請先允許「安裝未知應用」，再回來按下載更新。"
+            runCatching {
+                startActivity(AppUpdateDownloader.installPermissionIntent(this@MainActivity))
+            }
+            return
+        }
+        updateDownloading = true
+        updateProgress = 0
+        settingsMessage = "正在 App 內下載更新…"
+        lifecycleScope.launch {
+            runCatching {
+                AppUpdateDownloader.downloadApk(
+                    applicationContext,
+                    info.apkUrl,
+                    info.fileName,
+                    onProgress = { updateProgress = it },
+                    expectedSizeBytes = info.sizeBytes,
+                )
+            }.onSuccess { apk ->
+                updateDownloading = false
+                settingsMessage = "更新已下載完成，正在開啟安裝…"
+                runCatching {
+                    startActivity(AppUpdateDownloader.installIntent(this@MainActivity, apk))
+                }.onFailure {
+                    settingsMessage = "無法開啟安裝：${it.message ?: it.javaClass.simpleName}"
+                }
+            }.onFailure {
+                updateDownloading = false
+                settingsMessage = "更新下載失敗：${it.message ?: it.javaClass.simpleName}"
+            }
+        }
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes <= 0) return ""
+        val mb = bytes / 1_048_576.0
+        return if (mb >= 1) "約 ${"%.0f".format(mb)} MB" else "約 ${bytes / 1024} KB"
     }
 
     private fun hasPermission(permission: String): Boolean =
