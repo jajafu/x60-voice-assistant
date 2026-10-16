@@ -8,10 +8,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $packageName = 'com.va.voiceassistant'
-$repositoryRoot = Split-Path -Parent $PSScriptRoot
-$vadAssetDirectory = Join-Path $repositoryRoot 'app\src\main\assets\models\vad'
-$vadUrl = 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx'
-$vadSha256 = '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6'
 
 $packs = [ordered]@{
     standard = [ordered]@{
@@ -53,14 +49,8 @@ function Assert-Sha256([string]$Path, [string]$Expected) {
 }
 
 New-Item -ItemType Directory -Force -Path $CacheDirectory | Out-Null
-New-Item -ItemType Directory -Force -Path $vadAssetDirectory | Out-Null
-$vadCachePath = Join-Path $CacheDirectory 'silero_vad.onnx'
-if (!(Test-Path -LiteralPath $vadCachePath)) {
-    Invoke-WebRequest -Uri $vadUrl -OutFile $vadCachePath
-}
-Assert-Sha256 $vadCachePath $vadSha256
-Copy-Item -Force -LiteralPath $vadCachePath -Destination (Join-Path $vadAssetDirectory 'silero_vad.onnx')
-Write-Output "Prepared verified VAD asset: $vadSha256"
+# VAD is a bundled APK asset; keep one source of truth for its URL and SHA256.
+& (Join-Path $PSScriptRoot 'prepare-vad-asset.ps1') -CacheDirectory $CacheDirectory
 
 $selected = if ($Pack -eq 'all') { @('standard', 'moonshine', 'xasr') } else { @($Pack) }
 foreach ($packName in $selected) {

@@ -45,7 +45,7 @@ x iǎo zh ù sh ǒu @小助手
 
 sherpa runtime repository 的 Apache-2.0 不應自動推定為 model weights 的授權。官方模型 archive 不含 `LICENSE`／`NOTICE`，官方 KWS 頁與 release 沒有列出此模型權重及 `tokens.txt` 的授權。官方 issue `#3760` 曾要求釐清這三個 KWS model 的使用與再散布權，但在沒有維護者公開答覆的情況下關閉。
 
-因此 Repository 只提交來源、檔名、大小、格式與 SHA256，以及由專案自行建立的 keyword；模型 binary 與 `tokens.txt` 都被 `.gitignore` 排除。`scripts/prepare-m1-kws-assets.ps1` 僅供本機個人評估。授權釐清前，不得發佈含模型 APK。
+因此 Repository 只提交來源、檔名、大小、格式與 SHA256，以及由專案自行建立的 keyword；模型 binary 與 `tokens.txt` 都被 `.gitignore` 排除。`scripts/prepare-m1-kws-assets.ps1`（KWS）與 `scripts/prepare-vad-asset.ps1`（Silero VAD）僅供本機與 release 建置準備。授權釐清前，不得發佈含模型 APK。
 
 ## M2 VAD / ASR
 
@@ -57,6 +57,8 @@ sherpa runtime repository 的 Apache-2.0 不應自動推定為 model weights 的
 | X-ASR zh-en punct INT8 | `sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2` | 136,396,739 | `5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224` | 改由「模型」頁按鈕從雲端硬碟下載；句尾交付辨識結果 |
 
 Standard pack 的 `model.int8.onnx` 為 162,290,887 bytes，SHA256 `24ffdc19ba9aaed5a6a9beaede1e087745217d82425cf4041bca0c696661801e`；`tokens.txt` SHA256 `6193c7ea1c96d0d9a1e9652789b40d13a8a913b434a5451e93158f5a09fd6652`。
+
+Silero VAD 由 `scripts/prepare-vad-asset.ps1` 下載並校驗後放入 `app/src/main/assets/models/vad/silero_vad.onnx`；它是 APK 內建資產，服務啟動時若缺檔會直接以 `VAD_INIT_FAILED` 停止。`scripts/prepare-m2-model-packs.ps1` 已改為呼叫同一支腳本，避免 URL／SHA256 兩份。release workflow 與 `assembleRelease` 前的 `verifyReleaseModelAssets` 檢查都會確認它在 APK 內。
 
 Moonshine pack 逐檔：
 

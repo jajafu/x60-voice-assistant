@@ -18,11 +18,14 @@
 
 ## 準備模型
 
-模型 binary 不進 Git。KWS 模型需在建置前準備；X-ASR 改由 App「模型」頁按鈕從雲端硬碟下載（約 136 MB，解壓後約 175 MB），APK 不再內建，下載後啟動服務時會解壓並逐檔校驗至 App 私有儲存空間。準備建置資產：
+模型 binary 不進 Git。KWS 與 Silero VAD 模型會內建進 APK，需在建置前準備；X-ASR 改由 App「模型」頁按鈕從雲端硬碟下載（約 136 MB，解壓後約 175 MB），APK 不再內建，下載後啟動服務時會解壓並逐檔校驗至 App 私有儲存空間。準備建置資產：
 
 ```powershell
 .\scripts\prepare-m1-kws-assets.ps1
+.\scripts\prepare-vad-asset.ps1
 ```
+
+兩個腳本都會下載後比對 SHA256。Release 建置在打包前會檢查這些資產是否存在（`preReleaseBuild` → `verifyReleaseModelAssets`），缺檔就讓建置失敗，不會再產出啟動不了的 APK。
 
 舊版 scripts/prepare-bundled-xasr.ps1 已停用，APK 內建壓縮檔不再需要。
 
@@ -94,7 +97,7 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 ## AI 開發流程
 
-Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.6` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.7` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
 
 從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 

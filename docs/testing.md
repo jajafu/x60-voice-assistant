@@ -4,6 +4,7 @@
 
 ```powershell
 .\scripts\prepare-m1-kws-assets.ps1
+.\scripts\prepare-vad-asset.ps1
 .\gradlew.bat test
 .\gradlew.bat lint
 .\gradlew.bat assembleDebug
