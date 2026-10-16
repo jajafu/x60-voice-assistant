@@ -32,6 +32,7 @@ jobs:
         shell: powershell
         run: |
           .\scripts\prepare-m1-kws-assets.ps1
+          .\scripts\prepare-vad-asset.ps1
 
       - name: Check tag matches app version
         if: startsWith(github.ref, 'refs/tags/v')

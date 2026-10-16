@@ -15,8 +15,8 @@ android {
         applicationId = "com.va.voiceassistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 40
-        versionName = "1.0.6"
+        versionCode = 41
+        versionName = "1.0.7"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -75,6 +75,39 @@ kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_17
     }
+}
+
+// Release APK must bundle the KWS and Silero VAD model assets. These binaries are gitignored
+// and prepared by scripts/prepare-*.ps1; without them the service fails immediately at startup
+// (KWS_MODEL_INVALID / VAD_INIT_FAILED), which is how the v1.0.6 release APK broke.
+// Guard only the release path so test/lint/assembleDebug stay unaffected.
+val requiredReleaseModelAssets = listOf(
+    "models/vad/silero_vad.onnx",
+    "models/kws/**/encoder-*.int8.onnx",
+    "models/kws/**/decoder-*.onnx",
+    "models/kws/**/joiner-*.int8.onnx",
+    "models/kws/**/tokens.txt",
+    "models/kws/**/keywords.txt",
+)
+
+val verifyReleaseModelAssets = tasks.register("verifyReleaseModelAssets") {
+    group = "verification"
+    description = "Fails when bundled KWS/VAD model assets are missing from a release build."
+    val assets = fileTree(layout.projectDirectory.dir("src/main/assets"))
+    val required = requiredReleaseModelAssets
+    doLast {
+        val missing = required.filter { pattern -> assets.matching { include(pattern) }.isEmpty }
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "Missing bundled model assets for release: ${missing.joinToString()}. " +
+                    "Run scripts\\prepare-m1-kws-assets.ps1 and scripts\\prepare-vad-asset.ps1 first.",
+            )
+        }
+    }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(verifyReleaseModelAssets)
 }
 
 dependencies {

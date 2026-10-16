@@ -20,6 +20,8 @@
 ## M2–M5
 
 - 1.0.6 未驗收：X-ASR 雲端下載→解壓→安裝、App 內更新下載→系統安裝、MuMu smoke 與真機語音皆待補做，不得宣稱通過。更新檢查需倉庫公開＋有 release，目前私有零 releases，檢查一律靜默無橫幅。
+- 已發佈的 v1.0.6 release APK 缺 `assets/models/vad/silero_vad.onnx`，任何手機啟動語音助理都會以 `VAD_INIT_FAILED` 立刻停止，不可再使用；該 release 已標為 pre-release。
+- 1.0.7 未驗收：修正後的 release APK 真機啟動語音助理、喚醒→VAD→X-ASR→回答整條流程、模型下載與 App 內更新安裝、MuMu smoke 皆待補做；本機只驗證測試、lint、debug 建置與 release APK 內含 KWS／VAD 資產，不得宣稱真機通過。
 
 - Small／Standard 中文 ASR archive 沒有模型專屬 `LICENSE`／`NOTICE`；Moonshine 中文權重附 Moonshine AI Community License。APK 不含 ASR binary，授權條款見 `docs/model-packs.md`。
 - 目前 X60 只完成 Small ASR 的單句合成短測和 Standard 的載入短測。Moonshine 尚未在真機下載、載入或辨識；20 句真人語意、連續 30 次、P95、Peak PSS、熱降頻與 OOM/LMK 仍待正式量測。

@@ -132,6 +132,12 @@
 - X-ASR 改由 App「模型」頁按鈕從使用者雲端硬碟下載（單次下載、無續傳，失敗重按；下載中可取消，啟動服務會被擋下直到完成），下載後維持逐檔 SHA256 解壓安裝；APK 不再內建，`prepare-bundled-xasr.ps1` 已停用，release workflow 不再呼叫它。
 - App 開啟檢查 GitHub releases 有無新版，有就在 App 內下載 APK（比對 release 檔大小）並叫起系統安裝，不跳瀏覽器；需「安裝未知應用」授權。限制：倉庫目前私有且零 releases，檢查一律 404 靜默；需設為公開並發 release，整條更新路徑才會動、才能真機驗收。
 - 版號 `1.0.6`／`versionCode 40`。`test`、`lint`、`assembleDebug` 通過；模型下載→解壓→安裝、App 內更新安裝、MuMu 與真機語音驗收待補做。
+## 1.0.7（本對話，使用者核准：修好 release APK 缺 VAD 模型）
+
+- 使用者實測發現 release APK 按下「啟動語音助理」後沒有反應；診斷頁「最後錯誤」顯示 `VAD_INIT_FAILED`。核對 APK 內容確認 `assets/models/vad/silero_vad.onnx` 從未進入 CI 產物：release workflow 只執行 `prepare-m1-kws-assets.ps1`，而 VAD 一直是由 `prepare-m2-model-packs.ps1` 準備、該腳本未被 workflow 呼叫。Debug APK 因本機 assets 目錄已有該檔而正常，所以先前沒被發現；已發佈的 v1.0.6 APK 在任何手機都會啟動失敗。
+- 新增 `scripts/prepare-vad-asset.ps1` 專責下載並校驗 Silero VAD；release workflow 改為同時執行 KWS 與 VAD 兩支腳本；`prepare-m2-model-packs.ps1` 改呼叫同一支腳本，URL／SHA256 只有一份。`app/build.gradle.kts` 新增 release 專用建置前檢查 `verifyReleaseModelAssets`（掛在 `preReleaseBuild`），缺 KWS／VAD 資產就讓建置失敗；debug／`test`／`lint` 不受影響。
+- 已發佈的 v1.0.6 release 標記為 pre-release，避免下載到無法啟動的 APK；改以 1.0.7 取代。
+- 版號 `1.0.7`／`versionCode 41`。`test`、`lint`、`assembleDebug` 通過；release APK 內容與真機啟動驗收見 Issue #36。
 ## 1.0.1（2026-10-05，Issue #24）
 
 - **開發者決定（版號）**：不再使用 `1.0.0-rcN` 候選版號。從本版起為 `1.0.1`／`versionCode 35`，後續行為變更的 APK 依序為 `1.0.2`、`1.0.3`…直到另行決定。`versionCode 35` 高於各分支已用的 34（含 Issue #20 的 rc30），覆蓋安裝不會被 Android 拒絕。
