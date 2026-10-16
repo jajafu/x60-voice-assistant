@@ -9,6 +9,7 @@ captures/
 .cxx/
 *.jks
 *.keystore
+keystore-base64.txt
 secrets.properties
 *.wav
 *.pcm
