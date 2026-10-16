@@ -132,6 +132,19 @@ fun DeviceDiagnosticsScreen(
     onSaveReminder: (String?, String, Long, ReminderRecurrence?) -> Unit,
     onDeleteReminder: (String) -> Unit,
     onChooseReminderSound: () -> Unit,
+    asrInstalled: Boolean = false,
+    asrStatusText: String = "",
+    asrDownloading: Boolean = false,
+    asrProgress: Int = 0,
+    onDownloadAsr: () -> Unit = {},
+    onCancelAsrDownload: () -> Unit = {},
+    updateVersion: String? = null,
+    updateFileSize: String? = null,
+    updateNotes: String? = null,
+    updateDownloading: Boolean = false,
+    updateProgress: Int = 0,
+    onDownloadUpdate: () -> Unit = {},
+    onIgnoreUpdate: () -> Unit = {},
 ) {
     var section by rememberSaveable { mutableStateOf(AppSection.VOICE) }
     var showDiagnostics by rememberSaveable { mutableStateOf(false) }
@@ -169,6 +182,13 @@ fun DeviceDiagnosticsScreen(
                 errorMessage = errorMessage,
                 onPrimaryAction = onPrimaryAction,
                 onPauseOrResume = onPauseOrResume,
+                updateVersion = updateVersion,
+                updateFileSize = updateFileSize,
+                updateNotes = updateNotes,
+                updateDownloading = updateDownloading,
+                updateProgress = updateProgress,
+                onDownloadUpdate = onDownloadUpdate,
+                onIgnoreUpdate = onIgnoreUpdate,
             )
 
             AppSection.MODELS -> ModelsPage(
@@ -184,6 +204,12 @@ fun DeviceDiagnosticsScreen(
                 onDeleteLlmApiKey = onDeleteLlmApiKey,
                 onDeleteAudioApiKey = onDeleteAudioApiKey,
                 onTestTts = onTestTts,
+                asrInstalled = asrInstalled,
+                asrStatusText = asrStatusText,
+                asrDownloading = asrDownloading,
+                asrProgress = asrProgress,
+                onDownloadAsr = onDownloadAsr,
+                onCancelAsrDownload = onCancelAsrDownload,
             )
 
             AppSection.SETTINGS -> if (showDiagnostics) DiagnosticsPage(
@@ -333,6 +359,13 @@ private fun VoicePage(
     errorMessage: String?,
     onPrimaryAction: () -> Unit,
     onPauseOrResume: () -> Unit,
+    updateVersion: String? = null,
+    updateFileSize: String? = null,
+    updateNotes: String? = null,
+    updateDownloading: Boolean = false,
+    updateProgress: Int = 0,
+    onDownloadUpdate: () -> Unit = {},
+    onIgnoreUpdate: () -> Unit = {},
 ) {
     val phase = diagnostics.phase
     val transcript = diagnostics.partialTranscript.ifBlank { diagnostics.finalTranscript }
@@ -357,6 +390,49 @@ private fun VoicePage(
         }
 
         if (errorMessage != null) item { MessageCard(errorMessage, error = true) }
+
+        if (updateVersion != null) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text(
+                            "發現新版本 $updateVersion ${updateFileSize.orEmpty()}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "在 App 內下載完成後會直接開啟安裝，不會跳到瀏覽器。",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                        if (!updateNotes.isNullOrBlank()) {
+                            Text(
+                                updateNotes,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                        if (updateDownloading) {
+                            Text(
+                                "下載中 ${updateProgress}%",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        } else {
+                            Row(modifier = Modifier.padding(top = 8.dp)) {
+                                Button(onClick = onDownloadUpdate) { Text("下載並安裝") }
+                                TextButton(onClick = onIgnoreUpdate) { Text("稍後") }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         item {
             Card(
@@ -491,6 +567,12 @@ private fun ModelsPage(
     onDeleteLlmApiKey: () -> Unit,
     onDeleteAudioApiKey: () -> Unit,
     onTestTts: (AssistantSettings, String) -> Unit,
+    asrInstalled: Boolean = false,
+    asrStatusText: String = "",
+    asrDownloading: Boolean = false,
+    asrProgress: Int = 0,
+    onDownloadAsr: () -> Unit = {},
+    onCancelAsrDownload: () -> Unit = {},
 ) {
     // 不以 saved 為 remember key：設定流每次發布都是新物件，否則外部更新會清掉整份草稿。
     var draft by remember { mutableStateOf(saved) }
@@ -516,11 +598,47 @@ private fun ModelsPage(
         item {
             Text("模型", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "設定 LLM 服務；語音辨識預設使用內建 X-ASR（首次啟動語音服務時會解壓模型，請預留約 175 MB 空間），可在下方開啟雲端語音 spike。",
+                "設定 LLM 服務；語音辨識使用 X-ASR（約 175 MB），第一次請在下方按鈕下載；可在下方開啟雲端語音 spike。",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
+        }
+        item {
+            SectionCard("本機語音模型（X-ASR）") {
+                StatusPill(if (asrInstalled) "已下載並驗證" else "尚未就緒", asrInstalled)
+                Text(
+                    asrStatusText.ifBlank { "尚未下載" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                if (asrDownloading) {
+                    Text(
+                        if (asrProgress >= 0) "下載中 $asrProgress%" else "解壓安裝中…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    // 解壓階段取消無效，只在下載階段顯示取消。
+                    if (asrProgress >= 0) {
+                        TextButton(
+                            onClick = onCancelAsrDownload,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                        ) { Text("取消下載") }
+                    }
+                } else {
+                    Button(
+                        onClick = onDownloadAsr,
+                        enabled = enabled,
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
+                    ) { Text(if (asrInstalled) "重新下載" else "下載 X-ASR 模型") }
+                    Text(
+                        "下載約 136 MB，解壓後約 175 MB；下載中請保持 App 開啟。啟動服務前需要先完成下載。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
         }
         if (!enabled) item { MessageCard("請先到「對話」停止服務，再修改模型設定。") }
         if (message != null) item { MessageCard(message, error = message.contains("失敗") || message.contains("無效")) }

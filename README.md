@@ -13,16 +13,18 @@
 - API Key 由 Android Keystore 的不可匯出 AES-256-GCM key 加密；DataStore 只放非敏感設定。
 - Release 僅允許 HTTPS；Debug HTTP 只白名單 `localhost`、`127.0.0.1`、`10.0.2.2`。
 - Transcript、回答與最近 6 組對話預設只在 process 記憶體。
+- App 更新需 `REQUEST_INSTALL_PACKAGES` 與使用者的「安裝未知應用」授權；APK 只從 GitHub release 在 App 內下載，不經瀏覽器。
 - `BOOT_COMPLETED` 只顯示提醒，不會啟動 microphone FGS；強制停止後不復活。
 
 ## 準備模型
 
-模型 binary 不進 Git。KWS 模型與內建 X-ASR 壓縮檔需在建置前準備；App 固定使用 X-ASR，不需下載或選擇 ASR 模型。首次啟動語音服務時，App 會校驗 APK 內的壓縮檔，將模型解壓並逐檔校驗至 App 私有儲存空間。首次啟動需要額外時間及約 175 MB 可用空間；往後會驗證已安裝模型，若損壞則從 APK 重新安裝。準備建置資產：
+模型 binary 不進 Git。KWS 模型需在建置前準備；X-ASR 改由 App「模型」頁按鈕從雲端硬碟下載（約 136 MB，解壓後約 175 MB），APK 不再內建，下載後啟動服務時會解壓並逐檔校驗至 App 私有儲存空間。準備建置資產：
 
 ```powershell
 .\scripts\prepare-m1-kws-assets.ps1
-.\scripts\prepare-bundled-xasr.ps1
 ```
+
+舊版 scripts/prepare-bundled-xasr.ps1 已停用，APK 內建壓縮檔不再需要。
 
 舊版的 ASR 模型選擇會自動改為 X-ASR；模型在一句話結束後交付辨識結果。診斷頁會分別顯示設定值與實際載入的模型。完整來源、大小、SHA256 與授權見 [docs/model-packs.md](docs/model-packs.md)，候選比較見 [docs/asr-benchmark.md](docs/asr-benchmark.md)。
 
@@ -43,16 +45,18 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Release variant 未配
 
 ## 手機設定
 
-1. App 分成「對話／設定／診斷」三個分頁；日常使用只需停留在「對話」。
+1. App 分成「對話／提醒／設定／模型」四個分頁；日常使用只需停留在「對話」。
 2. 在「設定」輸入 2–8 個中文字作為喚醒詞；自訂詞會在 Android 10 以上裝置本機轉為 KWS 發音。
-3. 在 LLM Provider 區輸入 Base URL、API Key、Model 與 Endpoint（預設 `/chat/completions`）。
-4. API Key 只能直接輸入手機 App；不要貼到聊天、終端或 source。
-5. 按「測試 LLM 連線」。成功後設定才標示可用。
-6. 視需要調整 VAD、Follow Up、TTS 語速與音高，按「測試語音」。
-7. 如需雲端語音，在「模型」頁另設定 Audio Base URL／Audio API Key，再個別開啟雲端 TTS 或 Whisper；未完成 Audio 設定時維持本機 X-ASR／TTS，不會改動 LLM Provider。
-8. 在「對話」按「啟動語音助理」。啟動後會顯示即時逐字稿與回答；設定變更需先停止服務。
-9. 回答不合用時直接再說「小助手」；目前回答會立即停止，接著播放「我在」，即可重新提問。也可從通知按「閉嘴」取消；回答結束後的 Follow Up 期間可直接追問。
-10. 依畫面指引設定自啟動、背景高耗電、最近任務加鎖；Android 電池白名單不等同廠商保活保證。
+3. 到「模型」頁按「下載 X-ASR 模型」（約 136 MB），完成顯示「已下載並驗證」後才能啟動語音服務。
+4. 在 LLM Provider 區輸入 Base URL、API Key、Model 與 Endpoint（預設 `/chat/completions`）。
+5. API Key 只能直接輸入手機 App；不要貼到聊天、終端或 source。
+6. 按「測試 LLM 連線」。成功後設定才標示可用。
+7. 視需要調整 VAD、Follow Up、TTS 語速與音高，按「測試語音」。
+8. 如需雲端語音，在「模型」頁另設定 Audio Base URL／Audio API Key，再個別開啟雲端 TTS 或 Whisper；未完成 Audio 設定時維持本機 X-ASR／TTS，不會改動 LLM Provider。
+9. 在「對話」按「啟動語音助理」。啟動後會顯示即時逐字稿與回答；設定變更需先停止服務。
+10. 回答不合用時直接再說「小助手」；目前回答會立即停止，接著播放「我在」，即可重新提問。也可從通知按「閉嘴」取消；回答結束後的 Follow Up 期間可直接追問。
+11. 依畫面指引設定自啟動、背景高耗電、最近任務加鎖；Android 電池白名單不等同廠商保活保證。
+12. 開啟 App 會檢查 GitHub release 是否有新版本；有更新會在「對話」頁顯示橫幅，在 App 內下載後直接開啟系統安裝（需允許「安裝未知應用」）。
 
 ## 音樂 App 語音控制
 
@@ -90,7 +94,7 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 ## AI 開發流程
 
-Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.5` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.6` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
 
 從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 

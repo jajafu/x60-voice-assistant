@@ -19,19 +19,21 @@ class ModelPackDeletionTest {
         val targetDirectory = File(filesDir, "model-packs/asr/${target.id}")
         val stagingDirectory = File(filesDir, "model-packs/asr/${target.id}.staging")
         val backupDirectory = File(filesDir, "model-packs/asr/${target.id}.backup")
-        val partialArchive = File(filesDir, "model-packs/downloads/${target.id}.part")
+        val partialArchive = File(filesDir, "model-packs/downloads/${target.archiveName}.part")
+        val keptArchive = File(filesDir, "model-packs/downloads/${target.archiveName}")
         val otherDirectory = File(filesDir, "model-packs/asr/${other.id}")
-        val otherPartial = File(filesDir, "model-packs/downloads/${other.id}.part")
+        val otherPartial = File(filesDir, "model-packs/downloads/${other.archiveName}.part")
         listOf(targetDirectory, stagingDirectory, backupDirectory, otherDirectory).forEach {
             assertTrue(it.mkdirs())
             File(it, "model.bin").writeText("data")
         }
         partialArchive.apply { parentFile!!.mkdirs(); writeText("partial") }
+        keptArchive.writeText("archive")
         otherPartial.writeText("other partial")
 
         deleteAsrPackFiles(filesDir, target)
 
-        listOf(targetDirectory, stagingDirectory, backupDirectory, partialArchive).forEach {
+        listOf(targetDirectory, stagingDirectory, backupDirectory, partialArchive, keptArchive).forEach {
             assertFalse(it.exists())
         }
         assertTrue(File(otherDirectory, "model.bin").isFile)
