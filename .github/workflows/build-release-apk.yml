@@ -15,8 +15,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Ensure Android packages
+        shell: powershell
+        run: |
+          $sdkmanager = "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager.bat"
+          1..20 | ForEach-Object { 'y' } | & $sdkmanager --licenses | Out-Null
+          & $sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Prepare model assets
         shell: powershell
