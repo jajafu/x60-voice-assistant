@@ -1,7 +1,13 @@
-name: Build release APK (manual)
+name: Build release APK
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build-release:
@@ -26,6 +32,16 @@ jobs:
         shell: powershell
         run: |
           .\scripts\prepare-m1-kws-assets.ps1
+
+      - name: Check tag matches app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: powershell
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          $line = Select-String -Path app/build.gradle.kts -Pattern 'versionName = "(.*)"' | Select-Object -First 1
+          $version = $line.Matches[0].Groups[1].Value
+          if ($tag -ne $version) { throw "Tag v$tag does not match versionName $version." }
+          Write-Output "Version match: $version"
 
       - name: Restore release keystore
         shell: powershell
@@ -63,3 +79,13 @@ jobs:
         with:
           name: app-release
           path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Publish GitHub release with changelog
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $apk = "app\build\outputs\apk\release\app-release.apk"
+          gh release create $tag $apk --title $tag --generate-notes
