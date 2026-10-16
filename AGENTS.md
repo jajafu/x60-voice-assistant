@@ -7,7 +7,7 @@
 - 主要分支：`main`
 - Issue 分支格式：`issue/<id>-<summary>`（新流程慣例；既有分支保持原狀）
 - 主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。
-- 架構概要：Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，將本機 KWS → VAD → 固定內建 X-ASR 的文字優先送本機音樂／提醒指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給 Android TTS。設定與提醒留在裝置；APK 內的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
+- 架構概要：Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，將本機 KWS → VAD → 下載式 X-ASR 的文字優先送本機音樂／提醒指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給 Android TTS。設定與提醒留在裝置；從雲端硬碟下載的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
 
 模組、資料流與相容性細節見 `docs/ARCHITECTURE.md`。以上依 `README.md`、Gradle、Manifest 與程式碼查證；實際驗收狀態見 `docs/testing.md` 與 `docs/known-issues.md`。
 

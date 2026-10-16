@@ -1,5 +1,4 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import java.security.MessageDigest
 
 plugins {
     alias(libs.plugins.android.application)
@@ -16,8 +15,8 @@ android {
         applicationId = "com.va.voiceassistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 39
-        versionName = "1.0.5"
+        versionCode = 40
+        versionName = "1.0.6"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -107,28 +106,3 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockwebserver)
 }
-
-val bundledXAsrArchive = file("src/main/assets/models/asr/sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2")
-val verifyBundledXAsr by tasks.registering {
-    doLast {
-        check(bundledXAsrArchive.isFile) {
-            "Missing bundled X-ASR archive. Run scripts/prepare-bundled-xasr.ps1 before building."
-        }
-        check(bundledXAsrArchive.length() == 136_396_739L) { "Bundled X-ASR archive has the wrong size." }
-        val digest = MessageDigest.getInstance("SHA-256")
-        bundledXAsrArchive.inputStream().buffered().use { input ->
-            val buffer = ByteArray(64 * 1024)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
-            }
-        }
-        val hash = digest.digest().joinToString("") { "%02x".format(it) }
-        check(hash == "5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224") {
-            "Bundled X-ASR archive failed SHA-256 verification."
-        }
-    }
-}
-
-tasks.named("preBuild") { dependsOn(verifyBundledXAsr) }

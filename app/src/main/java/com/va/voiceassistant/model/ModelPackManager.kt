@@ -67,7 +67,8 @@ internal fun deleteAsrPackFiles(filesDir: File, pack: AsrModelPack) {
         File(root, "asr/${pack.id}"),
         File(root, "asr/${pack.id}.staging"),
         File(root, "asr/${pack.id}.backup"),
-        File(root, "downloads/${pack.id}.part"),
+        File(root, "downloads/${pack.archiveName}.part"),
+        File(root, "downloads/${pack.archiveName}"),
     )
     files.forEach { file ->
         if (file.exists() && !file.deleteRecursively()) {

@@ -4,6 +4,7 @@ import android.content.Context
 import com.va.voiceassistant.asr.AsrModelPacks
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -12,14 +13,20 @@ import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 
-/** Installs the bundled X-ASR archive into the file paths required by sherpa-onnx. */
+/**
+ * Installs the X-ASR archive into the file paths required by sherpa-onnx.
+ *
+ * The APK no longer bundles the archive. [ensureInstalled] keeps the old APK-asset
+ * migration path when the asset exists, otherwise it reports the pack as missing so
+ * the service refuses to start and the settings page offers the Drive download button.
+ * [installFromArchive] installs an archive file previously downloaded (e.g. from Drive).
+ */
 class BundledAsrInstaller(private val context: Context) {
     private val pack = AsrModelPacks.xAsr
     private val manager = ModelPackManager(context)
 
     suspend fun ensureInstalled(): ModelPackStatus = withContext(Dispatchers.IO) {
         val target = manager.asrDirectory(pack)
-        val stage = File(target.parentFile, "${pack.id}.staging")
         val backup = File(target.parentFile, "${pack.id}.backup")
         if (!target.exists() && backup.exists() && !backup.renameTo(target)) {
             throw IOException("無法還原既有模型")
@@ -30,17 +37,41 @@ class BundledAsrInstaller(private val context: Context) {
         val archiveHash = try {
             Sha256.digest(context.assets.open(assetPath))
         } catch (error: IOException) {
-            throw IOException("APK 缺少內建 X-ASR 模型", error)
+            // APK 未內建模型：不拋錯，讓呼叫方顯示「請到設定頁下載」。
+            return@withContext ModelPackStatus(
+                pack.id,
+                installed = false,
+                valid = false,
+                reason = "missing-archive:請到設定頁下載 X-ASR 模型",
+            )
         }
         if (archiveHash != pack.archiveSha256) throw IOException("內建 X-ASR 壓縮檔校驗失敗")
 
+        installFromStream(openAsset = { context.assets.open(assetPath) })
+    }
+
+    suspend fun installFromArchive(archive: File): ModelPackStatus = withContext(Dispatchers.IO) {
+        if (!archive.isFile) throw IOException("下載的模型檔不存在")
+        if (archive.length() != pack.archiveBytes) throw IOException("下載的模型檔大小不符，請重新下載")
+        val actualHash = Sha256.digest(archive.inputStream())
+        if (!actualHash.equals(pack.archiveSha256, ignoreCase = true)) {
+            throw IOException("下載的模型檔校驗失敗，請重新下載")
+        }
+        installFromStream(openAsset = { archive.inputStream() })
+    }
+
+    private suspend fun installFromStream(openAsset: () -> InputStream): ModelPackStatus =
+        withContext(Dispatchers.IO) {
+        val target = manager.asrDirectory(pack)
+        val stage = File(target.parentFile, "${pack.id}.staging")
+        val backup = File(target.parentFile, "${pack.id}.backup")
         if (!stage.parentFile!!.isDirectory && !stage.parentFile!!.mkdirs()) {
             throw IOException("無法建立模型資料夾")
         }
         stage.deleteRecursively()
         try {
             if (!stage.mkdirs()) throw IOException("無法建立模型暫存資料夾")
-            extract(assetPath, stage)
+            extract(openAsset, stage)
             if (backup.exists() && !backup.deleteRecursively()) throw IOException("無法清除舊模型備份")
             if (target.exists() && !target.renameTo(backup)) throw IOException("無法保留舊模型")
             if (!stage.renameTo(target)) {
@@ -60,10 +91,10 @@ class BundledAsrInstaller(private val context: Context) {
         }
     }
 
-    private suspend fun extract(assetPath: String, stage: File) {
+    private suspend fun extract(openAsset: () -> InputStream, stage: File) {
         val found = mutableSetOf<String>()
         val prefix = "${pack.id}/"
-        TarArchiveInputStream(BZip2CompressorInputStream(context.assets.open(assetPath).buffered())).use { tar ->
+        TarArchiveInputStream(BZip2CompressorInputStream(openAsset().buffered())).use { tar ->
             while (true) {
                 currentCoroutineContext().ensureActive()
                 val entry = tar.nextEntry ?: break
