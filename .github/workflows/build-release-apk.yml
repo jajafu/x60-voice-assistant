@@ -26,7 +26,6 @@ jobs:
         shell: powershell
         run: |
           .\scripts\prepare-m1-kws-assets.ps1
-          .\scripts\prepare-bundled-xasr.ps1
 
       - name: Restore release keystore
         shell: powershell
