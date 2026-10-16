@@ -1,6 +1,6 @@
 # AI 協作規則：小助手 Voice Assistant
 
-本專案只有一位人類開發者。使用者本人決定需求與取捨、核准實作範圍、檢查結果並合併 PR；AI Agent 可以分析、修改、測試及提出審查意見，不得代替使用者做最終合併決定。既有 Issue／PR 不追溯改寫；從下一個 Issue 起採用本流程。
+本專案只有一位人類開發者。使用者本人決定需求與取捨、核准實作範圍、檢查結果並合併 PR；AI Agent 可以分析、修改、測試及提出審查意見。合併由使用者決定；使用者在對話中明確指示由 AI 合併時，AI 可代為執行（等同使用者同意），不需再要求使用者親自按。既有 Issue／PR 不追溯改寫；從下一個 Issue 起採用本流程。
 
 ## 專案設定
 
@@ -36,7 +36,7 @@
 7. 將已通過快速檢查且可驗證的版本提交並推送到 Issue 分支，建立關聯 Issue 的 Draft PR。既有必要的 PR 前 `assembleDebug` 保留；建立 Draft PR 後核對 APK 對應的 commit 與建置輸入仍符合目前 PR HEAD。
 8. 人工驗收以 Draft PR 目前 HEAD 為準。Android 測試記錄受測 commit、APK SHA-256、package、`versionName`／`versionCode`；MuMu 記錄相容執行個體與安裝／啟動結果，測試手機功能驗收依 `docs/testing.md` 記錄裝置及證據。此專案沒有 Preview／部署產物，相關欄位寫「不適用：Android App 以 APK 驗收」。PR HEAD 或影響 APK／行為的建置輸入改變，舊人工驗收失效；若 commit、輸入和產物未變，不因 PR 描述或 Draft／Ready 狀態改變而重建。
 9. 驗收完成後將 PR 標為 Ready，說明改動、產品版本決定、HEAD、APK 識別方式、驗證與風險。重要或高風險變更可請另一個 AI 模型或 Agent 審查；沒有實際執行就不要宣稱已獨立審查。
-10. 由使用者本人看 Diff、測試和風險後決定是否合併；AI 不自行 Merge。GitHub PR 在網站或 `gh` 合併會更新遠端主要分支，這是正常流程。
+10. 由使用者本人看 Diff、測試和風險後決定是否合併；使用者在對話中明確指示由 AI 合併時，AI 可直接執行合併，不需再要求使用者親自按。GitHub PR 在網站或 `gh` 合併會更新遠端主要分支，這是正常流程。
 11. 得知 PR 已在遠端合併後，執行 `git fetch origin` 並核對合併結果；本機 `main` 可安全 fast-forward 時同步到 `origin/main`。無法安全同步就回報狀態，下一個 Issue 仍從最新遠端主要分支建立。不得為了同步而在本機重複合併或 push。
 
 ## 停下來釐清的情況
