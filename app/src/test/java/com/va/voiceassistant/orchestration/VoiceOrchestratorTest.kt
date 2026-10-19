@@ -46,6 +46,146 @@ class VoiceOrchestratorTest {
         } finally { dispose(f) }
     }
 
+    /** 系統辨識場景以真實時間驅動（與 verifyDecodeShutdown 同模式）：引擎 finish 會在真實執行緒阻塞，
+     *  runTest 的虛擬排程接不到從其他執行緒回來的 resume，因此改用真實 scope 與狀態輪詢。 */
+    @Test
+    fun `system recognizer hears a transcript while our microphone is handed over`() = runBlocking {
+        val engine = FakeTakeoverAsr("解釋天空的顏色", gated = true)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val f = Fixture(
+            scope,
+            chunks = flow {
+                emit(LlmChunk("回答。"))
+                awaitCancellation()
+            },
+            customAsr = engine,
+        )
+        try {
+            f.voice.start()
+            awaitState(f, VoiceState.IDLE_KWS)
+            f.audio.feed(9, 0)
+            awaitState(f, VoiceState.LISTENING)
+            // 系統引擎聆聽中：共用麥克風已交棒給系統服務。
+            assertFalse(f.audio.running)
+            awaitBlocked(engine)
+            engine.release()
+            // 整句結果直接從 LISTENING 交逐字稿，未經本機 VAD 端點。
+            awaitState(f, VoiceState.SPEAKING)
+            assertTrue(f.audio.running)
+            assertEquals("解釋天空的顏色", f.provider.requests.single().messages.last().content)
+        } finally { disposeBlocking(f, scope) }
+    }
+
+    @Test
+    fun `system recognizer without result returns to idle and can listen again`() = runBlocking {
+        val engine = FakeTakeoverAsr("", gated = true)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val f = Fixture(scope, customAsr = engine)
+        try {
+            f.voice.start()
+            awaitState(f, VoiceState.IDLE_KWS)
+            f.audio.feed(9, 0)
+            awaitState(f, VoiceState.LISTENING)
+            awaitBlocked(engine)
+            engine.release()
+            // 空白結果視為沒聽到，回到待喚醒且麥克風恢復。
+            awaitState(f, VoiceState.IDLE_KWS)
+            assertTrue(f.audio.running)
+            assertTrue(f.provider.requests.isEmpty())
+            // 驗證真的可以再聽：第二次喚醒重新交棒、收第二輪空白後再回待喚醒。
+            f.audio.feed(9, 3_000)
+            awaitState(f, VoiceState.LISTENING)
+            assertFalse(f.audio.running)
+            awaitBlocked(engine)
+            engine.release()
+            awaitState(f, VoiceState.IDLE_KWS)
+            assertTrue(f.audio.running)
+        } finally { disposeBlocking(f, scope) }
+    }
+
+    @Test
+    fun `cancel during system recognizer listening releases the episode`() = runBlocking {
+        val engine = FakeTakeoverAsr("解釋天空的顏色", gated = true)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val f = Fixture(scope, customAsr = engine)
+        try {
+            f.voice.start()
+            awaitState(f, VoiceState.IDLE_KWS)
+            f.audio.feed(9, 0)
+            awaitState(f, VoiceState.LISTENING)
+            assertFalse(f.audio.running)
+            awaitBlocked(engine)
+            f.voice.cancelSession()
+            awaitState(f, VoiceState.IDLE_KWS)
+            assertTrue(f.audio.running)
+            assertTrue(f.provider.requests.isEmpty())
+            assertTrue(engine.cancelRequests >= 1)
+        } finally { disposeBlocking(f, scope) }
+    }
+
+    @Test
+    fun `system recognizer fatal error raises session error`() = runBlocking {
+        val engine = FakeTakeoverAsr(
+            listOf("解釋天空的顏色"),
+            gated = true,
+            error = IllegalStateException("system-asr-error:8"),
+        )
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val f = Fixture(scope, customAsr = engine)
+        try {
+            f.voice.start()
+            awaitState(f, VoiceState.IDLE_KWS)
+            f.audio.feed(9, 0)
+            awaitState(f, VoiceState.LISTENING)
+            awaitBlocked(engine)
+            engine.release()
+            // 忙線類錯誤不可重試：服務報 ASR_RUNTIME_FAILED，與「沒聽到回到待喚醒」不同。
+            awaitState(f, VoiceState.ERROR)
+            assertTrue(f.provider.requests.isEmpty())
+        } finally { disposeBlocking(f, scope) }
+    }
+
+    @Test
+    fun `system recognizer follow up restores microphone then hands over again`() = runBlocking {
+        val engine = FakeTakeoverAsr(listOf("解釋天空的顏色", "那第二首呢"), gated = true)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val f = Fixture(
+            scope,
+            chunks = flowOf(LlmChunk("回答。")),
+            customAsr = engine,
+            followUpSeconds = 3,
+        )
+        try {
+            f.voice.start()
+            awaitState(f, VoiceState.IDLE_KWS)
+            f.audio.feed(9, 0)
+            awaitState(f, VoiceState.LISTENING)
+            awaitBlocked(engine)
+            engine.release()
+            awaitState(f, VoiceState.SPEAKING)
+
+            // 第一輪回答播完進入 Follow Up：麥克風先回來給本機 VAD 偵測追問。
+            awaitState(f, VoiceState.FOLLOW_UP)
+            assertTrue(f.audio.running)
+            f.audio.feed(1, 2_000)
+            awaitState(f, VoiceState.LISTENING)
+            // 追問命中：再次交棒給系統引擎，收第二句。
+            assertFalse(f.audio.running)
+            awaitBlocked(engine)
+            engine.release()
+            awaitState(f, VoiceState.SPEAKING)
+            awaitRequests(f, 2)
+            assertEquals(
+                listOf("system", "user", "assistant", "user"),
+                f.provider.requests[1].messages.map { it.role },
+            )
+            assertEquals(
+                listOf("解釋天空的顏色", "回答。", "那第二首呢"),
+                f.provider.requests[1].messages.drop(1).map { it.content },
+            )
+        } finally { disposeBlocking(f, scope) }
+    }
+
     @Test fun `first sentence plays before SSE completion and long answers drain fully`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val expected = (1..30).map { "第${it}句。" }
@@ -201,7 +341,7 @@ class VoiceOrchestratorTest {
             f.audio.feed(1, 3_000)
             runCurrent()
             assertEquals(VoiceState.LISTENING, f.voice.state.value)
-            f.asr.text = "那第二首呢"
+            f.stdAsr.text = "那第二首呢"
             f.utterance(3_500)
             runCurrent()
 
@@ -221,7 +361,7 @@ class VoiceOrchestratorTest {
             assertEquals(VoiceState.IDLE_KWS, f.voice.state.value)
             f.audio.feed(9, 10_000)
             runCurrent()
-            f.asr.text = "明天台北天氣如何"
+            f.stdAsr.text = "明天台北天氣如何"
             f.utterance(11_000)
             runCurrent()
 
@@ -477,12 +617,12 @@ class VoiceOrchestratorTest {
             assertTrue(withContext(Dispatchers.IO) { entered.await(5, TimeUnit.SECONDS) })
             if (cancelParent) scope.cancel() else f.voice.close()
             // close() has returned while the fake native call is still using its model.
-            assertEquals(0, f.asr.closes)
-            assertFalse(f.asr.cancelledDuringDecode)
+            assertEquals(0, f.stdAsr.closes)
+            assertFalse(f.stdAsr.cancelledDuringDecode)
             exit.countDown()
             withTimeout(5_000) { f.voice.awaitClosed() }
-            assertEquals(1, f.asr.closes)
-            assertFalse(f.asr.cancelledDuringDecode)
+            assertEquals(1, f.stdAsr.closes)
+            assertFalse(f.stdAsr.cancelledDuringDecode)
             assertTrue(f.provider.requests.isEmpty())
             assertFalse(f.audio.running)
         } finally {
@@ -502,6 +642,35 @@ class VoiceOrchestratorTest {
         assertEquals(VoiceState.LISTENING, f.voice.state.value)
     }
 
+    /** 等系統引擎替身的 worker 真的擋上閘門（IO 執行緒內），之後 release／取消才不會錯過。 */
+    private suspend fun awaitBlocked(engine: FakeTakeoverAsr) {
+        withContext(Dispatchers.IO) {
+            repeat(500) {
+                if (engine.isAwaitingGate()) return@withContext
+                Thread.sleep(10)
+            }
+        }
+        check(engine.isAwaitingGate()) { "fake takeover engine never entered the gate" }
+    }
+
+    /** 真時間等待狀態轉換（供 runBlocking 場景使用；超時即失敗以免整個測試掛住）。 */
+    private suspend fun awaitState(f: Fixture, expected: VoiceState) {
+        withTimeout(10_000) { f.voice.state.first { it == expected } }
+    }
+
+    private suspend fun awaitRequests(f: Fixture, count: Int) {
+        withTimeout(10_000) {
+            while (f.provider.requests.size < count) delay(50)
+        }
+    }
+
+    /** runBlocking 場景收尾：先解除閘門避免 worker 卡住，再關閉 orchestrator 與 scope。 */
+    private suspend fun disposeBlocking(f: Fixture, scope: CoroutineScope) {
+        f.voice.close()
+        scope.cancel()
+        withTimeout(5_000) { f.voice.awaitClosed() }
+    }
+
     private suspend fun TestScope.dispose(f: Fixture) {
         f.voice.close()
         runCurrent()
@@ -517,10 +686,14 @@ class VoiceOrchestratorTest {
         decode: () -> Unit = {},
         followUpSeconds: Int = 0,
         corrector: TranscriptCorrector? = null,
+        customAsr: SpeechRecognizerEngine? = null,
     ) {
         val audio = FakeAudio()
         val output = FakeOutput()
-        val asr = FakeAsr(text, decode)
+        val asr = customAsr ?: FakeAsr(text, decode)
+        /** 需要操控 FakeAsr 既有欄位的測試使用；customAsr 時不可用。 */
+        val stdAsr: FakeAsr
+            get() = asr as FakeAsr
         val provider = FakeProvider(chunks)
         val acknowledgements = mutableListOf<String>()
         val voice = VoiceOrchestrator(
@@ -608,6 +781,58 @@ class VoiceOrchestratorTest {
         }
         override fun cancel() { if (decoding) cancelledDuringDecode = true }
         override fun close() { check(!decoding); closes++ }
+    }
+
+    /** 系統引擎替身：takesOverMicrophone 為真；每輪 finish() 可各給一筆文字、擋在閘門上或直接拋錯。 */
+    private class FakeTakeoverAsr(
+        texts: List<String>,
+        private val gated: Boolean = false,
+        private val error: Throwable? = null,
+    ) : SpeechRecognizerEngine {
+        constructor(text: String, gated: Boolean = false) : this(listOf(text), gated)
+
+        override val modelId = "system/fake"
+        override val takesOverMicrophone: Boolean get() = true
+        private val gateLock = Any()
+        private var nextGate: CountDownLatch? = null
+        private val results = texts.toMutableList()
+
+        /** finish() 真的返回時（IO 執行緒已出 blocker），讓測試等它完成再 runCurrent。 */
+        var finished = CountDownLatch(1)
+            private set
+        @Volatile var cancelRequests = 0
+            private set
+
+        override fun beginSession() = Unit
+        override fun accept(frame: AudioFrame): String? = null
+        override fun finish(): AsrResult {
+            val gate = synchronized(gateLock) {
+                nextGate = if (gated) CountDownLatch(1) else null
+                finished = CountDownLatch(1)
+                nextGate
+            }
+            gate?.await(10, TimeUnit.SECONDS)
+            val text = synchronized(gateLock) { results.removeFirstOrNull() ?: "" }
+            try {
+                error?.let { throw it }
+                return AsrResult(text, 0, 1, 0.0, 1)
+            } finally {
+                finished.countDown()
+            }
+        }
+
+        /** 模擬系統服務回報整句結果（只作用于當前阻塞中的那一輪）。 */
+        fun release() = synchronized(gateLock) { nextGate?.countDown() }
+
+        /** worker 已進入 finish() 且真的擋在閘門上；release／取消要先等到這一刻才不會錯過。 */
+        fun isAwaitingGate(): Boolean = synchronized(gateLock) { nextGate?.count ?: 0 > 0 }
+
+        override fun cancelActiveRequest() {
+            cancelRequests += 1
+            release()
+        }
+        override fun cancel() = cancelActiveRequest()
+        override fun close() = Unit
     }
 
     private class FakeOutput : SpeechOutputEngine {

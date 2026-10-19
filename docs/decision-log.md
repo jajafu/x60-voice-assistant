@@ -138,6 +138,13 @@
 - 新增 `scripts/prepare-vad-asset.ps1` 專責下載並校驗 Silero VAD；release workflow 改為同時執行 KWS 與 VAD 兩支腳本；`prepare-m2-model-packs.ps1` 改呼叫同一支腳本，URL／SHA256 只有一份。`app/build.gradle.kts` 新增 release 專用建置前檢查 `verifyReleaseModelAssets`（掛在 `preReleaseBuild`），缺 KWS／VAD 資產就讓建置失敗；debug／`test`／`lint` 不受影響。
 - 已發佈的 v1.0.6 release 標記為 pre-release，避免下載到無法啟動的 APK；改以 1.0.7 取代。
 - 版號 `1.0.7`／`versionCode 41`。`test`、`lint`、`assembleDebug` 通過；release APK 內容與真機啟動驗收見 Issue #36。
+## 1.0.8（本對話，使用者核准：「照舊可先裝」方案＋review-loop 流程）
+
+- 辨識引擎選擇改為：明確設定的雲端 Whisper 最優先 ＞ 系統語音辨識（啟動時探測）＞ 已下載的 X-ASR ＞ 全部不可用才報 `ASR_MODEL_INVALID` 並提示到「模型」分頁下載。使用者方向：系統可用就優先用，X-ASR 從「必下載」改為「可先裝的後備」，大部分手機不必下載 136 MB 模型。
+- 系統引擎（`SystemSpeechRecognizerEngine`）不接受外部 PCM、只能自己開麥，因此新增 `takesOverMicrophone` 標記：進入聆聽前共用 AudioRecord 先停用、整句從 LISTENING 直接交逐字稿（`VoiceStateMachine` 新增 LISTENING→ROUTING）。等待語音／單句上限沿用 VAD 設定（預設 5 秒／20 秒），逾時視為沒聽到回待喚醒；忙線、權限與 client 類錯誤才記 `ASR_RUNTIME_FAILED`。
+- 不做現場自動下載後備模型：兩條路都不可用時維持「拒絕啟動＋提示下載」；「模型」分頁下載按鈕照舊，文案不再聲稱「啟動服務前必須先完成下載」。目前無「停用系統辨識偏好」開關；使用者如要完全不上傳的路徑，系統探測通過時系統辨識仍會優先（風險已寫入 privacy.md，真機服務差異大時再考慮開關）。
+- 探測機制（真機 debug 後定案）：API 33+ 用 `SpeechRecognizer.checkRecognitionSupport` 直接問辨識服務支不支援候選中文語言；API < 33 或新版 API 沒答案時，退回 `ACTION_GET_LANGUAGE_DETAILS` 有序廣播讀 `EXTRA_SUPPORTED_LANGUAGES`（要帶 `FLAG_RECEIVER_INCLUDE_BACKGROUND`，且判準是 extras 有沒有語言清單、不是 result code）。**兩個來源都問不到時不再擋掉系統這條路**：只要裝置有辨識服務就先信任它，把未驗證原因記進 ring log `SYSTEM_ASR_UNVERIFIED`，成敗由執行中的辨識請求決定；只有來源明說不支援中文才判 `chinese-unsupported`。理由：2026-10-19 在 vivo X200s／Android 16 實測，預設辨識器 `com.google.android.tts/…GoogleTTSRecognitionService` 對 `checkRecognitionSupport` 回 `ERROR_CANNOT_CHECK_SUPPORT`（14），語言詳情廣播只回 Google 私有的 `com.google.recognition.extra.OFFLINE_*`（protobuf `byte[]`、沒有文件化 key），嚴格要求「先問到中文」會讓系統辨識在這種裝置（含 Google 辨識器）完全不能用。使用者在對話中核准放寬（選「放寬：有服務就用」）。
+- 版號 `1.0.8`／`versionCode 42`；驗證與驗收狀態見 Issue #38、known-issues 與 testing.md（vivo X200s 真機已確認探測通過並選用系統引擎；實聽逐字稿等項目仍待驗收）。
 ## 1.0.1（2026-10-05，Issue #24）
 
 - **開發者決定（版號）**：不再使用 `1.0.0-rcN` 候選版號。從本版起為 `1.0.1`／`versionCode 35`，後續行為變更的 APK 依序為 `1.0.2`、`1.0.3`…直到另行決定。`versionCode 35` 高於各分支已用的 34（含 Issue #20 的 rc30），覆蓋安裝不會被 Android 拒絕。

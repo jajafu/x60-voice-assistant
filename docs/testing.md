@@ -19,9 +19,25 @@ Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD 
 3. 背景播歌時叫小助手：音樂暫停（不再只變小聲），對話結束後恢復；通知存取權未授權時維持舊行為（duck），不假稱暫停。
 4. 以上皆須記錄車機型號、Android 版本、地圖／音樂 App 版本、APK HEAD 與 SHA-256；MockWebServer 不能取代實車。
 
+## 系統語音辨識探測與後備切換（1.0.8）
+
+1. 系統語音服務存在且支援中文的裝置：X-ASR 未下載直接啟動語音服務，確認診斷「實際載入的模型」為 `system/android-zh`，說話可取得逐字稿並正常回答；聆聽期間 Audio Error 為 0（共用 AudioRecord 已交棒停用）。
+2. 系統服務不存在，或探測來源明說不支援中文的裝置（或手動移除語音服務）：X-ASR 未下載時啟動應報 `ASR_MODEL_INVALID` 並指示到「模型」分頁下載；下載完成後重新啟動改回本機 X-ASR。
+3. 系統路徑逾時行為：進入「正在聆聽」後（開口前預算從 `onReadyForSpeech` 起算，服務啟動冷啟時間不計入使用者開口預算）靜默 5 秒（設定值）應回到等待喚醒狀態而非服務錯誤；開口後 20 秒上限從實際開口起算亦同。
+4. 先配置雲端 Whisper（Audio Provider 完整開啟）再啟動：確認雲端 Whisper 仍最優先，不因系統探測通過而改動。
+5. `SystemSpeechRecognizerEngine` 的主執行緒啟動、watchdog 錨點與 Episode 交付依賴 Android 框架的 SpeechRecognizer，沒有 JVM 自動化測試；一律由上述真機項目覆蓋，PR 與驗收說明不得宣稱該部分已由單元測試驗證。
+6. 探測在「兩個來源都問不到語言資訊」時仍會選用系統語辨（見 decision-log 1.0.8）：這種裝置的實聽成敗由執行中的請求決定，驗收時須記錄診斷 ring log 的 `SYSTEM_ASR_UNVERIFIED` 原因碼。
+
+### 真機結果（2026-10-19，vivo X200s／Android 16 SDK 36，serial `10AF4E23M30026F`）
+
+- 受測產物：工作區建置 `1.0.8`／`versionCode 42`（`app/build/outputs/apk/debug/app-debug.apk`，13:36 建置；未下載 X-ASR）。
+- 探測通過並選用系統引擎：服務持續執行（維持 130 秒以上未停止），診斷 dump `state=IDLE_KWS`、`asr_model_id=system/android-zh`、`last_error=-`、`audio_source=VOICE_RECOGNITION`。
+- 匯出安全診斷 ring log：`SYSTEM_ASR_UNVERIFIED|-|check-support-error-14+language-details-unavailable`，其後 `STATE_STARTING → STATE_IDLE_KWS`。兩個探測來源在此機都問不到語言：預設辨識器 `com.google.android.tts/…GoogleTTSRecognitionService` 對 `checkRecognitionSupport` 回 `ERROR_CANNOT_CHECK_SUPPORT`（14），語言詳情廣播只回 `com.google.recognition.extra.OFFLINE_*`（protobuf `byte[]`）。
+- 仍未驗收（不得宣稱通過）：系統辨識實聽逐字稿與回答（第 1 項的說話部分）、系統逾時行為、聆聽期間麥克風交棒、雲端 Whisper 優先序、以及第 2／3 項在其他裝置的組合。
+
 ## 雲端語音 spike 驗收（待真實 Provider／測試手機）
 
-1. 在診斷頁確認 LLM Provider 與 Audio Provider 的 Base URL／Key 分開保存；未設定 Audio URL／Key 時，即使雲端開關開啟也維持本機 X-ASR／TTS，不影響既有 LLM。
+1. 在診斷頁確認 LLM Provider 與 Audio Provider 的 Base URL／Key 分開保存；未設定 Audio URL／Key 時，即使雲端開關開啟也維持本機／系統辨識與系統 TTS，不影響既有 LLM。
 2. 以「測試雲端 TTS」確認草稿中的 Model、Voice 與獨立 Audio Base URL／Key 被使用；播放期間停止服務或再次說喚醒詞，確認請求與播放可取消。若 Audio Provider 忽略 `response_format=wav`，應在送出播放前顯示「未回傳 WAV（Content-Type／檔頭）」，而不是 `MediaPlayer 1/-2147483648`。
 3. 開啟 Whisper 雲端 ASR 且完成 Audio 設定後說出一般問句，確認 KWS／VAD 仍在本機，VAD 結束才上傳整段 WAV；停止服務時確認上傳請求不需等待完整 read timeout。
 4. 實際 Provider、費用、網路錯誤、鎖屏與真人語音結果須記錄 Provider、測試手機、APK HEAD 與證據；MockWebServer／合成語音只能作自動化測試，不能取代真機驗收。

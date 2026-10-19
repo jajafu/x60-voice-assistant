@@ -42,7 +42,7 @@ class BundledAsrInstaller(private val context: Context) {
                 pack.id,
                 installed = false,
                 valid = false,
-                reason = "missing-archive:請到設定頁下載 X-ASR 模型",
+                reason = "missing-archive:請到「模型」分頁下載 X-ASR 後備模型",
             )
         }
         if (archiveHash != pack.archiveSha256) throw IOException("內建 X-ASR 壓縮檔校驗失敗")

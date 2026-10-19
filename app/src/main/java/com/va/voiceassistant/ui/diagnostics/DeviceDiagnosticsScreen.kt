@@ -598,7 +598,7 @@ private fun ModelsPage(
         item {
             Text("模型", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "設定 LLM 服務；語音辨識使用 X-ASR（約 175 MB），第一次請在下方按鈕下載；可在下方開啟雲端語音 spike。",
+                "設定 LLM 服務；語音辨識啟動時先探測手機系統服務（含中文支援），系統可用即直接使用；X-ASR 為後備模型（約 175 MB），可先不下載，需要時再到下方按鈕下載。",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -632,7 +632,7 @@ private fun ModelsPage(
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
                     ) { Text(if (asrInstalled) "重新下載" else "下載 X-ASR 模型") }
                     Text(
-                        "下載約 136 MB，解壓後約 175 MB；下載中請保持 App 開啟。啟動服務前需要先完成下載。",
+                        "下載約 136 MB，解壓後約 175 MB；下載中請保持 App 開啟。系統語音辨識不可用時，啟動服務需要本模型作為後備。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
@@ -729,7 +729,7 @@ private fun ModelsPage(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
                 ) { Text("測試雲端 TTS") }
                 Text(
-                    "Audio Provider 與 LLM 分開；未設定 Audio URL／Key 時維持本機 X-ASR 與系統 TTS。開關開啟且設定完整後，問題音訊才會整句上傳 Whisper，回答文字才會送雲端 TTS；喚醒與 VAD 永遠維持本機。儲存後請停止再重新啟動語音服務；測試按鈕會直接使用此處草稿。",
+                    "Audio Provider 與 LLM 分開；未設定 Audio URL／Key 時維持系統辨識或 X-ASR 後備與系統 TTS。開關開啟且設定完整後，問題音訊才會整句上傳 Whisper，回答文字才會送雲端 TTS；喚醒與 VAD 永遠維持本機。儲存後請停止再重新啟動語音服務；測試按鈕會直接使用此處草稿。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

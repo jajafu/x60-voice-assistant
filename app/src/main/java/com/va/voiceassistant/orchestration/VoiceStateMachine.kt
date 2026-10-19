@@ -32,6 +32,7 @@ class VoiceStateMachine(initial: VoiceState = VoiceState.STOPPED) {
             )
             VoiceState.LISTENING -> setOf(
                 VoiceState.TRANSCRIBING,
+                VoiceState.ROUTING, // 系統語音辨識整句完成時直接交逐字稿（見 VoiceOrchestrator.beginListening）。
                 VoiceState.IDLE_KWS,
                 VoiceState.PAUSED,
                 VoiceState.RECOVERING,

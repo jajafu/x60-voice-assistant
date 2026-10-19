@@ -28,6 +28,10 @@
         <intent>
             <action android:name="android.media.browse.MediaBrowserService" />
         </intent>
+        <!-- SpeechRecognizer.isRecognitionAvailable／createSpeechRecognizer 在 Android 11+ 需要此服務宣告才看得見系統語音辨識（Issue #38）。 -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application

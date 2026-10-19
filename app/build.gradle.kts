@@ -15,8 +15,8 @@ android {
         applicationId = "com.va.voiceassistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 41
-        versionName = "1.0.7"
+        versionCode = 42
+        versionName = "1.0.8"
 
         ndk {
             abiFilters += "arm64-v8a"
