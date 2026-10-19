@@ -10,7 +10,7 @@
 
 ## M1
 
-- `sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20` 官方 archive 沒有模型專屬 `LICENSE`／`NOTICE`，官方 release 與模型頁也未明示權重授權；目前只能做本機個人評估，不能把模型或含模型 APK 再散布。
+- `sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20` 的 ModelScope repo 已標示 Apache-2.0（2026-10-08），但 sherpa-onnx GitHub archive 沒有模型專屬 `LICENSE`／`NOTICE`；截至 2026-10-19，archive 內權重、`tokens.txt`、`en.phone`、訓練資料及公開再散布的適用範圍仍待上游明確確認（[#3802](https://github.com/k2-fsa/sherpa-onnx/issues/3802)），因此先不公開散布含此模型的 APK。
 - sherpa-onnx 1.13.8 的 `KeywordSpotterResult` 不回傳 confidence。UI 的 Score 是 configured keyword boosting score，不是實際偵測信心分數；threshold 需靠真機召回率／誤喚醒資料調校。
 - 最終 APK 的短時鎖屏合成測試用 5 次「小助手」刺激得到 6 次事件，顯示目前 2 秒 cooldown／0.25 threshold 仍可能對單一長語句重複觸發；不得只依合成語音調參，需用一公尺真人 20 次與安靜 8 小時資料決定。
 - OriginOS 的側載安裝需要手機上人工確認風險，ADB `install -r` 會等待此 UI。
