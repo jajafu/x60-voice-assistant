@@ -22,6 +22,8 @@ import com.va.voiceassistant.asr.AsrRecognizerKind
 import com.va.voiceassistant.asr.CloudSpeechRecognizerEngine
 import com.va.voiceassistant.asr.OfflineSpeechRecognizerEngine
 import com.va.voiceassistant.asr.SherpaSpeechRecognizerEngine
+import com.va.voiceassistant.asr.SystemSpeechRecognizerEngine
+import com.va.voiceassistant.asr.SystemSpeechRecognizerSupport
 import com.va.voiceassistant.asr.TraditionalChineseConverter
 import com.va.voiceassistant.audio.AudioCaptureEngine
 import com.va.voiceassistant.audio.WakeAcknowledgementPlayer
@@ -184,12 +186,26 @@ class VoiceForegroundService : Service() {
                 failAndStop(VoiceErrorCode.AUDIO_CONFIG_INVALID, detail)
                 return
             }
-            // 雲端 Whisper 只有 Audio Provider 開關、URL、Key 都可用時才取代 X-ASR；KWS／VAD 仍維持本機。
+            // 引擎選擇：明確設定的雲端 Whisper 最優先；其次探測系統語音辨識（含中文支援），
+            // 探測通過就直接用系統、不必先下載 X-ASR；都不行才要求 X-ASR 後備模型。
             val useCloudAsr = settings.cloudAsrReady(hasAudioApiKey)
-            if (!useCloudAsr) {
+            val systemAsrProbe = if (useCloudAsr) {
+                null
+            } else {
+                SystemSpeechRecognizerSupport.probe(applicationContext)
+            }
+            val systemAsrLanguage = (systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Confirmed)?.language
+            val useSystemAsr = systemAsrLanguage != null
+            if (!useCloudAsr && !useSystemAsr) {
                 val asrStatus = BundledAsrInstaller(applicationContext).ensureInstalled()
                 if (!asrStatus.valid) {
-                    failAndStop(VoiceErrorCode.ASR_MODEL_INVALID, asrStatus.reason.orEmpty())
+                    val probeReason = (systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Unavailable)?.reason.orEmpty()
+                    // 提示要能同時說明兩條退路都不可行；reason 前綴供診斷顯示。
+                    failAndStop(
+                        VoiceErrorCode.ASR_MODEL_INVALID,
+                        "missing-archive:系統語音辨識不可用（$probeReason）" +
+                            "且 X-ASR 未下載；請到「模型」分頁按「下載 X-ASR 模型」",
+                    )
                     return
                 }
             }
@@ -246,6 +262,13 @@ class VoiceForegroundService : Service() {
                             apiKeyProvider = audioSecretStore::readApiKey,
                             allowHttp = BuildConfig.DEBUG,
                         ),
+                    )
+                } else if (systemAsrLanguage != null) {
+                    SystemSpeechRecognizerEngine(
+                        applicationContext,
+                        waitForSpeechMs = settings.waitForSpeechMs,
+                        maxUtteranceMs = settings.maxUtteranceMs,
+                        language = systemAsrLanguage,
                     )
                 } else when (asrPack.recognizerKind) {
                     AsrRecognizerKind.ZIPFORMER_CTC -> SherpaSpeechRecognizerEngine(
@@ -328,7 +351,13 @@ class VoiceForegroundService : Service() {
                 created.close()
                 return
             }
-            M1DiagnosticsRepository.setAsrModel(if (useCloudAsr) "cloud/${settings.cloudAsrModel}" else asrPack.id)
+            M1DiagnosticsRepository.setAsrModel(
+                when {
+                    useCloudAsr -> "cloud/${settings.cloudAsrModel}"
+                    useSystemAsr -> SystemSpeechRecognizerSupport.MODEL_ID
+                    else -> asrPack.id
+                },
+            )
             startHealthPublishing()
             created.start()
         } catch (error: OutOfMemoryError) {

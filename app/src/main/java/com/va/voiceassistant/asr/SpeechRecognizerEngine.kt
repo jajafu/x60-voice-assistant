@@ -4,6 +4,13 @@ import com.va.voiceassistant.audio.AudioFrame
 
 interface SpeechRecognizerEngine : AutoCloseable {
     val modelId: String
+
+    /**
+     * 引擎自己出麥克風收整句（系統語音辨識服務）才為真：聆聽期間共用 AudioRecord
+     * 必須先停掉，由 `VoiceOrchestrator` 交棒給系統；本機模型引擎一律走音框路徑。
+     */
+    val takesOverMicrophone: Boolean get() = false
+
     fun beginSession()
     fun accept(frame: AudioFrame): String?
     fun finish(): AsrResult

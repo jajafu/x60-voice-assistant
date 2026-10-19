@@ -268,18 +268,42 @@ class VoiceOrchestrator(
     }
 
     private suspend fun beginListening(firstFrame: AudioFrame?, audioAlreadyRunning: Boolean) {
+        // 系統引擎自己出麥收音：聆聽前先把共用 AudioRecord 交出去，聆聽改由 finish() 一次完成。
+        val takeover = asr.takesOverMicrophone
         runCatching {
             vad.reset()
             asr.beginSession()
             M1DiagnosticsRepository.setAsrModel(asr.modelId)
-            endpointDetector.reset(clock.elapsedRealtimeMs())
-            if (!audioAlreadyRunning) audioSource = audio.start()
+            if (takeover) {
+                if (audio.isRunning()) audio.stop()
+            } else {
+                endpointDetector.reset(clock.elapsedRealtimeMs())
+                if (!audioAlreadyRunning) audioSource = audio.start()
+            }
         }.onFailure {
             val code = if (it is OutOfMemoryError) VoiceErrorCode.ASR_MODEL_OOM else VoiceErrorCode.ASR_INIT_FAILED
             dispatch(Command.SessionFailed(code, it.javaClass.simpleName))
             return
         }
         transition(VoiceState.LISTENING, TransitionReason.ACK_FINISHED)
+        if (takeover) {
+            stateJob = launchState { emit ->
+                // 系統引擎的 finish 會阻塞等整句；放到 IO 執行緒，避免佔滿排程執行緒。
+                // 取消時 cancelStateWork 會先呼叫 cancelActiveRequest 解除阻塞再 join。
+                try {
+                    val result = withContext(Dispatchers.IO) { asr.finish() }
+                    if (isActive) emit(Command.TranscriptReady(result))
+                } catch (cancelled: CancellationException) {
+                    // 取消者（cancelStateWork）會 join 待 worker 結束；讓取消正常傳播，不吞成 SessionFailed。
+                    throw cancelled
+                } catch (error: OutOfMemoryError) {
+                    if (isActive) emit(Command.SessionFailed(VoiceErrorCode.ASR_MODEL_OOM, error.javaClass.simpleName))
+                } catch (error: Throwable) {
+                    if (isActive) emit(Command.SessionFailed(VoiceErrorCode.ASR_RUNTIME_FAILED, error.message ?: error.javaClass.simpleName))
+                }
+            }
+            return
+        }
         stateJob = launchState { emit ->
             try {
                 firstFrame?.let { if (processListeningFrame(it, emit)) return@launchState }
@@ -328,7 +352,8 @@ class VoiceOrchestrator(
     }
 
     private suspend fun handleTranscriptReady(result: AsrResult) {
-        if (machine.state != VoiceState.TRANSCRIBING) return
+        // 系統引擎沒有本機 VAD 端點，整句結果在 LISTENING 內一次拿到；本機引擎仍經 TRANSCRIBING。
+        if (machine.state != VoiceState.TRANSCRIBING && machine.state != VoiceState.LISTENING) return
         if (result.text.isBlank()) {
             M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.ASR_NO_RESULT, "session=$sessionId")
             returnToIdle(TransitionReason.USER_CANCEL)

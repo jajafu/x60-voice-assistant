@@ -40,4 +40,10 @@ class VoiceStateMachineTest {
         assertTrue(VoiceState.WAKE_ACK in VoiceStateMachine.allowedTargets(VoiceState.THINKING))
         assertTrue(VoiceState.WAKE_ACK in VoiceStateMachine.allowedTargets(VoiceState.SPEAKING))
     }
+
+    @Test
+    fun `system recognizer delivers transcript straight from listening`() {
+        // 系統引擎沒有本機 VAD 端點，整句結果從 LISTENING 直接交給 ROUTING。
+        assertTrue(VoiceState.ROUTING in VoiceStateMachine.allowedTargets(VoiceState.LISTENING))
+    }
 }
