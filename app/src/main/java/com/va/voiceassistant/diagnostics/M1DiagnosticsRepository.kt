@@ -121,6 +121,11 @@ object M1DiagnosticsRepository {
         publish()
     }
 
+    /** 系統語音辨識探測問不到語言資訊、但仍選用系統辨識時，把未驗證的原因留在 ring log。 */
+    fun recordSystemAsrUnverified(detail: String) {
+        log("SYSTEM_ASR_UNVERIFIED", detail = detail)
+    }
+
     fun onAudioFrame() {
         audioFrames.incrementAndGet()
     }

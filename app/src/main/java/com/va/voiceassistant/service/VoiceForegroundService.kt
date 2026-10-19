@@ -194,7 +194,10 @@ class VoiceForegroundService : Service() {
             } else {
                 SystemSpeechRecognizerSupport.probe(applicationContext)
             }
-            val systemAsrLanguage = (systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Confirmed)?.language
+            val systemAsrConfirmed = systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Confirmed
+            val systemAsrLanguage = systemAsrConfirmed?.language
+            // 問不到語言資訊仍會選用系統辨識，把未驗證的原因留在診斷，日後才追得出當時的取捨。
+            systemAsrConfirmed?.unverifiedReason?.let(M1DiagnosticsRepository::recordSystemAsrUnverified)
             val useSystemAsr = systemAsrLanguage != null
             if (!useCloudAsr && !useSystemAsr) {
                 val asrStatus = BundledAsrInstaller(applicationContext).ensureInstalled()
