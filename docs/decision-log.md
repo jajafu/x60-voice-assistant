@@ -18,7 +18,7 @@
 - 提示音採 `ToneGenerator.TONE_PROP_ACK`，不初始化或呼叫 TTS。
 - sherpa-onnx runtime 鎖定 `1.13.8`；官方 AAR 由固定 release URL 解析，並限定 APK 只含 `arm64-v8a`。
 - KWS 模型固定為 `sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20` 的 chunk-16 INT8 encoder／joiner組合。模型不提交 Git，由 provisioning script 驗證 archive 與逐檔 SHA256 後放入 ignored assets。
-- 上游模型未提供模型專屬授權；只進行本機個人評估，禁止把模型授權誤寫為 sherpa runtime 的 Apache-2.0，禁止再散布模型或含模型 APK。
+- `zh-en-3M-2025-12-20` 的 ModelScope repo 自 2026-10-08 標示 Apache-2.0；但 sherpa-onnx GitHub archive 未附授權檔，且 archive 內 ONNX／`tokens.txt`／`en.phone` 與訓練資料的授權範圍尚待上游明確確認（追蹤 [#3802](https://github.com/k2-fsa/sherpa-onnx/issues/3802)）。不可把 runtime 的 Apache-2.0 自動套用到模型；上游確認前不公開散布含此模型的 APK。
 - sherpa 公開 `KeywordSpotterResult` 不提供 confidence；診斷頁 Score 顯示 configured keyword boosting score 1.5 並明確標示不是 confidence，threshold 固定 0.25。
 - Ring Log 只存在記憶體，固定 200 筆，欄位去除換行並限制 160 字元；不記 PCM、tokens、硬體識別碼或任意 exception message。
 

@@ -24,7 +24,7 @@ Gradle 只從固定 `v1.13.8` release URL 解析 artifact，沒有 `latest`、`+
 | SHA256 | `68447f4fbc67e70eee3a93961f36e81e98f47aef73ce7e7ca00885c6cd3616a6` |
 | Source | `https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2` |
 | Format | streaming Zipformer transducer ONNX；`phone+ppinyin` tokens |
-| Model license | 上游未明示；未確認 |
+| Model license | ModelScope 模型頁標示 Apache License 2.0（2026-10-08 更新）；GitHub archive 與配套檔適用範圍待上游確認 |
 
 App 使用以下最小組合：
 
@@ -43,9 +43,11 @@ x iǎo zh ù sh ǒu @小助手
 
 ## 授權查核結論
 
-sherpa runtime repository 的 Apache-2.0 不應自動推定為 model weights 的授權。官方模型 archive 不含 `LICENSE`／`NOTICE`，官方 KWS 頁與 release 沒有列出此模型權重及 `tokens.txt` 的授權。官方 issue `#3760` 曾要求釐清這三個 KWS model 的使用與再散布權，但在沒有維護者公開答覆的情況下關閉。
+sherpa runtime repository 的 Apache-2.0 不應自動推定為 model weights 的授權。`pkufool/icefall-kws-zipformer-zh-en-3M-2025-12-20` 的 [ModelScope 模型頁](https://www.modelscope.cn/models/pkufool/icefall-kws-zipformer-zh-en-3M-2025-12-20)目前標示 `Apache License 2.0`，頁面更新日期為 2026-10-08；維護者 `pkufool` 亦於 [官方 issue #3802](https://github.com/k2-fsa/sherpa-onnx/issues/3802#issuecomment-6052663364) 表示已更新該 ModelScope repo 的授權為 Apache 2.0。
 
-因此 Repository 只提交來源、檔名、大小、格式與 SHA256，以及由專案自行建立的 keyword；模型 binary 與 `tokens.txt` 都被 `.gitignore` 排除。`scripts/prepare-m1-kws-assets.ps1`（KWS）與 `scripts/prepare-vad-asset.ps1`（Silero VAD）僅供本機與 release 建置準備。授權釐清前，不得發佈含模型 APK。
+但 sherpa-onnx GitHub release archive 仍未附 `LICENSE`／`NOTICE`，且截至 2026-10-19，#3802 仍在追問該聲明是否涵蓋這個 GitHub archive 的 ONNX 權重、`tokens.txt`、`en.phone`，以及商業使用、再散布和訓練資料來源。故目前只能記錄「ModelScope repo 宣告 Apache-2.0」；不能據此宣稱 GitHub archive 內每個檔案、其來源資料或含模型 APK 的公開散布已獲明確確認。`#3760` 已由維護者指向 #3802，授權討論仍以後者為準。
+
+因此 Repository 只提交來源、檔名、大小、格式與 SHA256，以及由專案自行建立的 keyword；模型 binary 與 `tokens.txt` 都被 `.gitignore` 排除。`scripts/prepare-m1-kws-assets.ps1`（KWS）與 `scripts/prepare-vad-asset.ps1`（Silero VAD）僅供本機與 release 建置準備。上游尚未明確確認 GitHub archive 與所有配套檔的授權範圍前，維持不公開散布含此 KWS 模型 APK 的限制。
 
 ## M2 VAD / ASR
 
