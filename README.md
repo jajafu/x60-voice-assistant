@@ -13,7 +13,7 @@
 - API Key 由 Android Keystore 的不可匯出 AES-256-GCM key 加密；DataStore 只放非敏感設定。
 - Release 僅允許 HTTPS；Debug HTTP 只白名單 `localhost`、`127.0.0.1`、`10.0.2.2`。
 - Transcript、回答與最近 6 組對話預設只在 process 記憶體。
-- App 更新需 `REQUEST_INSTALL_PACKAGES` 與使用者的「安裝未知應用」授權；APK 只從 GitHub release 在 App 內下載，不經瀏覽器。
+- App 更新需 `REQUEST_INSTALL_PACKAGES` 與使用者的「安裝未知應用」授權；APK 只從公開的 [releases 專案](https://github.com/jajafu/x60-voice-assistant-releases) 在 App 內下載，不經瀏覽器。原始碼專案維持私有。
 - `BOOT_COMPLETED` 只顯示提醒，不會啟動 microphone FGS；強制停止後不復活。
 
 ## 準備模型

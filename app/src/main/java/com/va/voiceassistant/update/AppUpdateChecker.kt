@@ -28,9 +28,10 @@ object AppUpdateChecker {
     /**
      * App 未登入 GitHub，所以倉庫必須設為公開且發佈過 release，檢查才會有結果；
      * 私有倉庫一律回 404，App 會保持安靜（見 checkForUpdate）。
+     * 主程式庫保持私有，APK 另外發佈到公開的 releases 專案。
      */
     const val LATEST_RELEASE_URL =
-        "https://api.github.com/repos/jajafu/x60-voice-assistant/releases/latest"
+        "https://api.github.com/repos/jajafu/x60-voice-assistant-releases/releases/latest"
 
     private val json = Json { ignoreUnknownKeys = true }
 

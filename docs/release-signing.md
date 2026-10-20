@@ -39,4 +39,15 @@ keytool -genkeypair -v -keystore ci-release.keystore -alias x60assistant -keyalg
 2. 等跑完，在下方 Artifacts 下載 `app-release`
 3. 第一次裝到手機後，以後都用同一個印章，就能直接覆蓋升級，不用刪掉重裝。
 
+## 5. 發佈到公開更新專案
+
+主程式庫是私有的，App 的更新檢查只認公開的 `jajafu/x60-voice-assistant-releases`。
+
+1. 建立 fine-grained token：GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens。
+2. 只選 `jajafu/x60-voice-assistant-releases` 這個專案，權限給 **Contents: Read and write**。
+3. 回到私有主程式庫 → Settings → Secrets and variables → Actions，新增 `RELEASES_REPO_TOKEN`，內容貼上 token。
+4. 之後推 `v*` 標籤時，workflow 會把同一顆 APK 發到公開專案；沒設定 token 就跳過，只留在私有專案的 Release。
+
+Token 只需給公開 repo 的內容權限，不要勾選主程式庫。
+
 本地沒設密碼時打出的正式包仍是未簽名測試用，跟以前一樣；雲上有 4 個密鑰才會打出可安裝的正式包。
