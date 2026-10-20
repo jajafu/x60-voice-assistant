@@ -47,7 +47,7 @@ sherpa runtime repository 的 Apache-2.0 不應自動推定為 model weights 的
 
 但 sherpa-onnx GitHub release archive 仍未附 `LICENSE`／`NOTICE`，且截至 2026-10-19，#3802 仍在追問該聲明是否涵蓋這個 GitHub archive 的 ONNX 權重、`tokens.txt`、`en.phone`，以及商業使用、再散布和訓練資料來源。故目前只能記錄「ModelScope repo 宣告 Apache-2.0」；不能據此宣稱 GitHub archive 內每個檔案、其來源資料或含模型 APK 的公開散布已獲明確確認。`#3760` 已由維護者指向 #3802，授權討論仍以後者為準。
 
-因此 Repository 只提交來源、檔名、大小、格式與 SHA256，以及由專案自行建立的 keyword；模型 binary 與 `tokens.txt` 都被 `.gitignore` 排除。`scripts/prepare-m1-kws-assets.ps1`（KWS）與 `scripts/prepare-vad-asset.ps1`（Silero VAD）僅供本機與 release 建置準備。上游尚未明確確認 GitHub archive 與所有配套檔的授權範圍前，維持不公開散布含此 KWS 模型 APK 的限制。
+因此 Repository 只提交來源、檔名、大小、格式與 SHA256，以及由專案自行建立的 keyword；模型 binary 與 `tokens.txt` 都被 `.gitignore` 排除。`scripts/prepare-m1-kws-assets.ps1`（KWS）與 `scripts/prepare-vad-asset.ps1`（Silero VAD）僅供本機與 release 建置準備。本專案免費散布、不販售；APK 內的模型原樣散布，不修改、不另行授權，著作權屬上游。商業使用請自行向上游確認，詳見 `THIRD_PARTY_NOTICES.md`。
 
 ## M2 VAD / ASR
 
