@@ -90,7 +90,7 @@ jobs:
         run: |
           $tag = $env:RELEASE_TAG
           $apk = "app\build\outputs\apk\release\app-release.apk"
-          $existing = gh release view $tag 2>$null
+          cmd /c "gh release view $tag >nul 2>&1"
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $apk --clobber
           } else {
@@ -113,7 +113,7 @@ jobs:
           $notes = (gh release view $tag --json body --jq .body) -join "`n"
           [IO.File]::WriteAllText($notesFile, $notes, [Text.UTF8Encoding]::new($false))
           $env:GH_TOKEN = $env:RELEASES_REPO_TOKEN
-          $existing = gh release view $tag --repo jajafu/x60-voice-assistant-releases 2>$null
+          cmd /c "gh release view $tag --repo jajafu/x60-voice-assistant-releases >nul 2>&1"
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $apk --repo jajafu/x60-voice-assistant-releases --clobber
           } else {
