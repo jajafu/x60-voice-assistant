@@ -95,6 +95,12 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 另見：[隱私](docs/privacy.md)、[疑難排解](docs/troubleshooting.md)、[已知限制](docs/known-issues.md)、[決策紀錄](docs/decision-log.md)、[第三方聲明](THIRD_PARTY_NOTICES.md)。
 
+## 授權
+
+本專案原始碼依 [Apache License 2.0](LICENSE) 釋出，版權聲明見 [NOTICE](NOTICE)。App 免費提供、不販售。
+
+第三方元件與模型權重的著作權仍屬原開發者，本專案不主張權利；來源、授權狀態與限制見 [第三方聲明](THIRD_PARTY_NOTICES.md)。
+
 ## AI 開發流程
 
 Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.9` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
