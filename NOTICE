@@ -1,0 +1,29 @@
+小助手 Voice Assistant
+Copyright 2026 jajafu
+
+本專案原始碼依 Apache License 2.0 釋出，全文見 LICENSE。
+
+本專案包含或散布下列第三方元件與模型權重。它們不是本專案的著作，
+著作權仍屬原開發者所有；本專案不主張任何權利，也不對它們另行授權。
+
+1. sherpa-onnx
+   https://github.com/k2-fsa/sherpa-onnx
+   Copyright k2-fsa 社群
+   Apache License 2.0
+
+2. 語音喚醒（KWS）模型 sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
+   由 k2-fsa / pkufool 釋出，著作權屬原作者。
+   ModelScope 模型頁標示 Apache License 2.0（2026-10-08 更新）；
+   GitHub release archive 未附 LICENSE／NOTICE。
+   本專案僅原樣（未修改）隨免費 APK 散布，不販售、不另行授權。
+
+3. Silero VAD
+   https://github.com/snakers4/silero-vad
+   Copyright Silero Team
+   MIT License
+
+4. OkHttp、AndroidX / Jetpack Compose
+   Copyright Square, Inc.、The Android Open Source Project
+   Apache License 2.0
+
+第三方元件的來源、版本與雜湊值見 THIRD_PARTY_NOTICES.md。

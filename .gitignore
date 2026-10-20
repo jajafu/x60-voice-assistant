@@ -15,6 +15,7 @@ secrets.properties
 *.pcm
 private-logs/
 device-logs/
+work_logs/
 app/src/main/assets/models/kws/*/*.onnx
 app/src/main/assets/models/kws/*/tokens.txt
 app/src/main/assets/models/kws/*/MODEL_SOURCE.txt
