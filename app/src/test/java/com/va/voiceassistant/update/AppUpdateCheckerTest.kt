@@ -4,6 +4,7 @@ import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,6 +12,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.nio.file.Files
 
 class AppUpdateCheckerTest {
     private lateinit var server: MockWebServer
@@ -97,7 +99,7 @@ class AppUpdateCheckerTest {
             MockResponse().setResponseCode(404).setBody("""{"message":"Not Found"}"""),
         )
         assertNull(
-            AppUpdateChecker.checkForUpdate("1.0.6", OkHttpClient(), api),
+            AppUpdateChecker.checkForUpdate("1.0.6", OkHttpClient(), api, forceRefresh = true),
         )
         server.enqueue(
             MockResponse().setBody(
@@ -106,7 +108,7 @@ class AppUpdateCheckerTest {
             ),
         )
         assertNull(
-            AppUpdateChecker.checkForUpdate("1.0.6", OkHttpClient(), api),
+            AppUpdateChecker.checkForUpdate("1.0.6", OkHttpClient(), api, forceRefresh = true),
         )
         server.enqueue(
             MockResponse().setBody(
@@ -114,7 +116,55 @@ class AppUpdateCheckerTest {
                     {"name":"app.apk","browser_download_url":"https://example.com/a.apk","size":1}]}""",
             ),
         )
-        val info = AppUpdateChecker.checkForUpdate("1.0.6", OkHttpClient(), api)!!
+        val info = AppUpdateChecker.checkForUpdate("1.0.6", OkHttpClient(), api, forceRefresh = true)!!
         assertEquals("v1.0.7", info.versionTag)
+    }
+
+    @Test
+    fun `automatic checks reuse the recent release response`() = runTest {
+        val api = server.url("/releases/latest").toString()
+        server.enqueue(
+            MockResponse().setBody(
+                """{"tag_name":"v1.0.7","body":"new","assets":[
+                    {"name":"app.apk","browser_download_url":"https://example.com/a.apk","size":1}]}""",
+            ),
+        )
+
+        val first = AppUpdateChecker.checkForUpdate("1.0.6", OkHttpClient(), api, forceRefresh = true)
+        val second = AppUpdateChecker.checkForUpdate("1.0.6", OkHttpClient(), api)
+
+        assertEquals("v1.0.7", first?.versionTag)
+        assertEquals("v1.0.7", second?.versionTag)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `apk download resumes an existing partial file`() = runTest {
+        val bytes = "complete apk bytes".toByteArray()
+        val directory = Files.createTempDirectory("voice-assistant-update").toFile()
+        val target = directory.resolve("update.apk")
+        val partial = AppUpdateDownloader.partialApkFile(target)
+        partial.writeBytes(bytes.copyOfRange(0, 8))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(206)
+                .setHeader("Content-Range", "bytes 8-${bytes.lastIndex}/${bytes.size}")
+                .setBody(Buffer().write(bytes, 8, bytes.size - 8)),
+        )
+
+        val result = AppUpdateDownloader.downloadApkToFile(
+            target = target,
+            url = server.url("/update.apk").toString(),
+            expectedSizeBytes = bytes.size.toLong(),
+            client = OkHttpClient.Builder().followRedirects(false).build(),
+            maxRetries = 0,
+        )
+
+        assertEquals(target, result)
+        assertEquals(bytes.toList(), target.readBytes().toList())
+        assertEquals("bytes=8-", server.takeRequest().getHeader("Range"))
+        assertFalse(partial.exists())
+        target.delete()
+        directory.delete()
     }
 }

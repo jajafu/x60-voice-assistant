@@ -32,6 +32,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -69,6 +70,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.va.voiceassistant.data.AssistantSettings
+import com.va.voiceassistant.BuildConfig
 import com.va.voiceassistant.diagnostics.DeviceDiagnostics
 import com.va.voiceassistant.diagnostics.M1DiagnosticsSnapshot
 import com.va.voiceassistant.orchestration.VoiceState
@@ -143,7 +145,15 @@ fun DeviceDiagnosticsScreen(
     updateNotes: String? = null,
     updateDownloading: Boolean = false,
     updateProgress: Int = 0,
+    updateDownloaded: Boolean = false,
+    updateHasPartialDownload: Boolean = false,
+    updateCanInstall: Boolean = false,
+    updateChecking: Boolean = false,
+    updateCheckMessage: String = "尚未檢查",
+    onCheckForUpdate: () -> Unit = {},
     onDownloadUpdate: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
+    onOpenUpdateInstallPermission: () -> Unit = {},
     onIgnoreUpdate: () -> Unit = {},
 ) {
     var section by rememberSaveable { mutableStateOf(AppSection.VOICE) }
@@ -187,7 +197,12 @@ fun DeviceDiagnosticsScreen(
                 updateNotes = updateNotes,
                 updateDownloading = updateDownloading,
                 updateProgress = updateProgress,
+                updateDownloaded = updateDownloaded,
+                updateHasPartialDownload = updateHasPartialDownload,
+                updateCanInstall = updateCanInstall,
                 onDownloadUpdate = onDownloadUpdate,
+                onInstallUpdate = onInstallUpdate,
+                onOpenUpdateInstallPermission = onOpenUpdateInstallPermission,
                 onIgnoreUpdate = onIgnoreUpdate,
             )
 
@@ -240,10 +255,24 @@ fun DeviceDiagnosticsScreen(
                 onOpenMusicApp = onOpenMusicApp,
                 compatibleNavApps = compatibleNavApps,
                 onOpenNavApp = onOpenNavApp,
-                musicCabinFavoriteAccessGranted = musicCabinFavoriteAccessGranted,
-                onOpenMusicCabinFavoriteAccess = onOpenMusicCabinFavoriteAccess,
-                onOpenDiagnostics = { showDiagnostics = true },
-            )
+                 musicCabinFavoriteAccessGranted = musicCabinFavoriteAccessGranted,
+                 onOpenMusicCabinFavoriteAccess = onOpenMusicCabinFavoriteAccess,
+                 onOpenDiagnostics = { showDiagnostics = true },
+                 updateVersion = updateVersion,
+                 updateFileSize = updateFileSize,
+                 updateNotes = updateNotes,
+                 updateDownloading = updateDownloading,
+                 updateProgress = updateProgress,
+                 updateDownloaded = updateDownloaded,
+                 updateHasPartialDownload = updateHasPartialDownload,
+                 updateCanInstall = updateCanInstall,
+                 updateChecking = updateChecking,
+                 updateCheckMessage = updateCheckMessage,
+                 onCheckForUpdate = onCheckForUpdate,
+                 onDownloadUpdate = onDownloadUpdate,
+                 onInstallUpdate = onInstallUpdate,
+                 onOpenUpdateInstallPermission = onOpenUpdateInstallPermission,
+             )
 
             AppSection.REMINDERS -> RemindersPage(
                 modifier = Modifier.padding(scaffoldPadding),
@@ -364,7 +393,12 @@ private fun VoicePage(
     updateNotes: String? = null,
     updateDownloading: Boolean = false,
     updateProgress: Int = 0,
+    updateDownloaded: Boolean = false,
+    updateHasPartialDownload: Boolean = false,
+    updateCanInstall: Boolean = false,
     onDownloadUpdate: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
+    onOpenUpdateInstallPermission: () -> Unit = {},
     onIgnoreUpdate: () -> Unit = {},
 ) {
     val phase = diagnostics.phase
@@ -417,16 +451,51 @@ private fun VoicePage(
                                 modifier = Modifier.padding(top = 4.dp),
                             )
                         }
-                        if (updateDownloading) {
+                        if (updateDownloaded) {
+                            Text(
+                                "更新已下載完成，可在 App 內開啟系統安裝。",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            if (updateCanInstall) {
+                                Button(
+                                    onClick = onInstallUpdate,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                ) { Text("安裝更新") }
+                            } else {
+                                Text(
+                                    "需要先允許此 App 安裝未知應用。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                                Button(
+                                    onClick = onOpenUpdateInstallPermission,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                ) { Text("允許安裝") }
+                            }
+                        } else if (updateDownloading) {
                             Text(
                                 "下載中 ${updateProgress}%",
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(top = 8.dp),
                             )
+                            LinearProgressIndicator(
+                                progress = { updateProgress / 100f },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            )
                         } else {
                             Row(modifier = Modifier.padding(top = 8.dp)) {
-                                Button(onClick = onDownloadUpdate) { Text("下載並安裝") }
+                                Button(onClick = onDownloadUpdate) {
+                                    Text(if (updateHasPartialDownload) "繼續下載" else "下載更新")
+                                }
                                 TextButton(onClick = onIgnoreUpdate) { Text("稍後") }
+                            }
+                            if (updateHasPartialDownload) {
+                                LinearProgressIndicator(
+                                    progress = { updateProgress / 100f },
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                )
                             }
                         }
                     }
@@ -756,6 +825,20 @@ private fun SettingsPage(
     ttsVoices: List<TtsVoiceOption>,
     ttsVoicesLoading: Boolean,
     onLoadTtsVoices: (String?) -> Unit,
+    updateVersion: String? = null,
+    updateFileSize: String? = null,
+    updateNotes: String? = null,
+    updateDownloading: Boolean = false,
+    updateProgress: Int = 0,
+    updateDownloaded: Boolean = false,
+    updateHasPartialDownload: Boolean = false,
+    updateCanInstall: Boolean = false,
+    updateChecking: Boolean = false,
+    updateCheckMessage: String = "尚未檢查",
+    onCheckForUpdate: () -> Unit = {},
+    onDownloadUpdate: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
+    onOpenUpdateInstallPermission: () -> Unit = {},
 ) {
     // 不以 saved 為 remember key：設定流每次發布都是新物件，否則外部更新會清掉整份草稿。
     var draft by remember { mutableStateOf(saved) }
@@ -790,6 +873,82 @@ private fun SettingsPage(
 
         if (!enabled) item { MessageCard("請先到「對話」停止服務，再修改設定。") }
         if (message != null) item { MessageCard(message, error = message.contains("失敗") || message.contains("無效")) }
+
+        item {
+            SectionCard("App 更新") {
+                Text("目前版本 ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    updateCheckMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (updateCheckMessage.startsWith("檢查失敗")) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+
+                if (updateChecking) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text("正在檢查更新…", modifier = Modifier.padding(start = 10.dp))
+                    }
+                } else if (updateVersion != null) {
+                    Text(
+                        "新版本 $updateVersion ${updateFileSize.orEmpty()}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    if (!updateNotes.isNullOrBlank()) {
+                        Text(
+                            updateNotes,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                    if (updateDownloaded) {
+                        if (updateCanInstall) {
+                            Button(
+                                onClick = onInstallUpdate,
+                                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+                            ) { Text("安裝更新") }
+                        } else {
+                            OutlinedButton(
+                                onClick = onOpenUpdateInstallPermission,
+                                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+                            ) { Text("允許安裝未知應用") }
+                        }
+                    } else {
+                        Button(
+                            onClick = onDownloadUpdate,
+                            enabled = !updateDownloading,
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+                        ) {
+                            Text(if (updateHasPartialDownload) "繼續下載更新" else "下載更新")
+                        }
+                        if (updateDownloading || updateHasPartialDownload) {
+                            LinearProgressIndicator(
+                                progress = { updateProgress / 100f },
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                            )
+                            if (updateDownloading) {
+                                Text("下載中 $updateProgress%", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onCheckForUpdate,
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+                    ) { Text("立即檢查更新") }
+                }
+            }
+        }
 
         item {
             SectionCard("喚醒方式") {

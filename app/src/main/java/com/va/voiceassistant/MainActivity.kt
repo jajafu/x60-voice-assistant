@@ -66,6 +66,9 @@ import com.va.voiceassistant.ui.diagnostics.DeviceDiagnosticsScreen
 import com.va.voiceassistant.ui.theme.VoiceAssistantTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -101,7 +104,13 @@ class MainActivity : ComponentActivity() {
     private var appUpdate by mutableStateOf<AppUpdateInfo?>(null)
     private var updateDownloading by mutableStateOf(false)
     private var updateProgress by mutableStateOf(0)
+    private var updateDownloaded by mutableStateOf(false)
+    private var updateHasPartialDownload by mutableStateOf(false)
+    private var updateCanInstall by mutableStateOf(false)
     private var updateIgnored by mutableStateOf(false)
+    private var updateCheckJob: Job? = null
+    private var updateChecking by mutableStateOf(false)
+    private var updateCheckMessage by mutableStateOf("尚未檢查")
 
     private val diagnosticsExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain"),
@@ -181,7 +190,6 @@ class MainActivity : ComponentActivity() {
         reminderManager = ReminderManager(applicationContext)
         refreshDiagnostics()
         refreshAsrStatus(force = true)
-        if (savedInstanceState == null) checkAppUpdate()
         refreshMusicApps()
         refreshTtsEngines()
         refreshReminders()
@@ -262,7 +270,15 @@ class MainActivity : ComponentActivity() {
                     updateNotes = appUpdate?.notes?.take(100),
                     updateDownloading = updateDownloading,
                     updateProgress = updateProgress,
+                    updateDownloaded = updateDownloaded,
+                    updateHasPartialDownload = updateHasPartialDownload,
+                    updateCanInstall = updateCanInstall,
+                    updateChecking = updateChecking,
+                    updateCheckMessage = updateCheckMessage,
+                      onCheckForUpdate = { checkAppUpdate(forceRefresh = true) },
                     onDownloadUpdate = ::downloadAndInstallUpdate,
+                    onInstallUpdate = ::installDownloadedUpdate,
+                    onOpenUpdateInstallPermission = ::openUpdateInstallPermission,
                     onIgnoreUpdate = { updateIgnored = true },
                 )
             }
@@ -279,12 +295,17 @@ class MainActivity : ComponentActivity() {
             refreshMusicCabinFavoriteAccess()
             refreshReminders()
             refreshReminderSound()
+            refreshUpdateDownloadState()
         }
     }
 
     override fun onStart() {
         super.onStart()
         AssistantUiVisibility.onStart()
+        // Check on every foreground launch, including Activity recreation with
+        // a saved instance state. A failed check stays silent and does not hide
+        // an update that was already found in this Activity instance.
+        checkAppUpdate()
         if (skipAutoStartOnNextStart) {
             skipAutoStartOnNextStart = false
             return
@@ -682,49 +703,125 @@ class MainActivity : ComponentActivity() {
         xasrDownload?.cancel()
     }
 
-    private fun checkAppUpdate() {
-        lifecycleScope.launch {
-            runCatching { AppUpdateChecker.checkForUpdate(BuildConfig.VERSION_NAME) }
-                .onSuccess { appUpdate = it }
-                .onFailure { appUpdate = null }
+    private fun checkAppUpdate(forceRefresh: Boolean = false) {
+        updateCheckJob?.cancel()
+        updateCheckJob = lifecycleScope.launch {
+            updateChecking = true
+            updateCheckMessage = "正在檢查更新…"
+            try {
+                val info = AppUpdateChecker.checkForUpdate(
+                    localVersionName = BuildConfig.VERSION_NAME,
+                    forceRefresh = forceRefresh,
+                )
+                appUpdate = info
+                updateIgnored = false
+                refreshUpdateDownloadState(info)
+                updateCheckMessage = if (info == null) "目前已是最新版本" else "發現新版本 ${info.versionTag}"
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                updateCheckMessage = "檢查失敗：${error.message ?: error.javaClass.simpleName}"
+            } finally {
+                if (currentCoroutineContext().isActive) updateChecking = false
+            }
+        }
+    }
+
+    private fun refreshUpdateDownloadState(info: AppUpdateInfo? = appUpdate) {
+        updateCanInstall = !AppUpdateDownloader.needsInstallPermission(this)
+        if (info == null) {
+            updateDownloaded = false
+            updateHasPartialDownload = false
+            return
+        }
+
+        val staged = AppUpdateDownloader.updateApkFile(this, info.versionTag)
+        AppUpdateDownloader.removeOtherStagedApks(staged)
+        val expected = info.sizeBytes.takeIf { it > 0L }
+        updateDownloaded = staged.isFile && staged.length() > 0L &&
+            (expected == null || staged.length() == expected)
+        val partialLength = AppUpdateDownloader.partialDownloadLength(staged)
+        updateHasPartialDownload = !updateDownloaded && partialLength > 0L
+        if (!updateDownloading) {
+            updateProgress = when {
+                updateDownloaded -> 100
+                expected != null -> ((partialLength * 100L) / expected).toInt().coerceIn(0, 99)
+                else -> 0
+            }
         }
     }
 
     private fun downloadAndInstallUpdate() {
         val info = appUpdate ?: return
         if (updateDownloading) return
-        // 先要授權再下載，避免下載完才發現不能裝、還要重下一次。
-        if (AppUpdateDownloader.needsInstallPermission(this@MainActivity)) {
-            settingsMessage = "請先允許「安裝未知應用」，再回來按下載更新。"
-            runCatching {
-                startActivity(AppUpdateDownloader.installPermissionIntent(this@MainActivity))
-            }
-            return
-        }
         updateDownloading = true
-        updateProgress = 0
+        refreshUpdateDownloadState(info)
         settingsMessage = "正在 App 內下載更新…"
         lifecycleScope.launch {
-            runCatching {
+            try {
                 AppUpdateDownloader.downloadApk(
                     applicationContext,
                     info.apkUrl,
-                    info.fileName,
-                    onProgress = { updateProgress = it },
+                    info.versionTag,
+                    onProgress = { downloaded, total ->
+                        val expected = total ?: info.sizeBytes.takeIf { it > 0L }
+                        val progress = if (expected != null) {
+                            ((downloaded * 100L) / expected).toInt().coerceIn(0, 100)
+                        } else {
+                            0
+                        }
+                        lifecycleScope.launch(Dispatchers.Main.immediate) {
+                            updateProgress = progress
+                            updateHasPartialDownload = downloaded > 0L && progress < 100
+                        }
+                    },
                     expectedSizeBytes = info.sizeBytes,
                 )
-            }.onSuccess { apk ->
                 updateDownloading = false
-                settingsMessage = "更新已下載完成，正在開啟安裝…"
-                runCatching {
-                    startActivity(AppUpdateDownloader.installIntent(this@MainActivity, apk))
-                }.onFailure {
-                    settingsMessage = "無法開啟安裝：${it.message ?: it.javaClass.simpleName}"
+                updateDownloaded = true
+                updateHasPartialDownload = false
+                updateProgress = 100
+                updateCanInstall = !AppUpdateDownloader.needsInstallPermission(this@MainActivity)
+                settingsMessage = if (updateCanInstall) {
+                    "更新已下載完成，請按「安裝更新」。"
+                } else {
+                    "更新已下載完成，請允許安裝未知應用後再按「安裝更新」。"
                 }
-            }.onFailure {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
                 updateDownloading = false
-                settingsMessage = "更新下載失敗：${it.message ?: it.javaClass.simpleName}"
+                refreshUpdateDownloadState(info)
+                settingsMessage = "更新下載失敗，可稍後繼續下載：${error.message ?: error.javaClass.simpleName}"
             }
+        }
+    }
+
+    private fun installDownloadedUpdate() {
+        val info = appUpdate ?: return
+        val apk = AppUpdateDownloader.updateApkFile(this, info.versionTag)
+        if (!apk.isFile || apk.length() == 0L) {
+            refreshUpdateDownloadState(info)
+            settingsMessage = "更新檔尚未下載完成，請先按下載更新。"
+            return
+        }
+        if (AppUpdateDownloader.needsInstallPermission(this)) {
+            openUpdateInstallPermission()
+            return
+        }
+        runCatching {
+            startActivity(AppUpdateDownloader.installIntent(this, apk))
+        }.onFailure {
+            settingsMessage = "無法開啟安裝：${it.message ?: it.javaClass.simpleName}"
+        }
+    }
+
+    private fun openUpdateInstallPermission() {
+        settingsMessage = "請允許「安裝未知應用」，再回來按「安裝更新」。"
+        runCatching {
+            startActivity(AppUpdateDownloader.installPermissionIntent(this))
+        }.onFailure {
+            settingsMessage = "無法開啟安裝權限設定：${it.message ?: it.javaClass.simpleName}"
         }
     }
 

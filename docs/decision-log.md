@@ -150,6 +150,12 @@
 - **開發者決定（版號）**：不再使用 `1.0.0-rcN` 候選版號。從本版起為 `1.0.1`／`versionCode 35`，後續行為變更的 APK 依序為 `1.0.2`、`1.0.3`…直到另行決定。`versionCode 35` 高於各分支已用的 34（含 Issue #20 的 rc30），覆蓋安裝不會被 Android 拒絕。
 - X-ASR 同音錯字加 LLM 校正（Typeless 兩段式）：本機 Router 全 miss 才打一次 LLM（`temperature 0.0`、固定 JSON），命中導航／音樂就轉回既有本機 Executor；`AssistantSettings.llmCorrectionEnabled`（預設 true）在 LLM Provider 卡片有開關，關閉即回舊行為。校正 prompt 是程式常數，不受 DataStore 舊值影響。
 
+## 1.0.10（2026-10-20，本對話，使用者核准：補齊 MusicCabin 風格的 App 內更新 UI 與續傳）
+
+- 「設定 → App 更新」固定顯示目前版號、啟動檢查結果與手動檢查入口；自動啟動檢查比照 MusicCabin 使用兩小時記憶體快取，手動按鈕才強制重新請求。查到新版時可在設定頁或對話頁橫幅下載、繼續下載，完成後按「安裝更新」開啟系統安裝器。
+- 更新檔以版本標籤分開暫存；網路中斷或取消會保留 `.part`，下一次使用 HTTP Range 續傳並重試。缺少「安裝未知應用」授權時，下載仍可完成，再由 App 引導授權。
+- 版號 `1.0.10`／`versionCode 44`。`test` 通過；lint、assembleDebug 與真機 App 內更新驗收待完成。
+
 ## 1.0.9（2026-10-20，本對話，使用者核准：下載來源改回官方＋移除雲端 ASR）
 
 - X-ASR 下載來源由使用者私人 Google Drive 改回 sherpa-onnx 官方 GitHub release 的同一個壓縮檔（`sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2`，136,396,739 bytes、SHA256 `5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224`）。理由：私人雲端硬碟將刪除；原檔案即官方 release 產物，HTTP HEAD 大小與官方 Release API 的 digest 均吻合。下載完成後仍先驗證大小與 SHA256 再解壓，失敗即中止，不會安裝錯誤模型。

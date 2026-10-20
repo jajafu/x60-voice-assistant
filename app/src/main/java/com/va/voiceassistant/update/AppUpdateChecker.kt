@@ -28,9 +28,19 @@ object AppUpdateChecker {
     /**
      * App 未登入 GitHub，所以倉庫必須設為公開且發佈過 release，檢查才會有結果；
      * 私有倉庫一律回 404，App 會保持安靜（見 checkForUpdate）。
+     * 主程式庫保持私有，APK 另外發佈到公開的 releases 專案。
      */
     const val LATEST_RELEASE_URL =
-        "https://api.github.com/repos/jajafu/x60-voice-assistant/releases/latest"
+        "https://api.github.com/repos/jajafu/x60-voice-assistant-releases/releases/latest"
+
+    // Match MusicCabin's updater: foreground checks use the in-process cache,
+    // while an explicit button tap can force a fresh request.
+    private const val CHECK_INTERVAL_MILLIS = 2 * 60 * 60 * 1000L
+    private val cacheLock = Any()
+    private var cachedApiUrl: String? = null
+    private var cachedRelease: AppUpdateInfo? = null
+    private var hasCachedResult = false
+    private var lastCheckTime = 0L
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -86,24 +96,62 @@ object AppUpdateChecker {
         localVersionName: String,
         client: OkHttpClient = defaultClient(),
         apiUrl: String = LATEST_RELEASE_URL,
+        forceRefresh: Boolean = false,
     ): AppUpdateInfo? = withContext(Dispatchers.IO) {
+        val cached = synchronized(cacheLock) {
+            if (!forceRefresh &&
+                hasCachedResult &&
+                cachedApiUrl == apiUrl &&
+                System.currentTimeMillis() - lastCheckTime < CHECK_INTERVAL_MILLIS
+            ) {
+                cachedRelease
+            } else {
+                CACHE_MISS
+            }
+        }
+        if (cached !== CACHE_MISS) {
+            return@withContext cached as AppUpdateInfo?
+        }
+
         val request = Request.Builder()
             .url(apiUrl)
             .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "x60-voice-assistant-updater")
             .get()
             .build()
         client.newCall(request).execute().use { response ->
             // No releases yet, repo renamed, or (for private repos) no access: stay silent.
-            if (response.code == 404) return@withContext null
+            if (response.code == 404) {
+                cacheResult(apiUrl, null)
+                return@withContext null
+            }
             if (!response.isSuccessful) throw IOException("檢查更新失敗（HTTP ${response.code}）")
             val payload = response.body?.string().orEmpty()
-            val info = parseLatestRelease(payload) ?: return@withContext null
-            if (isNewerVersion(info.versionTag, localVersionName)) info else null
+            val info = parseLatestRelease(payload)
+            cacheResult(apiUrl, info)
+            if (info != null && isNewerVersion(info.versionTag, localVersionName)) info else null
         }
     }
+
+    private fun cacheResult(apiUrl: String, release: AppUpdateInfo?) {
+        synchronized(cacheLock) {
+            cachedApiUrl = apiUrl
+            cachedRelease = release
+            hasCachedResult = true
+            lastCheckTime = System.currentTimeMillis()
+        }
+    }
+
+    private object CACHE_MISS
 
     fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    /** The release asset redirects from GitHub to an object-storage URL. */
+    fun defaultDownloadClient(): OkHttpClient = defaultClient().newBuilder()
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build()
 }
