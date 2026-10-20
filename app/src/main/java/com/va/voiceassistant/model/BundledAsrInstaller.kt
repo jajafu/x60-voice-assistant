@@ -18,8 +18,8 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
  *
  * The APK no longer bundles the archive. [ensureInstalled] keeps the old APK-asset
  * migration path when the asset exists, otherwise it reports the pack as missing so
- * the service refuses to start and the settings page offers the Drive download button.
- * [installFromArchive] installs an archive file previously downloaded (e.g. from Drive).
+ * the service refuses to start and the settings page offers the model download button.
+ * [installFromArchive] installs an archive file previously downloaded (e.g. via the model page).
  */
 class BundledAsrInstaller(private val context: Context) {
     private val pack = AsrModelPacks.xAsr

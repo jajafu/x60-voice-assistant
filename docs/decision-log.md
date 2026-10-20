@@ -149,3 +149,10 @@
 
 - **開發者決定（版號）**：不再使用 `1.0.0-rcN` 候選版號。從本版起為 `1.0.1`／`versionCode 35`，後續行為變更的 APK 依序為 `1.0.2`、`1.0.3`…直到另行決定。`versionCode 35` 高於各分支已用的 34（含 Issue #20 的 rc30），覆蓋安裝不會被 Android 拒絕。
 - X-ASR 同音錯字加 LLM 校正（Typeless 兩段式）：本機 Router 全 miss 才打一次 LLM（`temperature 0.0`、固定 JSON），命中導航／音樂就轉回既有本機 Executor；`AssistantSettings.llmCorrectionEnabled`（預設 true）在 LLM Provider 卡片有開關，關閉即回舊行為。校正 prompt 是程式常數，不受 DataStore 舊值影響。
+
+## 1.0.9（2026-10-20，本對話，使用者核准：下載來源改回官方＋移除雲端 ASR）
+
+- X-ASR 下載來源由使用者私人 Google Drive 改回 sherpa-onnx 官方 GitHub release 的同一個壓縮檔（`sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2`，136,396,739 bytes、SHA256 `5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224`）。理由：私人雲端硬碟將刪除；原檔案即官方 release 產物，HTTP HEAD 大小與官方 Release API 的 digest 均吻合。下載完成後仍先驗證大小與 SHA256 再解壓，失敗即中止，不會安裝錯誤模型。
+- 移除「模型」頁的雲端 ASR（Whisper）設定與整條程式路徑：`CloudSpeechRecognizerEngine`、`OpenAiAudioTranscriptionClient`（含 `AudioTranscriber`）、`cloudAsrEnabled`／`Model`／`Language`、啟動時的雲端優先分支、診斷 `cloud_asr` 行；引擎選擇回到「系統語音辨識優先，系統不可用才用已下載的 X-ASR」。雲端 TTS 保留。理由：系統辨識已可優先使用，雲端 ASR 的 spike 不再需要。
+- 升級相容：舊 DataStore 的 `cloud_asr_*` 鍵留在裝置但不讀取；既有 X-ASR 模型檔與舊版模型選擇遷移不變。原 `CloudSpeechRecognizerEngine.pcmToWav` 僅測試使用，移到測試 source set 的 `audio/TestWav.kt`。
+- 版號 `1.0.9`／`versionCode 43`。`test`、`lint`、`assembleDebug` 通過；真機驗收項目見 testing.md 與 known-issues。

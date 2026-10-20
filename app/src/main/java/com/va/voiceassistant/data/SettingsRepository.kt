@@ -58,9 +58,6 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.CLOUD_TTS_ENABLED] = settings.cloudTtsEnabled
             prefs[Keys.CLOUD_TTS_MODEL] = settings.cloudTtsModel
             prefs[Keys.CLOUD_TTS_VOICE] = settings.cloudTtsVoice
-            prefs[Keys.CLOUD_ASR_ENABLED] = settings.cloudAsrEnabled
-            prefs[Keys.CLOUD_ASR_MODEL] = settings.cloudAsrModel
-            prefs[Keys.CLOUD_ASR_LANGUAGE] = settings.cloudAsrLanguage
             prefs[Keys.AUDIO_BASE_URL] = settings.audioBaseUrl
             prefs[Keys.PITCH] = settings.pitch
             prefs[Keys.CONNECTION_VERIFIED] = settings.connectionVerified
@@ -110,9 +107,6 @@ class SettingsRepository(private val context: Context) {
         cloudTtsEnabled = prefs[Keys.CLOUD_TTS_ENABLED] ?: AssistantSettings.DEFAULT_CLOUD_TTS_ENABLED,
         cloudTtsModel = prefs[Keys.CLOUD_TTS_MODEL] ?: AssistantSettings.DEFAULT_CLOUD_TTS_MODEL,
         cloudTtsVoice = prefs[Keys.CLOUD_TTS_VOICE] ?: AssistantSettings.DEFAULT_CLOUD_TTS_VOICE,
-        cloudAsrEnabled = prefs[Keys.CLOUD_ASR_ENABLED] ?: AssistantSettings.DEFAULT_CLOUD_ASR_ENABLED,
-        cloudAsrModel = prefs[Keys.CLOUD_ASR_MODEL] ?: AssistantSettings.DEFAULT_CLOUD_ASR_MODEL,
-        cloudAsrLanguage = prefs[Keys.CLOUD_ASR_LANGUAGE].orEmpty(),
         audioBaseUrl = prefs[Keys.AUDIO_BASE_URL].orEmpty(),
         pitch = prefs[Keys.PITCH] ?: 1.0f,
         connectionVerified = prefs[Keys.CONNECTION_VERIFIED] ?: false,
@@ -153,9 +147,6 @@ class SettingsRepository(private val context: Context) {
         val CLOUD_TTS_ENABLED = booleanPreferencesKey("cloud_tts_enabled")
         val CLOUD_TTS_MODEL = stringPreferencesKey("cloud_tts_model")
         val CLOUD_TTS_VOICE = stringPreferencesKey("cloud_tts_voice")
-        val CLOUD_ASR_ENABLED = booleanPreferencesKey("cloud_asr_enabled")
-        val CLOUD_ASR_MODEL = stringPreferencesKey("cloud_asr_model")
-        val CLOUD_ASR_LANGUAGE = stringPreferencesKey("cloud_asr_language")
         val AUDIO_BASE_URL = stringPreferencesKey("audio_base_url")
         val PITCH = floatPreferencesKey("tts_pitch")
         val CONNECTION_VERIFIED = booleanPreferencesKey("llm_connection_verified")

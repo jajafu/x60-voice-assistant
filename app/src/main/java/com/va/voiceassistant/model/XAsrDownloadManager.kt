@@ -13,7 +13,7 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 /**
- * Downloads the X-ASR archive from the user's Drive link and installs it.
+ * Downloads the X-ASR archive from the official sherpa-onnx release and installs it.
  *
  * Progress is reported as 0..100 for the download phase; the extract phase reports -1.
  * Callers must run [downloadAndInstall] off the main thread (it uses Dispatchers.IO).
@@ -43,10 +43,10 @@ class XAsrDownloadManager(
                 try {
                     call.execute().use { response ->
                         if (!response.isSuccessful) throw IOException("模型下載失敗（HTTP ${response.code}）")
-                        // Drive 病毒掃描提示頁是 HTML；真正的壓縮檔是 bzip2，提早擋掉避免浪費流量。
+                        // 回傳 HTML 代表連到錯誤或提示頁而非壓縮檔；提早擋掉避免浪費流量。
                         val contentType = response.header("Content-Type").orEmpty()
                         if (contentType.contains("text/html")) {
-                            throw IOException("雲端連結回傳網頁而非模型檔，請確認共用設定為知道連結者可檢視")
+                            throw IOException("下載連結回傳網頁而非模型檔，請稍後再試")
                         }
                         val body = response.body ?: throw IOException("模型下載回應為空")
                         val total = body.contentLength()

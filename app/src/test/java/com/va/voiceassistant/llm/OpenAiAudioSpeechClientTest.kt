@@ -1,6 +1,6 @@
 package com.va.voiceassistant.llm
 
-import com.va.voiceassistant.asr.CloudSpeechRecognizerEngine
+import com.va.voiceassistant.audio.TestWav
 import com.va.voiceassistant.data.AssistantSettings
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonObject
@@ -34,7 +34,7 @@ class OpenAiAudioSpeechClientTest {
 
     @Test
     fun `posts speech request and returns wav bytes`() = runTest {
-        val audio = CloudSpeechRecognizerEngine.pcmToWav(shortArrayOf(0, 1_000, -1_000))
+        val audio = TestWav.pcmToWav(shortArrayOf(0, 1_000, -1_000))
         server.enqueue(MockResponse().setBody(Buffer().write(audio)).setHeader("Content-Type", "audio/wav"))
         val client = client()
 

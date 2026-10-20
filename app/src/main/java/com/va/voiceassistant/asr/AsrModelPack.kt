@@ -63,7 +63,8 @@ object AsrModelPacks {
         archiveName = "sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2",
         archiveBytes = 136_396_739,
         archiveSha256 = "5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224",
-        sourceUrl = X_ASR_DRIVE_DOWNLOAD_URL,
+        sourceUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" +
+            "sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2",
         modelFile = "encoder-epoch-99-avg-1.int8.onnx",
         tokensFile = "tokens.txt",
         recognizerKind = AsrRecognizerKind.X_ASR_OFFLINE_TRANSDUCER,
@@ -81,11 +82,6 @@ object AsrModelPacks {
     )
 
     val all = listOf(standard, moonshine, xAsr)
-
-    /** 使用者雲端硬碟上的 X-ASR 壓縮檔，可在設定頁按鈕下載；APK 不再內建。 */
-    const val X_ASR_DRIVE_FILE_ID = "10J92dM5Bz0s_Bl1iEYfIxmbrSQsstOyy"
-    const val X_ASR_DRIVE_DOWNLOAD_URL =
-        "https://drive.usercontent.google.com/download?id=$X_ASR_DRIVE_FILE_ID&export=download&confirm=t"
 
     fun byId(id: String): AsrModelPack? = all.firstOrNull { it.id == id }
 }
