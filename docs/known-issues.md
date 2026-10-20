@@ -24,6 +24,7 @@
 - 1.0.7 未驗收：修正後的 release APK 真機啟動語音助理、喚醒→VAD→X-ASR→回答整條流程、模型下載與 App 內更新安裝、MuMu smoke 皆待補做；本機只驗證測試、lint、debug 建置與 release APK 內含 KWS／VAD 資產，不得宣稱真機通過。
 - 1.0.8 部分驗收：探測與引擎選擇已在 vivo X200s／Android 16 真機確認（未下載 X-ASR 也能啟動，系統服務持續執行、`asr_model_id=system/android-zh`、`last_error=-`，證據見 testing.md）；仍未驗收：系統辨識實聽逐字稿與回答、系統逾時、聆聽期間麥克風交棒、X-ASR 後備順序，不得宣稱通過。此路徑會把語音交給系統服務，語音去向依廠商服務而定（見 privacy.md）。兩個探測來源都問不到語言資訊時程式會先信任系統辨識（`SYSTEM_ASR_UNVERIFIED`），服務其實不支援中文時的使用者體驗（執行中錯誤訊息、是否要有更明確的提示或改用 X-ASR）仍待真機實聽後再決定。
 - 1.0.9 未驗收：模型頁移除雲端 ASR 後的版面與既有雲端 TTS 設定保存、X-ASR 改由官方 release 下載→大小／SHA256 驗證→解壓安裝、由舊版升級後引擎選擇（系統→X-ASR）皆待真機確認。
+- 1.0.10 未驗收：設定頁 App 更新入口、GitHub release 啟動檢查、APK 斷點續傳、未知來源授權與系統安裝流程仍待真機確認；單元測試只覆蓋 release 解析與模擬 HTTP 續傳。
 
 - Small／Standard 中文 ASR archive 沒有模型專屬 `LICENSE`／`NOTICE`；Moonshine 中文權重附 Moonshine AI Community License。APK 不含 ASR binary，授權條款見 `docs/model-packs.md`。
 - 目前 X60 只完成 Small ASR 的單句合成短測和 Standard 的載入短測。Moonshine 尚未在真機下載、載入或辨識；20 句真人語意、連續 30 次、P95、Peak PSS、熱降頻與 OOM/LMK 仍待正式量測。

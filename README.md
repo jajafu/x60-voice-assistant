@@ -59,7 +59,7 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Release variant 未配
 9. 在「對話」按「啟動語音助理」。啟動後會顯示即時逐字稿與回答；設定變更需先停止服務。
 10. 回答不合用時直接再說「小助手」；目前回答會立即停止，接著播放「我在」，即可重新提問。也可從通知按「閉嘴」取消；回答結束後的 Follow Up 期間可直接追問。
 11. 依畫面指引設定自啟動、背景高耗電、最近任務加鎖；Android 電池白名單不等同廠商保活保證。
-12. 開啟 App 會檢查 GitHub release 是否有新版本；有更新會在「對話」頁顯示橫幅，在 App 內下載後直接開啟系統安裝（需允許「安裝未知應用」）。
+12. 開啟 App 會檢查 GitHub release 是否有新版本；自動檢查沿用兩小時快取，避免反覆消耗 GitHub API 額度；「設定 → App 更新」永遠提供目前版本與手動強制檢查入口，有更新時「對話」頁也會顯示橫幅。APK 在 App 內下載，支援中斷後繼續下載，再由 App 內按鈕開啟系統安裝（需允許「安裝未知應用」）。
 
 ## 音樂 App 語音控制
 
@@ -97,7 +97,7 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 ## AI 開發流程
 
-Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.9` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.10` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
 
 從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 
