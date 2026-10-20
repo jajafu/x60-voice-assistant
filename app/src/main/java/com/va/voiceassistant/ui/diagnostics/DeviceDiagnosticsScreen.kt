@@ -694,7 +694,7 @@ private fun ModelsPage(
                     label = { Text("Audio API Key（目前：$maskedAudioApiKey）") },
                     singleLine = true,
                     visualTransformation = if (revealAudioKey) VisualTransformation.None else PasswordVisualTransformation(),
-                    supportingText = { Text("供雲端 TTS／Whisper 使用；留白會保留現有 Key。") },
+                    supportingText = { Text("供雲端 TTS 使用；留白會保留現有 Key。") },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
                 ToggleRow("暫時顯示新輸入的 Audio Key", revealAudioKey, enabled) {
@@ -714,22 +714,13 @@ private fun ModelsPage(
                 SettingsField("雲端 TTS Voice", draft.cloudTtsVoice, enabled) {
                     draft = draft.copy(cloudTtsVoice = it)
                 }
-                ToggleRow("Whisper 雲端 ASR", draft.cloudAsrEnabled, enabled) {
-                    draft = draft.copy(cloudAsrEnabled = it)
-                }
-                SettingsField("雲端 ASR Model", draft.cloudAsrModel, enabled) {
-                    draft = draft.copy(cloudAsrModel = it)
-                }
-                SettingsField("雲端 ASR 語言（留白自動判斷）", draft.cloudAsrLanguage, enabled) {
-                    draft = draft.copy(cloudAsrLanguage = it)
-                }
                 OutlinedButton(
                     onClick = { onTestTts(draft.normalized(), audioApiKey) },
                     enabled = enabled && draft.cloudTtsEnabled,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
                 ) { Text("測試雲端 TTS") }
                 Text(
-                    "Audio Provider 與 LLM 分開；未設定 Audio URL／Key 時維持系統辨識或 X-ASR 後備與系統 TTS。開關開啟且設定完整後，問題音訊才會整句上傳 Whisper，回答文字才會送雲端 TTS；喚醒與 VAD 永遠維持本機。儲存後請停止再重新啟動語音服務；測試按鈕會直接使用此處草稿。",
+                    "Audio Provider 與 LLM 分開；未設定 Audio URL／Key 時維持系統辨識或 X-ASR 後備與系統 TTS。開關開啟且設定完整後，回答文字才會送雲端 TTS；喚醒與 VAD 永遠維持本機。儲存後請停止再重新啟動語音服務；測試按鈕會直接使用此處草稿。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

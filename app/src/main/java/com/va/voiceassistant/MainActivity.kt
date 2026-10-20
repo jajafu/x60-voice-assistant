@@ -552,7 +552,7 @@ class MainActivity : ComponentActivity() {
 
     private fun deleteAudioApiKey() {
         audioSecretStore.deleteApiKey()
-        settingsMessage = "Audio API Key 已刪除；雲端 TTS／Whisper 將改用本機引擎。"
+        settingsMessage = "Audio API Key 已刪除；雲端 TTS 將改用本機引擎。"
     }
 
     private fun testTts(settings: AssistantSettings, draftAudioApiKey: String) {
@@ -657,7 +657,7 @@ class MainActivity : ComponentActivity() {
         if (asrDownloading) return
         asrDownloading = true
         asrProgress = 0
-        settingsMessage = "正在從雲端下載 X-ASR 模型，請保持 App 開啟…"
+        settingsMessage = "正在下載 X-ASR 模型，請保持 App 開啟…"
         val manager = XAsrDownloadManager(applicationContext).also { xasrDownload = it }
         lifecycleScope.launch {
             runCatching {

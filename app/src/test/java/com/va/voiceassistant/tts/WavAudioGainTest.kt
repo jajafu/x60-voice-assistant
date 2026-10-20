@@ -1,6 +1,6 @@
 package com.va.voiceassistant.tts
 
-import com.va.voiceassistant.asr.CloudSpeechRecognizerEngine
+import com.va.voiceassistant.audio.TestWav
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -9,7 +9,7 @@ import org.junit.Test
 class WavAudioGainTest {
     @Test
     fun `scales and clips signed 16 bit wav samples`() {
-        val wav = CloudSpeechRecognizerEngine.pcmToWav(shortArrayOf(1_000, -1_000, 20_000, -20_000))
+        val wav = TestWav.pcmToWav(shortArrayOf(1_000, -1_000, 20_000, -20_000))
 
         val result = WavAudioGain.apply(wav, 2.0f)
 

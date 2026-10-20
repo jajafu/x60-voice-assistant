@@ -29,9 +29,9 @@ class CloudAudioSettingsValidatorTest {
     fun `enabled cloud audio validates audio endpoint`() {
         val settings = AssistantSettings(
             audioBaseUrl = "http://example.com/v1",
-            cloudAsrEnabled = true,
+            cloudTtsEnabled = true,
         )
-        val error = CloudAudioSettingsValidator.validateAsr(settings, true, allowHttp = false)
+        val error = CloudAudioSettingsValidator.validateTts(settings, true, allowHttp = false)
         assertEquals("Audio Base URL 無效：此版本不允許該 HTTP Host", error)
     }
 
@@ -40,7 +40,6 @@ class CloudAudioSettingsValidatorTest {
         val settings = AssistantSettings(
             audioBaseUrl = "https://api.example.com/v1",
             cloudTtsEnabled = true,
-            cloudAsrEnabled = true,
         )
         assertNull(CloudAudioSettingsValidator.validate(settings, true, allowHttp = false))
     }
@@ -50,11 +49,9 @@ class CloudAudioSettingsValidatorTest {
         val settings = AssistantSettings(
             baseUrl = "https://llm.example.com/v1",
             cloudTtsEnabled = true,
-            cloudAsrEnabled = true,
         )
 
         assertNull(CloudAudioSettingsValidator.validate(settings, false, allowHttp = false))
         assertFalse(settings.cloudTtsReady(hasAudioApiKey = true))
-        assertFalse(settings.cloudAsrReady(hasAudioApiKey = true))
     }
 }

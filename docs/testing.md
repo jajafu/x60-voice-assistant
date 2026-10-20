@@ -24,9 +24,8 @@ Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD 
 1. 系統語音服務存在且支援中文的裝置：X-ASR 未下載直接啟動語音服務，確認診斷「實際載入的模型」為 `system/android-zh`，說話可取得逐字稿並正常回答；聆聽期間 Audio Error 為 0（共用 AudioRecord 已交棒停用）。
 2. 系統服務不存在，或探測來源明說不支援中文的裝置（或手動移除語音服務）：X-ASR 未下載時啟動應報 `ASR_MODEL_INVALID` 並指示到「模型」分頁下載；下載完成後重新啟動改回本機 X-ASR。
 3. 系統路徑逾時行為：進入「正在聆聽」後（開口前預算從 `onReadyForSpeech` 起算，服務啟動冷啟時間不計入使用者開口預算）靜默 5 秒（設定值）應回到等待喚醒狀態而非服務錯誤；開口後 20 秒上限從實際開口起算亦同。
-4. 先配置雲端 Whisper（Audio Provider 完整開啟）再啟動：確認雲端 Whisper 仍最優先，不因系統探測通過而改動。
-5. `SystemSpeechRecognizerEngine` 的主執行緒啟動、watchdog 錨點與 Episode 交付依賴 Android 框架的 SpeechRecognizer，沒有 JVM 自動化測試；一律由上述真機項目覆蓋，PR 與驗收說明不得宣稱該部分已由單元測試驗證。
-6. 探測在「兩個來源都問不到語言資訊」時仍會選用系統語辨（見 decision-log 1.0.8）：這種裝置的實聽成敗由執行中的請求決定，驗收時須記錄診斷 ring log 的 `SYSTEM_ASR_UNVERIFIED` 原因碼。
+4. `SystemSpeechRecognizerEngine` 的主執行緒啟動、watchdog 錨點與 Episode 交付依賴 Android 框架的 SpeechRecognizer，沒有 JVM 自動化測試；一律由上述真機項目覆蓋，PR 與驗收說明不得宣稱該部分已由單元測試驗證。
+5. 探測在「兩個來源都問不到語言資訊」時仍會選用系統語辨（見 decision-log 1.0.8）：這種裝置的實聽成敗由執行中的請求決定，驗收時須記錄診斷 ring log 的 `SYSTEM_ASR_UNVERIFIED` 原因碼。
 
 ### 真機結果（2026-10-19，vivo X200s／Android 16 SDK 36，serial `10AF4E23M30026F`）
 
@@ -35,13 +34,18 @@ Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD 
 - 匯出安全診斷 ring log：`SYSTEM_ASR_UNVERIFIED|-|check-support-error-14+language-details-unavailable`，其後 `STATE_STARTING → STATE_IDLE_KWS`。兩個探測來源在此機都問不到語言：預設辨識器 `com.google.android.tts/…GoogleTTSRecognitionService` 對 `checkRecognitionSupport` 回 `ERROR_CANNOT_CHECK_SUPPORT`（14），語言詳情廣播只回 `com.google.recognition.extra.OFFLINE_*`（protobuf `byte[]`）。
 - 仍未驗收（不得宣稱通過）：系統辨識實聽逐字稿與回答（第 1 項的說話部分）、系統逾時行為、聆聽期間麥克風交棒、雲端 Whisper 優先序、以及第 2／3 項在其他裝置的組合。
 
-## 雲端語音 spike 驗收（待真實 Provider／測試手機）
+## X-ASR 下載來源與雲端 ASR 移除（1.0.9，待真機驗收）
+
+1. 「模型」頁只保留本機 X-ASR、LLM Provider 與雲端 TTS；確認不再出現 Whisper／雲端 ASR 欄位，既有雲端 TTS 設定可正常保存與測試。
+2. 移除 App 內已下載的 X-ASR 後按下載：確認連到 sherpa-onnx 官方 GitHub release，下載完成後大小與 SHA256 驗證通過並完成解壓；系統語音辨識不可用的裝置重新啟動服務可改用 X-ASR。
+3. 由舊版（含雲端 ASR 設定）升級安裝：確認不因舊 DataStore 鍵而崩潰，雲端 ASR 設定靜默失效，其餘設定保留。
+
+## 雲端 TTS spike 驗收（待真實 Provider／測試手機）
 
 1. 在診斷頁確認 LLM Provider 與 Audio Provider 的 Base URL／Key 分開保存；未設定 Audio URL／Key 時，即使雲端開關開啟也維持本機／系統辨識與系統 TTS，不影響既有 LLM。
 2. 以「測試雲端 TTS」確認草稿中的 Model、Voice 與獨立 Audio Base URL／Key 被使用；播放期間停止服務或再次說喚醒詞，確認請求與播放可取消。若 Audio Provider 忽略 `response_format=wav`，應在送出播放前顯示「未回傳 WAV（Content-Type／檔頭）」，而不是 `MediaPlayer 1/-2147483648`。
-3. 開啟 Whisper 雲端 ASR 且完成 Audio 設定後說出一般問句，確認 KWS／VAD 仍在本機，VAD 結束才上傳整段 WAV；停止服務時確認上傳請求不需等待完整 read timeout。
-4. 實際 Provider、費用、網路錯誤、鎖屏與真人語音結果須記錄 Provider、測試手機、APK HEAD 與證據；MockWebServer／合成語音只能作自動化測試，不能取代真機驗收。
-5. `CloudTtsEngine` 的媒體播放生命週期（`MediaPlayer`、Audio Focus、取消後回收暫存檔）依賴 Android 框架，未有 JVM 測試；須以上述真機項目覆蓋，並確認不支援語速／音調的解碼器仍能正常播放整句。
+3. 實際 Provider、費用、網路錯誤、鎖屏與真人語音結果須記錄 Provider、測試手機、APK HEAD 與證據；MockWebServer／合成語音只能作自動化測試，不能取代真機驗收。
+4. `CloudTtsEngine` 的媒體播放生命週期（`MediaPlayer`、Audio Focus、取消後回收暫存檔）依賴 Android 框架，未有 JVM 測試；須以上述真機項目覆蓋，並確認不支援語速／音調的解碼器仍能正常播放整句。
 
 rc22 另包含 Orchestrator 跨元件回歸測試：重複取消、暫停後取消、過期回答事件、辨識未完成時關閉／取消父 scope、第一句在串流結束前朗讀、長回答及音樂拒絕補救。JVM 以可控制的 engine、音訊來源及同步阻塞辨識替身驗證生命週期，診斷使用測試 clock shim，不能替代 native 或 Android 實機結果。另測試 12 段背壓、取消清空、網路失敗不補讀半句、逾期一次性／每日／每週提醒，以及鬧鐘 TTS 靜音／恢復。
 

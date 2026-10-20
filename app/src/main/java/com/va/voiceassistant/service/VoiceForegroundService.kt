@@ -19,7 +19,6 @@ import com.va.voiceassistant.R
 import com.va.voiceassistant.BuildConfig
 import com.va.voiceassistant.asr.AsrModelPacks
 import com.va.voiceassistant.asr.AsrRecognizerKind
-import com.va.voiceassistant.asr.CloudSpeechRecognizerEngine
 import com.va.voiceassistant.asr.OfflineSpeechRecognizerEngine
 import com.va.voiceassistant.asr.SherpaSpeechRecognizerEngine
 import com.va.voiceassistant.asr.SystemSpeechRecognizerEngine
@@ -31,7 +30,6 @@ import com.va.voiceassistant.diagnostics.M1DiagnosticsRepository
 import com.va.voiceassistant.diagnostics.VoiceErrorCode
 import com.va.voiceassistant.data.SettingsRepository
 import com.va.voiceassistant.llm.OpenAiAudioSpeechClient
-import com.va.voiceassistant.llm.OpenAiAudioTranscriptionClient
 import com.va.voiceassistant.llm.OpenAiCompatibleLlmProvider
 import com.va.voiceassistant.llm.CloudAudioSettingsValidator
 import com.va.voiceassistant.llm.LlmTranscriptCorrector
@@ -186,20 +184,15 @@ class VoiceForegroundService : Service() {
                 failAndStop(VoiceErrorCode.AUDIO_CONFIG_INVALID, detail)
                 return
             }
-            // 引擎選擇：明確設定的雲端 Whisper 最優先；其次探測系統語音辨識（含中文支援），
-            // 探測通過就直接用系統、不必先下載 X-ASR；都不行才要求 X-ASR 後備模型。
-            val useCloudAsr = settings.cloudAsrReady(hasAudioApiKey)
-            val systemAsrProbe = if (useCloudAsr) {
-                null
-            } else {
-                SystemSpeechRecognizerSupport.probe(applicationContext)
-            }
+            // 引擎選擇：先探測系統語音辨識（含中文支援），探測通過就直接用系統、
+            // 不必先下載 X-ASR；都不行才要求 X-ASR 後備模型。
+            val systemAsrProbe = SystemSpeechRecognizerSupport.probe(applicationContext)
             val systemAsrConfirmed = systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Confirmed
             val systemAsrLanguage = systemAsrConfirmed?.language
             // 問不到語言資訊仍會選用系統辨識，把未驗證的原因留在診斷，日後才追得出當時的取捨。
             systemAsrConfirmed?.unverifiedReason?.let(M1DiagnosticsRepository::recordSystemAsrUnverified)
             val useSystemAsr = systemAsrLanguage != null
-            if (!useCloudAsr && !useSystemAsr) {
+            if (!useSystemAsr) {
                 val asrStatus = BundledAsrInstaller(applicationContext).ensureInstalled()
                 if (!asrStatus.valid) {
                     val probeReason = (systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Unavailable)?.reason.orEmpty()
@@ -257,16 +250,7 @@ class VoiceForegroundService : Service() {
                 audio = audio,
                 kws = SherpaWakeWordEngine(assets, settings.wakePhrase),
                 vad = SherpaVadEngine(assets),
-                asr = if (useCloudAsr) {
-                    CloudSpeechRecognizerEngine(
-                        modelId = "cloud/${settings.cloudAsrModel}",
-                        transcriber = OpenAiAudioTranscriptionClient(
-                            settings = settings,
-                            apiKeyProvider = audioSecretStore::readApiKey,
-                            allowHttp = BuildConfig.DEBUG,
-                        ),
-                    )
-                } else if (systemAsrLanguage != null) {
+                asr = if (systemAsrLanguage != null) {
                     SystemSpeechRecognizerEngine(
                         applicationContext,
                         waitForSpeechMs = settings.waitForSpeechMs,
@@ -355,11 +339,7 @@ class VoiceForegroundService : Service() {
                 return
             }
             M1DiagnosticsRepository.setAsrModel(
-                when {
-                    useCloudAsr -> "cloud/${settings.cloudAsrModel}"
-                    useSystemAsr -> SystemSpeechRecognizerSupport.MODEL_ID
-                    else -> asrPack.id
-                },
+                if (useSystemAsr) SystemSpeechRecognizerSupport.MODEL_ID else asrPack.id,
             )
             startHealthPublishing()
             created.start()

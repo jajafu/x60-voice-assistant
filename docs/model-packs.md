@@ -56,7 +56,7 @@ sherpa runtime repository 的 Apache-2.0 不應自動推定為 model weights 的
 | Silero VAD | `silero_vad.onnx` | 643,854 | `9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6` | APK asset，本機 VAD；上游 MIT |
 | Standard ASR | `sherpa-onnx-streaming-zipformer-ctc-zh-int8-2025-06-30.tar.bz2` | 127,965,713 | `f2ab7a5deb02717801f6a5b26c751b42f8a2db891b07f5b095e6da7442081448` | 預設備用 |
 | Moonshine v2 base zh | `sherpa-onnx-moonshine-base-zh-quantized-2026-02-27.tar.bz2` | 99,905,420 | `6495d4240f66bcdd2bbbbfefaa687c463150d467854001270934e88940b733c1` | 中文比較候選；整句辨識 |
-| X-ASR zh-en punct INT8 | `sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2` | 136,396,739 | `5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224` | 改由「模型」頁按鈕從雲端硬碟下載；句尾交付辨識結果 |
+| X-ASR zh-en punct INT8 | `sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2` | 136,396,739 | `5d02c36d7b44e886b7c8f0d8e051f8713acab96c264bb6ef9e718be39a6a2224` | 改由「模型」頁按鈕從官方 release 下載；句尾交付辨識結果 |
 
 Standard pack 的 `model.int8.onnx` 為 162,290,887 bytes，SHA256 `24ffdc19ba9aaed5a6a9beaede1e087745217d82425cf4041bca0c696661801e`；`tokens.txt` SHA256 `6193c7ea1c96d0d9a1e9652789b40d13a8a913b434a5451e93158f5a09fd6652`。
 
@@ -81,4 +81,4 @@ X-ASR pack 逐檔（以 GitHub release archive 內容計算；Hugging Face 目�
 | `bpe.model` | 119,265 | `f87a38025a5fdd1e4e9591f6a44bb81295097ce0b80df6f4ab9f44e52c64ca5f` |
 | `tokens.txt` | 58,806 | `b818a60878b9aae978cbb8ad594acbd403d76d1af2e31ef4197c84e2dbdba27c` |
 
-三個 archive 均來自 sherpa-onnx 官方 model release。Standard 使用 1.13.8 的 `OnlineRecognizer` / Zipformer2 CTC API；X-ASR 與 Moonshine v2 使用 `OfflineRecognizer`，在 VAD 偵測一句話結束後辨識並交付結果。X-ASR release 的 encoder 介面是整句輸入，不適用 `OnlineRecognizer`。X-ASR 作者的 [X-ASR 模型頁](https://huggingface.co/GilgameshWind/X-ASR-zh-en)標示 Apache-2.0，但 sherpa-onnx 壓縮檔未附模型專屬授權檔；對外散布 APK 前仍需核對第三方聲明中的 KWS 模型授權。Moonshine 中文權重附有 Moonshine AI Community License。X-ASR 改由使用者雲端硬碟下載（App「模型」頁按鈕，下載後解壓到 App Private Storage 並逐檔驗證 SHA256），APK 不再內建；X-ASR 單一來源為使用者雲端硬碟（刻意取捨：APK 變小，但連結失效就無法安裝；屆時需更新 `X_ASR_DRIVE_FILE_ID` 並發版）。舊版已選的 Standard 或 Moonshine 設定會自動改用 X-ASR；既有模型檔不會被自動刪除。
+三個 archive 均來自 sherpa-onnx 官方 model release。Standard 使用 1.13.8 的 `OnlineRecognizer` / Zipformer2 CTC API；X-ASR 與 Moonshine v2 使用 `OfflineRecognizer`，在 VAD 偵測一句話結束後辨識並交付結果。X-ASR release 的 encoder 介面是整句輸入，不適用 `OnlineRecognizer`。X-ASR 作者的 [X-ASR 模型頁](https://huggingface.co/GilgameshWind/X-ASR-zh-en)標示 Apache-2.0，但 sherpa-onnx 壓縮檔未附模型專屬授權檔；對外散布 APK 前仍需核對第三方聲明中的 KWS 模型授權。Moonshine 中文權重附有 Moonshine AI Community License。X-ASR 改由 App「模型」頁按鈕從 sherpa-onnx 官方 GitHub release 下載（下載後解壓到 App Private Storage 並逐檔驗證 SHA256），APK 不再內建；下載來源即該模型在官方 release 的原始壓縮檔，與其他 pack 同一來源。舊版已選的 Standard 或 Moonshine 設定會自動改用 X-ASR；既有模型檔不會被自動刪除。

@@ -2,7 +2,7 @@ package com.va.voiceassistant.llm
 
 import com.va.voiceassistant.data.AssistantSettings
 
-/** Validates the independent Audio Provider settings used by optional cloud audio paths. */
+/** Validates the independent Audio Provider settings used by the optional cloud TTS path. */
 object CloudAudioSettingsValidator {
     fun validateTts(
         settings: AssistantSettings,
@@ -14,16 +14,6 @@ object CloudAudioSettingsValidator {
             ?: endpointError(settings.audioBaseUrl, "/audio/speech", allowHttp)
     }
 
-    fun validateAsr(
-        settings: AssistantSettings,
-        hasApiKey: Boolean,
-        allowHttp: Boolean,
-    ): String? {
-        if (!settings.cloudAsrEnabled) return null
-        return validateCommon(settings, hasApiKey)
-            ?: endpointError(settings.audioBaseUrl, "/audio/transcriptions", allowHttp)
-    }
-
     fun validate(
         settings: AssistantSettings,
         hasApiKey: Boolean,
@@ -31,9 +21,6 @@ object CloudAudioSettingsValidator {
     ): String? {
         if (configuredTts(settings, hasApiKey)) {
             validateTts(settings, hasApiKey, allowHttp)?.let { return it }
-        }
-        if (configuredAsr(settings, hasApiKey)) {
-            validateAsr(settings, hasApiKey, allowHttp)?.let { return it }
         }
         return null
     }
@@ -52,7 +39,4 @@ object CloudAudioSettingsValidator {
 
     private fun configuredTts(settings: AssistantSettings, hasApiKey: Boolean): Boolean =
         settings.cloudTtsEnabled && hasApiKey && settings.audioBaseUrl.isNotBlank()
-
-    private fun configuredAsr(settings: AssistantSettings, hasApiKey: Boolean): Boolean =
-        settings.cloudAsrEnabled && hasApiKey && settings.audioBaseUrl.isNotBlank()
 }

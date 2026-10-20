@@ -2,9 +2,9 @@ param(
     [string]$CacheDirectory = (Join-Path $env:TEMP 'voiceassistant-asr-cache')
 )
 
-# 已停用：X-ASR 改由 App「模型」頁從雲端硬碟下載，APK 不再內建。
+# 已停用：X-ASR 改由 App「模型」頁從 sherpa-onnx 官方 release 下載，APK 不再內建。
 # 此腳本保留僅供查閱 SHA256 與檔名；執行會直接失敗，避免把 136 MB 壓縮檔放回 APK。
-throw "prepare-bundled-xasr 已停用：X-ASR 改由 App 內從雲端硬碟下載，不再打包進 APK。"
+throw "prepare-bundled-xasr 已停用：X-ASR 改由 App 內從官方 release 下載，不再打包進 APK。"
 
 $ErrorActionPreference = 'Stop'
 $archiveName = 'sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03.tar.bz2'

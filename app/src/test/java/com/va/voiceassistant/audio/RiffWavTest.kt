@@ -1,6 +1,5 @@
 package com.va.voiceassistant.audio
 
-import com.va.voiceassistant.asr.CloudSpeechRecognizerEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -8,8 +7,8 @@ import org.junit.Test
 
 class RiffWavTest {
     @Test
-    fun `accepts a wav produced by the uploader`() {
-        assertTrue(RiffWav.isWave(CloudSpeechRecognizerEngine.pcmToWav(shortArrayOf(0, 1, -1))))
+    fun `accepts a wav produced by the test helper`() {
+        assertTrue(RiffWav.isWave(TestWav.pcmToWav(shortArrayOf(0, 1, -1))))
     }
 
     @Test
