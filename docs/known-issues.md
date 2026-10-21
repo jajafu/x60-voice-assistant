@@ -26,6 +26,7 @@
 - 1.0.9 未驗收：模型頁移除雲端 ASR 後的版面、X-ASR 改由官方 release 下載→大小／SHA256 驗證→解壓安裝、由舊版升級後引擎選擇（系統→X-ASR）皆待真機確認。原列的「既有雲端 TTS 設定保存」已由 1.0.11 整條移除雲端 TTS 取代（見 decision-log），不再適用。
 - 1.0.10 未驗收：設定頁 App 更新入口、GitHub release 啟動檢查、APK 斷點續傳、未知來源授權與系統安裝流程仍待真機確認；單元測試只覆蓋 release 解析與模擬 HTTP 續傳。
 - 1.0.11 未驗收：模型頁移除雲端語音（spike）／雲端 TTS 後的版面、由舊版升級（含雲端 TTS 設定與 Audio Key）不崩潰且雲端設定靜默失效、TTS 一律走系統引擎，皆待真機確認。
+- 1.0.12 未驗收：更新檢查改指主倉庫後，真機在 1.0.10／1.0.11 上按「檢查更新」能取得 1.0.12、下載與安裝流程完整，待真機確認。主倉庫未開源或無 release 時 App 依設計保持安靜。
 
 - Small／Standard 中文 ASR archive 沒有模型專屬 `LICENSE`／`NOTICE`；Moonshine 中文權重附 Moonshine AI Community License。APK 不含 ASR binary，授權條款見 `docs/model-packs.md`。
 - 目前 X60 只完成 Small ASR 的單句合成短測和 Standard 的載入短測。Moonshine 尚未在真機下載、載入或辨識；20 句真人語意、連續 30 次、P95、Peak PSS、熱降頻與 OOM/LMK 仍待正式量測。

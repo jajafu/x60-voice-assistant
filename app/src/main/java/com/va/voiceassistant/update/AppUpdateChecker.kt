@@ -26,12 +26,13 @@ data class AppUpdateInfo(
  */
 object AppUpdateChecker {
     /**
-     * App 未登入 GitHub，所以倉庫必須設為公開且發佈過 release，檢查才會有結果；
-     * 私有倉庫一律回 404，App 會保持安靜（見 checkForUpdate）。
-     * 主程式庫保持私有，APK 另外發佈到公開的 releases 專案。
+     * App 未登入 GitHub，所以倉庫必須是公開且發佈過 release，檢查才會有結果；
+     * 查無 release 時回 404，App 會保持安靜（見 checkForUpdate）。
+     * 主倉庫已開源（1.0.12 起），更新檢查與 APK 下載直接指向主倉庫的 releases，
+     * 不再使用舊架構的獨立公開倉庫。
      */
     const val LATEST_RELEASE_URL =
-        "https://api.github.com/repos/jajafu/x60-voice-assistant-releases/releases/latest"
+        "https://api.github.com/repos/jajafu/x60-voice-assistant/releases/latest"
 
     // Match MusicCabin's updater: foreground checks use the in-process cache,
     // while an explicit button tap can force a fresh request.

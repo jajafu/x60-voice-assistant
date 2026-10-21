@@ -13,7 +13,7 @@
 - API Key 由 Android Keystore 的不可匯出 AES-256-GCM key 加密；DataStore 只放非敏感設定。
 - Release 僅允許 HTTPS；Debug HTTP 只白名單 `localhost`、`127.0.0.1`、`10.0.2.2`。
 - Transcript、回答與最近 6 組對話預設只在 process 記憶體。
-- App 更新需 `REQUEST_INSTALL_PACKAGES` 與使用者的「安裝未知應用」授權；APK 只從公開的 [releases 專案](https://github.com/jajafu/x60-voice-assistant-releases) 在 App 內下載，不經瀏覽器。原始碼專案維持私有。
+- App 更新需 `REQUEST_INSTALL_PACKAGES` 與使用者的「安裝未知應用」授權；APK 從本倉庫（已開源）的 GitHub Releases 在 App 內下載，不經瀏覽器。
 - `BOOT_COMPLETED` 只顯示提醒，不會啟動 microphone FGS；強制停止後不復活。
 
 ## 準備模型
@@ -102,7 +102,7 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 ## AI 開發流程
 
-Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.11` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.12` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
 
 從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 
