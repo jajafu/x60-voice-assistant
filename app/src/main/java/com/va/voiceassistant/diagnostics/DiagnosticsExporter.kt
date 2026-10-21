@@ -30,8 +30,6 @@ object DiagnosticsExporter {
         appendLine("llm_first_token_ms=${runtime.llmFirstTokenLatencyMs ?: "-"}")
         appendLine("llm_total_ms=${runtime.llmTotalLatencyMs ?: "-"}")
         appendLine("provider_host=${safeHost(settings.baseUrl)}")
-        appendLine("audio_provider_host=${safeHost(settings.audioBaseUrl)}")
-        appendLine("cloud_tts=${settings.cloudTtsEnabled}:${settings.cloudTtsModel}:${settings.cloudTtsVoice}")
         appendLine("tts_queue=${runtime.ttsQueueDepth}/${runtime.ttsQueueHighWaterMark}")
         appendLine("tts_engine=${runtime.ttsEngine}")
         appendLine("tts_voice=${runtime.ttsVoice}")

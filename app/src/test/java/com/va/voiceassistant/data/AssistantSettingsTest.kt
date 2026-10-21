@@ -67,35 +67,6 @@ class AssistantSettingsTest {
     }
 
     @Test
-    fun `cloud voice is off by default and uses audio credentials`() {
-        val defaults = AssistantSettings()
-        assertFalse(defaults.cloudTtsEnabled)
-        assertEquals("gpt-4o-mini-tts", defaults.cloudTtsModel)
-        assertEquals("alloy", defaults.cloudTtsVoice)
-        // 沒有 Audio URL／Key 時即使開關打開也不該走雲端；兩者都具備才啟用。
-        assertFalse(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasAudioApiKey = false))
-        assertFalse(AssistantSettings(cloudTtsEnabled = true).cloudTtsReady(hasAudioApiKey = true))
-        val configured = AssistantSettings(audioBaseUrl = "https://audio.example.com")
-        assertTrue(configured.copy(cloudTtsEnabled = true).cloudTtsReady(hasAudioApiKey = true))
-    }
-
-    @Test
-    fun `cloud model blanks fall back to defaults and identifiers are length limited`() {
-        val settings = AssistantSettings(
-            cloudTtsModel = "  ",
-            cloudTtsVoice = "  ",
-        ).normalized()
-        assertEquals(AssistantSettings.DEFAULT_CLOUD_TTS_MODEL, settings.cloudTtsModel)
-        assertEquals(AssistantSettings.DEFAULT_CLOUD_TTS_VOICE, settings.cloudTtsVoice)
-        val long = AssistantSettings(
-            cloudTtsModel = "m".repeat(500),
-            cloudTtsVoice = "v".repeat(500),
-        ).normalized()
-        assertEquals(AssistantSettings.MAX_CLOUD_IDENTIFIER_LENGTH, long.cloudTtsModel.length)
-        assertEquals(AssistantSettings.MAX_CLOUD_IDENTIFIER_LENGTH, long.cloudTtsVoice.length)
-    }
-
-    @Test
     fun `declared ranges match normalized clamping at both bounds`() {
         AssistantSettings(
             temperature = AssistantSettings.TEMPERATURE_RANGE.endInclusive,

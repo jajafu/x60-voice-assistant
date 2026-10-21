@@ -55,10 +55,6 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.TTS_VOICE] = settings.ttsVoice
             prefs[Keys.TTS_VOLUME] = settings.ttsVolume
             prefs[Keys.SPEECH_RATE] = settings.speechRate
-            prefs[Keys.CLOUD_TTS_ENABLED] = settings.cloudTtsEnabled
-            prefs[Keys.CLOUD_TTS_MODEL] = settings.cloudTtsModel
-            prefs[Keys.CLOUD_TTS_VOICE] = settings.cloudTtsVoice
-            prefs[Keys.AUDIO_BASE_URL] = settings.audioBaseUrl
             prefs[Keys.PITCH] = settings.pitch
             prefs[Keys.CONNECTION_VERIFIED] = settings.connectionVerified
         }
@@ -104,10 +100,6 @@ class SettingsRepository(private val context: Context) {
         ttsVoice = prefs[Keys.TTS_VOICE].orEmpty(),
         ttsVolume = prefs[Keys.TTS_VOLUME] ?: AssistantSettings.DEFAULT_TTS_VOLUME,
         speechRate = prefs[Keys.SPEECH_RATE] ?: 1.0f,
-        cloudTtsEnabled = prefs[Keys.CLOUD_TTS_ENABLED] ?: AssistantSettings.DEFAULT_CLOUD_TTS_ENABLED,
-        cloudTtsModel = prefs[Keys.CLOUD_TTS_MODEL] ?: AssistantSettings.DEFAULT_CLOUD_TTS_MODEL,
-        cloudTtsVoice = prefs[Keys.CLOUD_TTS_VOICE] ?: AssistantSettings.DEFAULT_CLOUD_TTS_VOICE,
-        audioBaseUrl = prefs[Keys.AUDIO_BASE_URL].orEmpty(),
         pitch = prefs[Keys.PITCH] ?: 1.0f,
         connectionVerified = prefs[Keys.CONNECTION_VERIFIED] ?: false,
     ).normalized()
@@ -144,10 +136,6 @@ class SettingsRepository(private val context: Context) {
         val TTS_VOICE = stringPreferencesKey("tts_voice")
         val TTS_VOLUME = floatPreferencesKey("tts_volume")
         val SPEECH_RATE = floatPreferencesKey("tts_speech_rate")
-        val CLOUD_TTS_ENABLED = booleanPreferencesKey("cloud_tts_enabled")
-        val CLOUD_TTS_MODEL = stringPreferencesKey("cloud_tts_model")
-        val CLOUD_TTS_VOICE = stringPreferencesKey("cloud_tts_voice")
-        val AUDIO_BASE_URL = stringPreferencesKey("audio_base_url")
         val PITCH = floatPreferencesKey("tts_pitch")
         val CONNECTION_VERIFIED = booleanPreferencesKey("llm_connection_verified")
     }

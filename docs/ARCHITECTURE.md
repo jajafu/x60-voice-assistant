@@ -4,9 +4,9 @@
 
 ## 架構與技術
 
-Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，啟動時先探測系統語音辨識（存在且支援中文）並優先使用，系統不可用時退回本機 X-ASR。辨識文字優先送本機音樂／提醒／導航／音量指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給系統 TTS 或選用的雲端 TTS。設定與提醒留在裝置；從 sherpa-onnx 官方 release 下載的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
+Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，啟動時先探測系統語音辨識（存在且支援中文）並優先使用，系統不可用時退回本機 X-ASR。辨識文字優先送本機音樂／提醒／導航／音量指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給系統 TTS。設定與提醒留在裝置；從 sherpa-onnx 官方 release 下載的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
 
-主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。目前產品版號為 `1.0.10`／`versionCode 44`，依 `app/build.gradle.kts` 查證。
+主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。目前產品版號為 `1.0.11`／`versionCode 45`，依 `app/build.gradle.kts` 查證。
 
 `VoiceForegroundService` 擁有語音服務生命週期與資源；`AudioCaptureEngine` 建立唯一 `AudioRecord`，以 16 kHz／mono／PCM16／20 ms frame 送入有界佇列。`VoiceOrchestrator` 是唯一狀態切換者，將喚醒後語音交給 VAD／ASR；本機 `MusicCommandRouter`、`NavigationCommandRouter`、`ReminderCommandRouter` 與 `VolumeCommandRouter` 優先處理明確指令，一般問答才走 `OpenAiCompatibleLlmProvider` 的 SSE，完整句送 TTS，結束後可進 Follow Up。實際分支、失敗與恢復策略依程式碼及 `docs/decision-log.md`。
 
@@ -28,7 +28,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - `music/`、`reminder/`：媒體操作與本機提醒路由、執行與排程。
 - `navigation/`：語音導航的本機指令解析、地圖 App 目錄與路線預覽啟動。只開啟使用者選定的地圖 App 到路線預覽頁，最後的開始導航由使用者點擊。
 - `volume/`：本機 `STREAM_MUSIC` 音量指令解析、級別換算與 Android `AudioManager` 執行（相對調整用 `adjustStreamVolume`，絕對音量用 `setStreamVolume`）；不使用無障礙設定頁，不提供語音靜音／解除靜音。
-- `llm/`、`tts/`：可設定的 OpenAI 相容 SSE 用戶端與 Android 語音輸出；另有預設關閉的雲端 TTS spike（`/audio/speech`），使用獨立 Audio Base URL／Key，失敗不靜默退回本機；未完成 Audio 設定時則維持本機引擎。雲端 TTS 在送出播放前以 `audio/RiffWav.kt` 驗證 RIFF/WAVE 檔頭，格式不符即回報實際 Content-Type 與檔頭，不讓 `MediaPlayer` 以不透明錯誤收尾；語音輸出 PCM 以 primitive 緩衝保存，避免長時間語句的記憶體尖峰。
+- `llm/`、`tts/`：可設定的 OpenAI 相容 SSE 用戶端與 Android 語音輸出。
 - `data/`、`security/`、`diagnostics/`：DataStore 設定、Keystore 密鑰、有限且遮罩的診斷。
 - `app/src/test/`、`app/src/androidTest/`、`docs/test-reports/`：單元測試、裝置測試與真機紀錄。
 - `scripts/`、`docs/model-packs.md`：模型資產準備及來源／授權資訊。
@@ -42,7 +42,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - 16 kHz PCM frame 保持在記憶體的 50-frame 有界佇列；逐字稿、回覆與近期對話預設只在 process 記憶體，不寫入診斷匯出。
 - 非敏感設定使用 DataStore；API Key 由 Android Keystore AES-GCM 加密；提醒由裝置內儲存與 Android alarm 排程，重開機或時間變動後補排程。
 - 辨識引擎選擇（1.0.8 起）：系統語音辨識（啟動時探測存在且支援中文；系統引擎自己出麥收音，聆聽期間共用 AudioRecord 先停用）優先；最後才是本機 X-ASR。KWS／VAD／X-ASR 模型本機執行；X-ASR 壓縮檔由 App「模型」頁按鈕從 sherpa-onnx 官方 GitHub release 下載（APK 不再內建），下載後解壓至 App 私有空間並逐檔校驗 SHA256。App 啟動時另檢查公開 releases 專案是否有新版本；自動檢查沿用兩小時記憶體快取，設定頁可手動強制檢查。更新 APK 以版本標籤分開暫存，下載中斷後以 HTTP Range 續傳並重試，下載完成後由 App 內按鈕叫起系統安裝。舊設定改用 X-ASR，既有模型檔不自動刪除。模型 binary 不進 Git。
-- 一般問答由使用者在 App 設定的 OpenAI 相容 HTTPS endpoint 處理，沿用 LLM Base URL／Model／Endpoint／Key；雲端 TTS 另使用 Audio Base URL／Key。未提供對應 API Key 時不能宣稱真實 Provider 已驗收。
+- 一般問答由使用者在 App 設定的 OpenAI 相容 HTTPS endpoint 處理，沿用 LLM Base URL／Model／Endpoint／Key。未提供對應 API Key 時不能宣稱真實 Provider 已驗收。
 - 選定的播放器以 Android 媒體服務／MediaSession 控制；MusicCabin 走公開語音通道（有序廣播），收藏與循環改由音樂 App 的隱私開關管，不再要求小助手的通知存取。通知存取只留給車機 fallback（實際在播的是另一台時暫停）。
 - 語音導航以 Intent 開啟使用者選定的地圖 App 到路線預覽頁，不查詢任何雲端地理編碼服務。
 

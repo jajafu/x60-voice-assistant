@@ -162,3 +162,11 @@
 - 移除「模型」頁的雲端 ASR（Whisper）設定與整條程式路徑：`CloudSpeechRecognizerEngine`、`OpenAiAudioTranscriptionClient`（含 `AudioTranscriber`）、`cloudAsrEnabled`／`Model`／`Language`、啟動時的雲端優先分支、診斷 `cloud_asr` 行；引擎選擇回到「系統語音辨識優先，系統不可用才用已下載的 X-ASR」。雲端 TTS 保留。理由：系統辨識已可優先使用，雲端 ASR 的 spike 不再需要。
 - 升級相容：舊 DataStore 的 `cloud_asr_*` 鍵留在裝置但不讀取；既有 X-ASR 模型檔與舊版模型選擇遷移不變。原 `CloudSpeechRecognizerEngine.pcmToWav` 僅測試使用，移到測試 source set 的 `audio/TestWav.kt`。
 - 版號 `1.0.9`／`versionCode 43`。`test`、`lint`、`assembleDebug` 通過；真機驗收項目見 testing.md 與 known-issues。
+
+## 1.0.11（2026-10-21，本對話，使用者核准：移除「模型」頁雲端語音／雲端 TTS）
+
+- 移除「模型」頁的「雲端語音（spike）」與「雲端 TTS」區塊，並整條移除雲端 TTS 程式路徑（含對應測試 `CloudAudioSettingsValidatorTest`、`OpenAiAudioSpeechClientTest`、`WavAudioGainTest`、`WavPlaybackSettingsTest`、`RiffWavTest` 與僅測試用的 `audio/TestWav.kt`）：`CloudTtsEngine`、`OpenAiAudioSpeechClient`、`CloudAudioSettingsValidator`（含 `validateTts`）、`RiffWav`、`WavAudioGain`、`WavPlaybackSettings`（後三者僅雲端 TTS 使用）、`cloudTtsEnabled`／`Model`／`Voice`／`audioBaseUrl` 設定欄位與 DataStore 鍵、`AndroidKeystoreSecretStore.Scope.AUDIO`、`VoiceErrorCode.AUDIO_CONFIG_INVALID`、診斷匯出的 `audio_provider_host`／`cloud_tts` 行、模型頁與主活動的 Audio Key 輸入／刪除／測試流程。TTS 回到純系統引擎；「測試語音」與 TTS 播放失敗重建（`speechOutputFactory`）保留，重建時一律用 `AndroidTtsEngine`。
+- 動機：雲端 TTS 只是 spike、預設關閉且從未完成真機驗收，使用者明確要求移除 UI 與殘留程式。1.0.9 移除雲端 ASR 時曾保留雲端 TTS，本版一併收掉。
+- 升級相容：舊 DataStore 的 `cloud_tts_*`／`audio_base_url` 鍵留在裝置但不讀取（比照 1.0.9 處理 `cloud_asr_*` 的慣例）；舊 Audio Key 加密檔（`secrets/audio_api_key.v1.json`）不再被讀取，「清除私人資料」會一併刪除該檔與暫存檔，Keystore 內舊 audio alias 不再使用。既有 LLM 設定與驗證狀態不受影響。
+- 版號 `1.0.11`／`versionCode 45`（行為變更，依 DEVELOPMENT.md 版本規則遞增）。
+

@@ -51,19 +51,16 @@ import com.va.voiceassistant.navigation.NavigationAppOption
 import com.va.voiceassistant.music.MusicAppOption
 import com.va.voiceassistant.music.MusicCabinFavoriteAccess
 import com.va.voiceassistant.music.AssistantUiVisibility
-import com.va.voiceassistant.llm.OpenAiAudioSpeechClient
 import com.va.voiceassistant.llm.OpenAiCompatibleLlmProvider
-import com.va.voiceassistant.llm.CloudAudioSettingsValidator
 import com.va.voiceassistant.kws.WakePhraseCompiler
 import com.va.voiceassistant.security.AndroidKeystoreSecretStore
 import com.va.voiceassistant.tts.AndroidTtsEngine
-import com.va.voiceassistant.tts.CloudTtsEngine
-import com.va.voiceassistant.tts.SpeechOutputEngine
 import com.va.voiceassistant.tts.TtsEngineCatalog
 import com.va.voiceassistant.tts.TtsEngineOption
 import com.va.voiceassistant.tts.TtsVoiceOption
 import com.va.voiceassistant.ui.diagnostics.DeviceDiagnosticsScreen
 import com.va.voiceassistant.ui.theme.VoiceAssistantTheme
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -75,7 +72,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var diagnosticsCollector: DeviceDiagnosticsCollector
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var secretStore: AndroidKeystoreSecretStore
-    private lateinit var audioSecretStore: AndroidKeystoreSecretStore
     private lateinit var reminderManager: ReminderManager
     private var diagnostics by mutableStateOf(emptyDiagnostics())
     private var errorMessage by mutableStateOf<String?>(null)
@@ -183,10 +179,6 @@ class MainActivity : ComponentActivity() {
         diagnosticsCollector = DeviceDiagnosticsCollector(applicationContext)
         settingsRepository = SettingsRepository(applicationContext)
         secretStore = AndroidKeystoreSecretStore(applicationContext)
-        audioSecretStore = AndroidKeystoreSecretStore(
-            applicationContext,
-            AndroidKeystoreSecretStore.Scope.AUDIO,
-        )
         reminderManager = ReminderManager(applicationContext)
         refreshDiagnostics()
         refreshAsrStatus(force = true)
@@ -213,7 +205,6 @@ class MainActivity : ComponentActivity() {
                     errorMessage = errorMessage,
                     assistantSettings = assistantSettings,
                     maskedLlmApiKey = secretStore.maskedApiKey(),
-                    maskedAudioApiKey = audioSecretStore.maskedApiKey(),
                     settingsMessage = settingsMessage,
                     testingConnection = testingConnection,
                     onPrimaryAction = {
@@ -233,7 +224,6 @@ class MainActivity : ComponentActivity() {
                     onSaveSettings = ::saveSettings,
                     onTestConnection = ::testConnection,
                     onDeleteLlmApiKey = ::deleteLlmApiKey,
-                    onDeleteAudioApiKey = ::deleteAudioApiKey,
                     onTestTts = ::testTts,
                     onExportDiagnostics = { exportDiagnostics(m1Diagnostics, assistantSettings) },
                     onClearPrivateData = ::clearPrivateData,
@@ -502,11 +492,10 @@ class MainActivity : ComponentActivity() {
             .onFailure { reminderMessage = "此裝置無法開啟鈴聲選擇器。" }
     }
 
-    private fun saveSettings(settings: AssistantSettings, llmApiKey: String, audioApiKey: String) {
+    private fun saveSettings(settings: AssistantSettings, llmApiKey: String) {
         lifecycleScope.launch {
             var connectionStillVerified = false
             runCatching {
-                validateCloudAudioSettings(settings, audioApiKey)
                 WakePhraseCompiler.compile(assets, settings.wakePhrase)
                 val current = settingsRepository.current()
                 val providerUnchanged = settings.baseUrl.trim() == current.baseUrl &&
@@ -518,7 +507,6 @@ class MainActivity : ComponentActivity() {
                     settings.copy(connectionVerified = connectionStillVerified),
                 )
                 if (llmApiKey.isNotBlank()) secretStore.saveApiKey(llmApiKey.toCharArray())
-                if (audioApiKey.isNotBlank()) audioSecretStore.saveApiKey(audioApiKey.toCharArray())
             }.onSuccess {
                 settingsMessage = if (connectionStillVerified) {
                     "設定已儲存。"
@@ -526,8 +514,6 @@ class MainActivity : ComponentActivity() {
                     "設定已儲存；請按「測試 LLM 連線」後再啟動服務。"
                 }
             }.onFailure {
-                // 雲端語音設定驗證會帶出具體原因（例如缺 Audio API Key），只印例外類別
-                // 會讓使用者只看到 IllegalArgumentException。例外訊息不含 API Key。
                 settingsMessage = "設定儲存失敗：${it.message ?: it.javaClass.simpleName}"
             }
         }
@@ -571,58 +557,27 @@ class MainActivity : ComponentActivity() {
         settingsMessage = "LLM API Key 已刪除。"
     }
 
-    private fun deleteAudioApiKey() {
-        audioSecretStore.deleteApiKey()
-        settingsMessage = "Audio API Key 已刪除；雲端 TTS 將改用本機引擎。"
-    }
-
-    private fun testTts(settings: AssistantSettings, draftAudioApiKey: String) {
+    private fun testTts(settings: AssistantSettings) {
         lifecycleScope.launch {
-            val hasAudioApiKey = draftAudioApiKey.isNotBlank() || audioSecretStore.maskedApiKey() != "未設定"
-            var engine: SpeechOutputEngine? = null
+            val engine = AndroidTtsEngine(applicationContext, settings)
             try {
-                if (settings.cloudTtsEnabled) {
-                    val configError = CloudAudioSettingsValidator.validateTts(
-                        settings,
-                        hasAudioApiKey,
-                        BuildConfig.DEBUG,
-                    )
-                    require(configError == null) { configError.orEmpty() }
-                    engine = CloudTtsEngine(
-                        applicationContext,
-                        settings,
-                        OpenAiAudioSpeechClient(
-                            settings = settings,
-                            apiKeyProvider = {
-                                if (draftAudioApiKey.isNotBlank()) {
-                                    draftAudioApiKey.toCharArray()
-                                } else {
-                                    audioSecretStore.readApiKey()
-                                }
-                            },
-                            allowHttp = BuildConfig.DEBUG,
-                        ),
-                    )
-                } else {
-                    engine = AndroidTtsEngine(applicationContext, settings)
-                }
-                val activeEngine = requireNotNull(engine)
-                val status = activeEngine.initialize()
+                val status = engine.initialize()
                 check(status.available) { status.message }
-                activeEngine.speak("${settings.wakePhrase}語音測試完成。")
+                engine.speak("${settings.wakePhrase}語音測試完成。")
                 settingsMessage = "TTS 測試完成：${status.engine}，${status.voice}"
             } catch (error: Exception) {
                 settingsMessage = "TTS 測試失敗：${error.message ?: error.javaClass.simpleName}"
             } finally {
-                engine?.close()
+                engine.close()
             }
         }
     }
 
-    private fun validateCloudAudioSettings(settings: AssistantSettings, audioApiKey: String) {
-        val hasAudioApiKey = audioApiKey.isNotBlank() || audioSecretStore.maskedApiKey() != "未設定"
-        val error = CloudAudioSettingsValidator.validate(settings, hasAudioApiKey, BuildConfig.DEBUG)
-        require(error == null) { error.orEmpty() }
+    /** 1.0.11 移除雲端 TTS 後的一次性清理：刪除不再讀取的舊 Audio Key 加密檔。 */
+    private fun deleteLegacyAudioApiKey() {
+        val secrets = File(applicationContext.filesDir, "secrets")
+        File(secrets, "audio_api_key.v1.json").delete()
+        File(secrets, "audio_api_key.tmp").delete()
     }
 
     private fun exportDiagnostics(
@@ -644,7 +599,7 @@ class MainActivity : ComponentActivity() {
             ReminderScheduler(applicationContext).cancelAll()
             ReminderPreferences(applicationContext).clear()
             secretStore.deleteApiKey()
-            audioSecretStore.deleteApiKey()
+            deleteLegacyAudioApiKey()
             M1DiagnosticsRepository.clearDiagnostics()
             getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE).edit { clear() }
             settingsMessage = "設定、API Key、排程提醒、記憶體內逐字稿／回答與診斷已清除。"

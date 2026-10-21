@@ -45,32 +45,19 @@ class KeystoreInstrumentation : Instrumentation() {
         }
         val results = Bundle()
         val store = AndroidKeystoreSecretStore(targetContext)
-        val audioStore = AndroidKeystoreSecretStore(
-            targetContext,
-            AndroidKeystoreSecretStore.Scope.AUDIO,
-        )
         val expected = "sk-device-instrumentation-only-1234".toCharArray()
-        val audioExpected = "audio-device-instrumentation-only-5678".toCharArray()
         try {
             store.deleteApiKey()
-            audioStore.deleteApiKey()
             store.saveApiKey(expected.copyOf())
-            audioStore.saveApiKey(audioExpected.copyOf())
             val actual = checkNotNull(store.readApiKey())
-            val actualAudio = checkNotNull(audioStore.readApiKey())
             try {
                 check(actual.contentEquals(expected))
                 check(store.maskedApiKey() == "••••1234")
-                check(actualAudio.contentEquals(audioExpected))
-                check(audioStore.maskedApiKey() == "••••5678")
                 store.deleteApiKey()
-                audioStore.deleteApiKey()
                 check(store.readApiKey() == null)
-                check(audioStore.readApiKey() == null)
                 results.putString("keystore_round_trip", "PASS")
             } finally {
                 actual.fill('\u0000')
-                actualAudio.fill('\u0000')
             }
             finish(Activity.RESULT_OK, results)
         } catch (error: Throwable) {
@@ -78,9 +65,7 @@ class KeystoreInstrumentation : Instrumentation() {
             finish(Activity.RESULT_CANCELED, results)
         } finally {
             expected.fill('\u0000')
-            audioExpected.fill('\u0000')
             store.deleteApiKey()
-            audioStore.deleteApiKey()
         }
     }
 
