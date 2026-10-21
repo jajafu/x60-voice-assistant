@@ -96,26 +96,3 @@ jobs:
           } else {
             gh release create $tag $apk --target "${{ github.sha }}" --title $tag --generate-notes
           }
-
-      - name: Publish APK to public releases repo
-        shell: powershell
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASES_REPO_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
-        run: |
-          if ([string]::IsNullOrEmpty($env:RELEASES_REPO_TOKEN)) {
-            Write-Output "Skipped: RELEASES_REPO_TOKEN is not configured (see docs/release-signing.md)."
-            exit 0
-          }
-          $tag = $env:RELEASE_TAG
-          $apk = "app\build\outputs\apk\release\app-release.apk"
-          $notesFile = Join-Path $env:RUNNER_TEMP "release-notes.md"
-          $notes = (gh release view $tag --json body --jq .body) -join "`n"
-          [IO.File]::WriteAllText($notesFile, $notes, [Text.UTF8Encoding]::new($false))
-          $env:GH_TOKEN = $env:RELEASES_REPO_TOKEN
-          cmd /c "gh release view $tag --repo jajafu/x60-voice-assistant-releases >nul 2>&1"
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $apk --repo jajafu/x60-voice-assistant-releases --clobber
-          } else {
-            gh release create $tag $apk --repo jajafu/x60-voice-assistant-releases --target "${{ github.sha }}" --title $tag --notes-file $notesFile
-          }

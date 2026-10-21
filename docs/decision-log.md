@@ -170,3 +170,9 @@
 - 升級相容：舊 DataStore 的 `cloud_tts_*`／`audio_base_url` 鍵留在裝置但不讀取（比照 1.0.9 處理 `cloud_asr_*` 的慣例）；舊 Audio Key 加密檔（`secrets/audio_api_key.v1.json`）不再被讀取，「清除私人資料」會一併刪除該檔與暫存檔，Keystore 內舊 audio alias 不再使用。既有 LLM 設定與驗證狀態不受影響。
 - 版號 `1.0.11`／`versionCode 45`（行為變更，依 DEVELOPMENT.md 版本規則遞增）。
 
+## 1.0.12（2026-10-21，本對話，使用者核准：更新檢查改回主倉庫）
+
+- 更新檢查 URL 由舊架構的公開倉庫 `jajafu/x60-voice-assistant-releases/releases/latest` 改回主倉庫 `jajafu/x60-voice-assistant/releases/latest`。主倉庫已開源，App 未登入即可查詢，不需要（也不該再）把 APK 搬到另一個公開專案。1.0.11 真機收不到更新即為此造成：workflow 的「發佈到公開 releases 專案」步驟因 `RELEASES_REPO_TOKEN` 未設定而靜默跳過，公開倉庫始終沒有 release。
+- 移除 `build-release-apk.yml` 的「Publish APK to public releases repo」步驟與 `RELEASES_REPO_TOKEN` 密鑰依賴；release 只發佈到主倉庫。同步移除 `docs/release-signing.md` 的 token 設定章節、README 與 ARCHITECTURE 的舊描述。
+- 版號 `1.0.12`／`versionCode 46`（行為變更）。
+
