@@ -6,10 +6,9 @@
 - 辨識引擎選擇（1.0.8 起）：系統語音辨識（啟動時探測）優先，最後為本機 X-ASR 後備。
 - 系統語音辨識是新引入的路徑：系統服務自己開麥收音，語音與辨識結果由該系統服務處理，是否上傳／以何雲端處理依各裝置廠商服務而定，不受本 App 控制。偏好完全不上傳辨識路徑的使用者，可在「模型」頁預先下載 X-ASR；但只要系統探測可用，系統辨識仍會優先被選用（目前無停用開關）。
 - 本機指令路由優先處理辨識文字，未命中的一般問答才會送到使用者自行設定的 OpenAI-compatible HTTPS Provider；本機 PCM、keyword audio 與診斷不會上傳。
-- 雲端 TTS spike 是例外且預設關閉：開啟雲端 TTS 且 Audio Provider 設定完整後，回答文字會送到 `/audio/speech` 換回音訊。需網路且會產生用量費用。
 - X-ASR 後備路徑維持本機辨識、不上傳語音；喚醒詞偵測與 VAD 永遠在本機。系統語音辨識路徑的語音去向依各裝置系統服務決定（見上）。
 - 音樂播放請求若進入 LLM 且回覆表示無法播放，App 會在本機檢查回覆中的歌手或歌曲名稱並嘗試交給已選音樂 App；不會為此另外發送 LLM 請求。
-- LLM API Key 與 Audio API Key 分別使用 Android Keystore 不可匯出 AES-GCM key 加密；App Private Storage 只含 version、alias、IV 與 ciphertext。
+- LLM API Key 使用 Android Keystore 不可匯出 AES-GCM key 加密；App Private Storage 只含 version、alias、IV 與 ciphertext。
 - Transcript、回答及最近對話不寫入 DataStore；停止 process 即消失。設定頁可清除 Key、設定與目前記憶體診斷。
 - 排程提醒是例外：提醒文字、觸發時間與隨機 ID 會保存在 App 的 device-protected private storage，讓重新開機後能補排程；內容不會送到 LLM 或其他網路服務，觸發後即刪除，也可由設定頁的清除功能一併刪除。
 - 音樂 App 選擇器只在本機查詢宣告公開媒體瀏覽服務的已安裝 App；保存所選 App 的顯示名稱、套件名稱與服務類別，不上傳安裝清單。

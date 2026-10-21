@@ -13,12 +13,12 @@ class DiagnosticsExporterTest {
             DeviceDiagnostics("13", 33, "build", "vivo", "arm64", "8", "4", emptyList(), true, true, true, 80, 30.0, 0),
             AssistantSettings(
                 baseUrl = "https://api.example.com/private/account?token=secret",
-                audioBaseUrl = "https://audio.example.com/private?token=secret",
             ),
             emptyList(),
         )
         assertTrue(output.contains("provider_host=https://api.example.com"))
-        assertTrue(output.contains("audio_provider_host=https://audio.example.com"))
+        assertFalse(output.contains("audio_provider_host"))
+        assertFalse(output.contains("cloud_tts"))
         assertFalse(output.contains("私人問題"))
         assertFalse(output.contains("token=secret"))
     }

@@ -36,16 +36,14 @@ Unit tests 覆蓋權限啟動策略、bounded Audio/TTS queue、狀態機、VAD 
 
 ## X-ASR 下載來源與雲端 ASR 移除（1.0.9，待真機驗收）
 
-1. 「模型」頁只保留本機 X-ASR、LLM Provider 與雲端 TTS；確認不再出現 Whisper／雲端 ASR 欄位，既有雲端 TTS 設定可正常保存與測試。
+1. 「模型」頁只保留本機 X-ASR 與 LLM Provider；確認不再出現 Whisper／雲端 ASR 欄位。
 2. 移除 App 內已下載的 X-ASR 後按下載：確認連到 sherpa-onnx 官方 GitHub release，下載完成後大小與 SHA256 驗證通過並完成解壓；系統語音辨識不可用的裝置重新啟動服務可改用 X-ASR。
 3. 由舊版（含雲端 ASR 設定）升級安裝：確認不因舊 DataStore 鍵而崩潰，雲端 ASR 設定靜默失效，其餘設定保留。
 
-## 雲端 TTS spike 驗收（待真實 Provider／測試手機）
+## 雲端 TTS 移除（1.0.11，待真機驗收）
 
-1. 在診斷頁確認 LLM Provider 與 Audio Provider 的 Base URL／Key 分開保存；未設定 Audio URL／Key 時，即使雲端開關開啟也維持本機／系統辨識與系統 TTS，不影響既有 LLM。
-2. 以「測試雲端 TTS」確認草稿中的 Model、Voice 與獨立 Audio Base URL／Key 被使用；播放期間停止服務或再次說喚醒詞，確認請求與播放可取消。若 Audio Provider 忽略 `response_format=wav`，應在送出播放前顯示「未回傳 WAV（Content-Type／檔頭）」，而不是 `MediaPlayer 1/-2147483648`。
-3. 實際 Provider、費用、網路錯誤、鎖屏與真人語音結果須記錄 Provider、測試手機、APK HEAD 與證據；MockWebServer／合成語音只能作自動化測試，不能取代真機驗收。
-4. `CloudTtsEngine` 的媒體播放生命週期（`MediaPlayer`、Audio Focus、取消後回收暫存檔）依賴 Android 框架，未有 JVM 測試；須以上述真機項目覆蓋，並確認不支援語速／音調的解碼器仍能正常播放整句。
+1. 「模型」頁不再出現雲端語音（spike）／雲端 TTS 區塊；TTS 一律走系統引擎，「測試語音」正常朗讀。
+2. 由舊版（含雲端 TTS 設定與 Audio Key）升級安裝：確認不因舊 DataStore 鍵或殘留的 `secrets/audio_api_key.v1.json` 而崩潰，雲端設定靜默失效，其餘設定保留。
 
 rc22 另包含 Orchestrator 跨元件回歸測試：重複取消、暫停後取消、過期回答事件、辨識未完成時關閉／取消父 scope、第一句在串流結束前朗讀、長回答及音樂拒絕補救。JVM 以可控制的 engine、音訊來源及同步阻塞辨識替身驗證生命週期，診斷使用測試 clock shim，不能替代 native 或 Android 實機結果。另測試 12 段背壓、取消清空、網路失敗不補讀半句、逾期一次性／每日／每週提醒，以及鬧鐘 TTS 靜音／恢復。
 

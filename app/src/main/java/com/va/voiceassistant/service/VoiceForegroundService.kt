@@ -29,9 +29,7 @@ import com.va.voiceassistant.audio.WakeAcknowledgementPlayer
 import com.va.voiceassistant.diagnostics.M1DiagnosticsRepository
 import com.va.voiceassistant.diagnostics.VoiceErrorCode
 import com.va.voiceassistant.data.SettingsRepository
-import com.va.voiceassistant.llm.OpenAiAudioSpeechClient
 import com.va.voiceassistant.llm.OpenAiCompatibleLlmProvider
-import com.va.voiceassistant.llm.CloudAudioSettingsValidator
 import com.va.voiceassistant.llm.LlmTranscriptCorrector
 import com.va.voiceassistant.music.MusicCabinController
 import com.va.voiceassistant.navigation.NavigationActionExecutor
@@ -46,7 +44,6 @@ import com.va.voiceassistant.orchestration.AndroidMonotonicClock
 import com.va.voiceassistant.orchestration.VoiceOrchestrator
 import com.va.voiceassistant.security.AndroidKeystoreSecretStore
 import com.va.voiceassistant.tts.AndroidTtsEngine
-import com.va.voiceassistant.tts.CloudTtsEngine
 import com.va.voiceassistant.tts.SpeechOutputEngine
 import com.va.voiceassistant.data.AssistantSettings
 import com.va.voiceassistant.orchestration.VoiceState
@@ -173,17 +170,7 @@ class VoiceForegroundService : Service() {
             }
             val asrPack = AsrModelPacks.xAsr
             val llmSecretStore = AndroidKeystoreSecretStore(applicationContext)
-            val audioSecretStore = AndroidKeystoreSecretStore(
-                applicationContext,
-                AndroidKeystoreSecretStore.Scope.AUDIO,
-            )
             val hasLlmApiKey = llmSecretStore.maskedApiKey() != "未設定"
-            val hasAudioApiKey = audioSecretStore.maskedApiKey() != "未設定"
-            CloudAudioSettingsValidator.validate(settings, hasAudioApiKey, BuildConfig.DEBUG)?.let { detail ->
-                // 音訊 Provider 的設定問題要與 LLM 分開，否則診斷會誤導成 LLM 故障。
-                failAndStop(VoiceErrorCode.AUDIO_CONFIG_INVALID, detail)
-                return
-            }
             // 引擎選擇：先探測系統語音辨識（含中文支援），探測通過就直接用系統、
             // 不必先下載 X-ASR；都不行才要求 X-ASR 後備模型。
             val systemAsrProbe = SystemSpeechRecognizerSupport.probe(applicationContext)
@@ -219,20 +206,7 @@ class VoiceForegroundService : Service() {
             } else {
                 null
             }
-            val useCloudTts = settings.cloudTtsReady(hasAudioApiKey)
-            val ttsEngine: SpeechOutputEngine = if (useCloudTts) {
-                CloudTtsEngine(
-                    applicationContext,
-                    settings,
-                    OpenAiAudioSpeechClient(
-                        settings = settings,
-                        apiKeyProvider = audioSecretStore::readApiKey,
-                        allowHttp = BuildConfig.DEBUG,
-                    ),
-                )
-            } else {
-                AndroidTtsEngine(applicationContext, settings)
-            }
+            val ttsEngine: SpeechOutputEngine = AndroidTtsEngine(applicationContext, settings)
             val ttsStatus = ttsEngine.initialize()
             M1DiagnosticsRepository.setTtsStatus(ttsStatus.engine, ttsStatus.voice)
             if (!ttsStatus.available) {
@@ -312,7 +286,7 @@ class VoiceForegroundService : Service() {
                     null
                 },
                 speechOutput = if (ttsStatus.available) ttsEngine else null,
-                speechOutputFactory = { createTtsEngine(settings, hasAudioApiKey) },
+                speechOutputFactory = { createTtsEngine(settings) },
                 audioResumeDelayMs = settings.audioResumeDelayMs,
                 endpointDetector = SpeechEndpointDetector(
                     SpeechEndpointConfig(
@@ -399,23 +373,8 @@ class VoiceForegroundService : Service() {
         }
     }
 
-    private suspend fun createTtsEngine(settings: AssistantSettings, hasAudioApiKey: Boolean): SpeechOutputEngine? {
-        val engine: SpeechOutputEngine = if (settings.cloudTtsReady(hasAudioApiKey)) {
-            CloudTtsEngine(
-                applicationContext,
-                settings,
-                OpenAiAudioSpeechClient(
-                    settings = settings,
-                    apiKeyProvider = AndroidKeystoreSecretStore(
-                        applicationContext,
-                        AndroidKeystoreSecretStore.Scope.AUDIO,
-                    )::readApiKey,
-                    allowHttp = BuildConfig.DEBUG,
-                ),
-            )
-        } else {
-            AndroidTtsEngine(applicationContext, settings)
-        }
+    private suspend fun createTtsEngine(settings: AssistantSettings): SpeechOutputEngine? {
+        val engine: SpeechOutputEngine = AndroidTtsEngine(applicationContext, settings)
         val status = engine.initialize()
         M1DiagnosticsRepository.setTtsStatus(status.engine, status.voice)
         return if (status.available) engine else null.also { engine.close() }

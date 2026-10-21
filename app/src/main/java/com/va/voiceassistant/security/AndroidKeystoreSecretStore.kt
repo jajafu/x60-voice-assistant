@@ -121,11 +121,5 @@ class AndroidKeystoreSecretStore(
             keyAlias = "voiceassistant-llm-api-key-v1",
             associatedData = "com.va.voiceassistant:llm-api-key:v1".toByteArray(),
         ),
-        AUDIO(
-            fileName = "audio_api_key.v1.json",
-            tempFileName = "audio_api_key.tmp",
-            keyAlias = "voiceassistant-audio-api-key-v1",
-            associatedData = "com.va.voiceassistant:audio-api-key:v1".toByteArray(),
-        ),
     }
 }
