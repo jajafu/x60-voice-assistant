@@ -66,7 +66,7 @@
 ## 5. 權限、風險與使用者控制
 
 - 初版只要求執行某類能力所必需的權限。MusicCabin 走語音通道：一般播放、喜愛清單、查歌、循環都不需要通知監聽或無障礙服務；收藏與取消收藏改由音樂 App 隱私開關管。通知存取只留給車機 fallback。音量不宣告 Accessibility Service。
-- 設定頁顯示目前選定的音樂 App、通知存取狀態、可用的操作，以及可隨時關閉手機操作的總開關。
+- 設定頁顯示目前選定的音樂 App、通知存取狀態與可用的操作。原規劃的「可隨時關閉手機操作的總開關」隨 1.0.13 移除手機系統音量功能一併移除（見 §8.5）；目前關閉音樂控制的方式是把音樂 App 設定留空。
 - 開啟 App、播放、暫停、切歌可直接執行；傳訊、撥號、購買、刪除資料及修改安全設定應另訂逐項確認流程，在本期一律不執行。
 - 不自動解鎖、不輸入密碼、不使用 root、ADB 或 overlay 規避 Android 限制。第三方 App 的訂閱、地區、登入和內容授權可能使搜尋或播放失敗，需回報真實狀態。
 - 若未來準備上架 Google Play，Accessibility Service 的用途、揭露及政策審核需另做檢查；本規劃不把側載可行等同商店可上架。[Google Play Accessibility Service 政策](https://support.google.com/googleplay/android-developer/answer/10964491)

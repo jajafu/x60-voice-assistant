@@ -183,6 +183,7 @@
 - **做法**：新增 `MusicVolumeCommandRouter`（沿用原本音量解析：喚醒詞／客套話剝除、繁簡、否定與疑問句拒收、亮度拒收、中文數字、百分比、格數；新增「現在音量多少」等查詢白名單），回傳 `MusicCommand.VolumeUp`／`VolumeDown`／`VolumeSet(percent)`／`VolumeGet`；指定音量要求明確設定動詞（調到／調至／設成／改成／調整為…），命中多個目標時取最後一個，避免「目前音量是 80」誤觸與「音量從 30 調到 80」抓到起點；`MusicCabinVoiceControl` 對應通道命令並解析回傳的 `volume`（0～1）；`MusicCabinVoiceReplies` 優先念音樂 App 的訊息，沒訊息才用回傳音量組句，都沒有就說已送出、不假稱已調到。路由順序為 關閉 → 提醒 → 音樂 → 音樂音量 → 導航 → 校正 → LLM。
 - **邊界**：`VolumeSet` 以整數百分比送出（`query=80`）；非 MusicCabin 的播放器不支援此通道，回「不支援用語音調整 App 內音量」且不改動任何音量；「靜音」「取消靜音」不支援；音量指令不觸發音樂暫停／恢復，也不影響小助手自己的 TTS 音量。關閉音樂控制（`musicPackageName` 留空）時沒有音樂執行器，音量指令會回到一般問答，不再有任何系統音量替代路徑。
 - **相容性**：舊 DataStore 的 `voice_volume_control` 鍵留在裝置但不讀取（比照既有的孤兒鍵慣例）。APK 移除了 `MODIFY_AUDIO_SETTINGS`（原先只用於已移除的音量功能）。
-- **驗證**：`test`（250 項，含新的 `MusicVolumeCommandRouterTest` 與音樂音量路由／回話測試）、`lint`、`assembleDebug` 通過；MuMu vmindex 0（Android 15）覆蓋安裝、啟動、前景顯示正常且無崩潰。真機與真人語音驗收待補做，見 `docs/testing.md`「語音調整音樂 App 音量（1.0.13，待真機驗收）」。
+- **驗證**：`test`（250 項，含新的 `MusicVolumeCommandRouterTest` 與音樂音量路由／回話測試）、`lint`、`assembleDebug` 通過；MuMu vmindex 0（Android 15）覆蓋安裝、啟動、前景顯示正常且無崩潰。受測 commit `87fcdda`，debug APK SHA-256 `B18E0E372854748BC8ADCA5A2346F441D0E4F9BD6F9BA20AA273C05C3B5FD918`。真機與真人語音驗收待補做，見 `docs/testing.md`「語音調整音樂 App 音量（1.0.13，待真機驗收）」。
+- **獨立審查**：依 `review-loop` 以三個不同模型只讀審查並逐項處置（B：描述句誤觸／抓錯起點／`volume` 範圍；C：動詞限縮造成的回歸、「15格／一半」設錯值、查詢兜底措辭；D：無高／中問題，補「至」家族動詞與尾語助詞查詢）。D 輪第一次因供應商 rate limit 失敗，原參數重試成功，未替換模型。
 - 版號 `1.0.13`／`versionCode 47`（行為變更且交付 APK）。
 
