@@ -26,7 +26,6 @@ data class AssistantSettings(
     val musicServiceName: String = DEFAULT_MUSIC_SERVICE_NAME,
     val navAppName: String = DEFAULT_NAV_APP_NAME,
     val navPackageName: String = DEFAULT_NAV_PACKAGE_NAME,
-    val voiceVolumeControl: Boolean = DEFAULT_VOICE_VOLUME_CONTROL,
     val llmCorrectionEnabled: Boolean = DEFAULT_LLM_CORRECTION_ENABLED,
     val ttsEngine: String = "",
     val ttsVoice: String = "",
@@ -82,12 +81,6 @@ data class AssistantSettings(
          */
         const val DEFAULT_NAV_APP_NAME = "Google 地圖"
         const val DEFAULT_NAV_PACKAGE_NAME = "com.google.android.apps.maps"
-
-        /**
-         * 語音調整手機音量的總開關，依 `docs/phone-control-plan.md` §5 要求可隨時關閉手機操作。
-         * 關閉時 `VoiceForegroundService` 不建立音量執行器，指令會落到一般問答流程。
-         */
-        const val DEFAULT_VOICE_VOLUME_CONTROL = true
 
         /**
          * X-ASR 同音錯字的 LLM 校正總開關（Issue #24）。

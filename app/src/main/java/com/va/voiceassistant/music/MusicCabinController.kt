@@ -35,6 +35,11 @@ data class MusicActionResult(
     val confirmedPlayback: Boolean = false,
 )
 
+/** 調整音樂 App 自己音量的指令：目前只有走公開語音通道的 MusicCabin 支援。 */
+private val MusicCommand.isVolumeControl: Boolean
+    get() = this == MusicCommand.VolumeUp || this == MusicCommand.VolumeDown ||
+        this is MusicCommand.VolumeSet || this == MusicCommand.VolumeGet
+
 interface MusicActionExecutor {
     suspend fun execute(command: MusicCommand): MusicActionResult
     /** Returns true only when this request sent a pause to an active player. */
@@ -395,6 +400,10 @@ class MusicCabinController(
                 musicAppName,
             )
         }
+        // App 內音量只走公開語音通道；其他播放器不支援，也不用系統音量代打。
+        if (command.isVolumeControl && !isVoiceControlPackage) {
+            return@withContext MusicActionResult("$musicAppName 不支援用語音調整 App 內音量。")
+        }
         if (isVoiceControlPackage) return@withContext executeViaVoiceControl(command)
         try {
             executeConnected(command)
@@ -452,6 +461,10 @@ class MusicCabinController(
         }
 
     private suspend fun launchForPlaybackSetup(command: MusicCommand): MusicActionResult {
+        // 音量指令沒有歌可以「先播放一首歌」，找不到 App 就照實說，不開 App 也不假稱已調整。
+        if (command.isVolumeControl) {
+            return MusicActionResult("找不到$musicAppName，無法調整音樂 App 的音量。")
+        }
         if (command == MusicCommand.NowPlaying) {
             return MusicActionResult("目前無法讀取$musicAppName 的歌曲資訊。")
         }
@@ -514,6 +527,9 @@ class MusicCabinController(
             MusicCommand.RepeatOne, MusicCommand.RepeatOff, MusicCommand.RepeatAll ->
                 return setRepeatMode(command)
             MusicCommand.RepeatState -> return readRepeatState()
+            MusicCommand.VolumeUp, MusicCommand.VolumeDown, is MusicCommand.VolumeSet,
+            MusicCommand.VolumeGet ->
+                return MusicActionResult("$musicAppName 不支援用語音調整 App 內音量。")
             MusicCommand.NowPlaying -> {
                 if (state?.state !in setOf(
                         PlaybackState.STATE_PLAYING,

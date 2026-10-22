@@ -13,6 +13,7 @@ class MusicCabinVoiceRepliesTest {
         mode: String? = null,
         message: String = "",
         artistMatched: Boolean = true,
+        volume: Float? = null,
     ) = VoiceControlResult(
         ok = true,
         status = status,
@@ -21,6 +22,7 @@ class MusicCabinVoiceRepliesTest {
         mode = mode,
         message = message,
         artistMatched = artistMatched,
+        volume = volume,
     )
 
     private fun failed(status: String, message: String = "") = VoiceControlResult(
@@ -44,6 +46,10 @@ class MusicCabinVoiceRepliesTest {
         assertEquals("play_liked" to null, MusicCabinVoiceControl.requestFor(MusicCommand.PlayFavorites))
         assertEquals("repeat_one" to null, MusicCabinVoiceControl.requestFor(MusicCommand.RepeatOne))
         assertEquals("repeat_state" to null, MusicCabinVoiceControl.requestFor(MusicCommand.RepeatState))
+        assertEquals("volume_up" to null, MusicCabinVoiceControl.requestFor(MusicCommand.VolumeUp))
+        assertEquals("volume_down" to null, MusicCabinVoiceControl.requestFor(MusicCommand.VolumeDown))
+        assertEquals("volume_set" to "80", MusicCabinVoiceControl.requestFor(MusicCommand.VolumeSet(80)))
+        assertEquals("volume_get" to null, MusicCabinVoiceControl.requestFor(MusicCommand.VolumeGet))
     }
 
     @Test fun `successful song playback names the track and confirms`() {
@@ -171,6 +177,72 @@ class MusicCabinVoiceRepliesTest {
         assertEquals(
             "要改收藏請先到MusicCabin的隱私設定開啟外部收藏。",
             MusicCabinVoiceReplies.forCommand(MusicCommand.SaveCurrent, failed("denied"), "MusicCabin").message,
+        )
+    }
+
+    @Test fun `volume replies speak the channel message and fall back to the returned level`() {
+        // 對方給的句子已含套用後的百分比，直接念，不自己重算。
+        assertEquals(
+            "音量已調到 80%。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.VolumeSet(80),
+                ok("volume", message = "音量已調到 80%。", volume = 0.8f),
+                "MusicCabin",
+            ).message,
+        )
+        // 對方沒給說明時用回傳的 0～1 音量自己組一句，不假稱已調到目標。
+        assertEquals(
+            "音樂音量現在是 55%。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.VolumeDown,
+                ok("volume", volume = 0.55f),
+                "MusicCabin",
+            ).message,
+        )
+        assertEquals(
+            "音樂音量現在是 100%。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.VolumeGet,
+                ok("volume", volume = 1f),
+                "MusicCabin",
+            ).message,
+        )
+    }
+
+    @Test fun `volume replies without message or level do not claim success`() {
+        assertEquals(
+            "已送出音量指令，請到 MusicCabin 確認結果。",
+            MusicCabinVoiceReplies.forCommand(MusicCommand.VolumeUp, ok("volume"), "MusicCabin").message,
+        )
+        // 查詢句的兜底措辭不能說成「已送出指令」。
+        assertEquals(
+            "查不到目前的音樂音量，請到 MusicCabin 確認。",
+            MusicCabinVoiceReplies.forCommand(MusicCommand.VolumeGet, ok("volume"), "MusicCabin").message,
+        )
+    }
+
+    @Test fun `volume replies ignore out-of-range or non-finite levels`() {
+        // 合約是 0～1；來了 1.5 或 NaN 就不組句子，改說已送出，不報錯誤的百分比。
+        assertEquals(
+            "已送出音量指令，請到 MusicCabin 確認結果。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.VolumeUp, ok("volume", volume = 1.5f), "MusicCabin",
+            ).message,
+        )
+        assertEquals(
+            "已送出音量指令，請到 MusicCabin 確認結果。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.VolumeDown, ok("volume", volume = Float.NaN), "MusicCabin",
+            ).message,
+        )
+    }
+
+    @Test fun `volume denials guide to the voice control setting`() {
+        assertEquals(
+            "MusicCabin 關掉了外部播放控制，請到音樂 App 的設定開啟語音控制。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.VolumeUp, failed("denied"), "MusicCabin",
+            ).message,
         )
     }
 }

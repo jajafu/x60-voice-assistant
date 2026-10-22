@@ -50,7 +50,6 @@ import com.va.voiceassistant.orchestration.VoiceState
 import com.va.voiceassistant.vad.SherpaVadEngine
 import com.va.voiceassistant.vad.SpeechEndpointConfig
 import com.va.voiceassistant.vad.SpeechEndpointDetector
-import com.va.voiceassistant.volume.AndroidVolumeActionExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -274,11 +273,6 @@ class VoiceForegroundService : Service() {
                     null
                 },
                 onBackgroundNavigation = ::offerMapDestination,
-                volumeExecutor = if (settings.voiceVolumeControl) {
-                    AndroidVolumeActionExecutor(context = applicationContext)
-                } else {
-                    null
-                },
                 alarmExecutor = AndroidAlarmActionExecutor(applicationContext),
                 transcriptCorrector = if (llmProvider != null && settings.llmCorrectionEnabled) {
                     LlmTranscriptCorrector(llmProvider)

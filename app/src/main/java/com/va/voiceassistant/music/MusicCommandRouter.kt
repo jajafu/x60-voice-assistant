@@ -16,6 +16,14 @@ sealed interface MusicCommand {
     data object PlayFavorites : MusicCommand
     data class SearchAndPlay(val query: String) : MusicCommand
     data class PlayArtist(val artist: String) : MusicCommand
+    /** 音樂 App 自己的音量大聲一點。 */
+    data object VolumeUp : MusicCommand
+    /** 音樂 App 自己的音量小聲一點。 */
+    data object VolumeDown : MusicCommand
+    /** 把音樂 App 自己的音量設成 [percent]（0–100）。 */
+    data class VolumeSet(val percent: Int) : MusicCommand
+    /** 查詢音樂 App 目前的音量，不改變。 */
+    data object VolumeGet : MusicCommand
 }
 
 /** Only explicit, low-risk requests for the selected music app are handled locally. */

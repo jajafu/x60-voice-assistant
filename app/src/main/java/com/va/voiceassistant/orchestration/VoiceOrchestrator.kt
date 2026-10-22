@@ -22,15 +22,11 @@ import com.va.voiceassistant.music.MusicActionExecutor
 import com.va.voiceassistant.music.MusicActionResult
 import com.va.voiceassistant.music.MusicCommand
 import com.va.voiceassistant.music.MusicCommandRouter
+import com.va.voiceassistant.music.MusicVolumeCommandRouter
 import com.va.voiceassistant.navigation.NavigationActionExecutor
 import com.va.voiceassistant.navigation.NavigationActionResult
 import com.va.voiceassistant.navigation.NavigationCommand
 import com.va.voiceassistant.navigation.NavigationCommandRouter
-import com.va.voiceassistant.volume.VolumeActionExecutor
-import com.va.voiceassistant.volume.VolumeActionResult
-import com.va.voiceassistant.volume.VolumeCommand
-import com.va.voiceassistant.volume.VolumeCommandRouter
-import com.va.voiceassistant.volume.VolumeReply
 import com.va.voiceassistant.navigation.NavigationLaunchMode
 import com.va.voiceassistant.music.MusicRefusalRecovery
 import com.va.voiceassistant.music.MusicRefusalRecoveryRouter
@@ -87,7 +83,6 @@ class VoiceOrchestrator(
      * 點按鈕屬於使用者操作，系統允許開地圖；車機上比另發通知可靠。
      */
     private val onBackgroundNavigation: ((String) -> Unit)? = null,
-    private val volumeExecutor: VolumeActionExecutor? = null,
     private val transcriptCorrector: TranscriptCorrector? = null,
     speechOutput: SpeechOutputEngine? = null,
     private val speechOutputFactory: (suspend () -> SpeechOutputEngine?)? = null,
@@ -147,7 +142,6 @@ class VoiceOrchestrator(
                 is Command.AnswerReady -> handleAnswerReady(command)
                 is Command.MusicActionReady -> handleMusicActionReady(command)
                 is Command.NavigationActionReady -> handleNavigationActionReady(command)
-                is Command.VolumeActionReady -> handleVolumeActionReady(command)
                 is Command.ReminderActionReady -> handleReminderActionReady(command.result)
                 is Command.ContextualCloseFinished -> handleContextualCloseFinished(command.message)
                 Command.SpeechFinished -> handleSpeechFinished()
@@ -387,17 +381,17 @@ class VoiceOrchestrator(
             executeMusic(musicCommand)
             return
         }
+        // 音樂 App 自己的音量也屬音樂操作，排在導航之前；不是播放控制，不影響暫停／恢復。
+        val musicVolumeCommand = MusicVolumeCommandRouter.parse(userText, settings.wakePhrase)
+        if (musicVolumeCommand != null && musicExecutor != null) {
+            transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
+            executeMusic(musicVolumeCommand)
+            return
+        }
         val navigationCommand = NavigationCommandRouter.parse(userText, settings.wakePhrase)
         if (navigationCommand != null && navigationExecutor != null) {
             transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
             executeNavigation(navigationCommand)
-            return
-        }
-        // 音量排在導航之後：兩者都會動手機，但使用者說「聲音」時不該被導航吃掉。
-        val volumeCommand = VolumeCommandRouter.parse(userText, settings.wakePhrase)
-        if (volumeCommand != null && volumeExecutor != null) {
-            transition(VoiceState.EXECUTING_ACTION, TransitionReason.ROUTE_LOCAL)
-            executeVolume(volumeCommand)
             return
         }
         // Issue #24：本機全 miss 才做一次 LLM 同音校正（Typeless 兩段式）。
@@ -542,36 +536,6 @@ class VoiceOrchestrator(
         val output = speechOutput
         if (output == null) {
             M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.TTS_ENGINE_MISSING, "nav-action-no-output")
-            returnToIdle(TransitionReason.USER_CANCEL)
-            return
-        }
-        transition(VoiceState.SPEAKING, TransitionReason.ANSWER_READY)
-        ttsRecoveryAttempted = false
-        startSpeaking(message)
-    }
-
-    private fun executeVolume(command: VolumeCommand) {
-        val executor = requireNotNull(volumeExecutor)
-        stateJob = launchState { emit ->
-            val response = try {
-                executor.execute(command)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                // 缺少 MODIFY_AUDIO_SETTINGS 或廠商層丟出例外時不假稱已調整。
-                VolumeActionResult(VolumeReply.failed(), applied = false)
-            }
-            if (isActive) emit(Command.VolumeActionReady(response))
-        }
-    }
-
-    private suspend fun handleVolumeActionReady(command: Command.VolumeActionReady) {
-        if (machine.state != VoiceState.EXECUTING_ACTION) return
-        val message = command.result.message
-        M1DiagnosticsRepository.setAnswerPreview(message)
-        val output = speechOutput
-        if (output == null) {
-            M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.TTS_ENGINE_MISSING, "volume-action-no-output")
             returnToIdle(TransitionReason.USER_CANCEL)
             return
         }
@@ -1053,7 +1017,6 @@ class VoiceOrchestrator(
             val recoveredFromLlm: Boolean = false,
         ) : Command
         data class NavigationActionReady(val result: NavigationActionResult) : Command
-        data class VolumeActionReady(val result: VolumeActionResult) : Command
         data class ReminderActionReady(val result: ReminderActionResult) : Command
         data class ContextualCloseFinished(val message: String?) : Command
         data object SpeechFinished : Command

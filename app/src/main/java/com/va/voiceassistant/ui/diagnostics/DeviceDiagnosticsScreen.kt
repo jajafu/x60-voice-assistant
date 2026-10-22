@@ -78,7 +78,6 @@ import com.va.voiceassistant.music.MusicAppOption
 import com.va.voiceassistant.navigation.NavigationAppOption
 import com.va.voiceassistant.reminder.ScheduledReminder
 import com.va.voiceassistant.reminder.ReminderFrequency
-import com.va.voiceassistant.volume.VolumeTargetPolicy
 import com.va.voiceassistant.reminder.ReminderRecurrence
 import com.va.voiceassistant.reminder.label
 import com.va.voiceassistant.tts.TtsEngineOption
@@ -1068,22 +1067,6 @@ private fun SettingsPage(
         }
 
         item {
-            SectionCard("語音調音量") {
-                ToggleRow("允許語音調整手機音量", draft.voiceVolumeControl, enabled) {
-                    draft = draft.copy(voiceVolumeControl = it)
-                }
-                Text(
-                    "開啟後說「聲音小一點」「音量調到50」，小助手會調整媒體音量。" +
-                        "音量最低只到 ${VolumeTargetPolicy.MIN_VOLUME_INDEX} 格，避免小助手自己的回話小到聽不見。" +
-                        "音樂與小助手的語音共用同一個音量級別，調整時兩者會一起變化。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
-            }
-        }
-
-        item {
             SectionCard("語音與追問") {
                 TtsPicker(
                     draft = draft,
@@ -1638,8 +1621,6 @@ private fun DiagnosticsPage(
                 InfoRow("服務時間", formatDuration(runtime.serviceUptimeMs))
                 InfoRow("Audio Error / Dropped", "${runtime.audioErrorCount} / ${runtime.droppedFrameCount}")
                 InfoRow("最後錯誤", runtime.lastError?.name ?: "—")
-                InfoRow("音量指令", runtime.volumeLastCommand)
-                InfoRow("音量實測", runtime.volumeLastDetail)
                 InfoRow("LLM HTTP", runtime.llmHttpStatus?.toString() ?: "—")
                 InfoRow("LLM 延遲", runtime.llmTotalLatencyMs?.let { "$it ms" } ?: "—")
             }

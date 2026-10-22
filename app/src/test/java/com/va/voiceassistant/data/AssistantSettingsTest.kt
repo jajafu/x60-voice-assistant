@@ -1,19 +1,9 @@
 package com.va.voiceassistant.data
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AssistantSettingsTest {
-    @Test
-    fun `voice volume control is on by default and survives normalization`() {
-        assertEquals(true, AssistantSettings.DEFAULT_VOICE_VOLUME_CONTROL)
-        assertTrue(AssistantSettings().voiceVolumeControl)
-        // normalized() 只夾數值範圍，不該把使用者關掉的開關打開。
-        assertFalse(AssistantSettings(voiceVolumeControl = false).normalized().voiceVolumeControl)
-    }
-
     @Test
     fun `older model selections migrate to bundled X-ASR`() {
         assertEquals(AssistantSettings.DEFAULT_ASR_MODEL_ID, AssistantSettings(asrModelId = "old-model").normalized().asrModelId)

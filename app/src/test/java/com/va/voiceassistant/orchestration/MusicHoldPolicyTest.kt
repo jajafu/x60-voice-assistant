@@ -35,4 +35,14 @@ class MusicHoldPolicyTest {
         assertFalse(MusicHoldPolicy.shouldPauseAfterAction(MusicCommand.Pause, true))
         assertFalse(MusicHoldPolicy.shouldPauseAfterAction(MusicCommand.Open, true))
     }
+
+    @Test
+    fun `volume commands never start a new music hold`() {
+        assertFalse(MusicHoldPolicy.shouldPauseAfterAction(MusicCommand.VolumeUp, musicAlreadyHeld = false))
+        assertFalse(MusicHoldPolicy.shouldPauseAfterAction(MusicCommand.VolumeDown, musicAlreadyHeld = false))
+        assertFalse(MusicHoldPolicy.shouldPauseAfterAction(MusicCommand.VolumeSet(50), musicAlreadyHeld = false))
+        assertFalse(MusicHoldPolicy.shouldPauseAfterAction(MusicCommand.VolumeGet, musicAlreadyHeld = false))
+        // 這一輪已經為對話按住時維持按住，音量指令不會把它放開。
+        assertTrue(MusicHoldPolicy.shouldPauseAfterAction(MusicCommand.VolumeDown, musicAlreadyHeld = true))
+    }
 }

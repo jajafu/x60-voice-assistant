@@ -27,6 +27,8 @@ object MusicReplyFormatter {
             MusicCommand.Pause, MusicCommand.Open, MusicCommand.NowPlaying,
             MusicCommand.RepeatOne, MusicCommand.RepeatOff, MusicCommand.RepeatAll,
             MusicCommand.RepeatState,
+            MusicCommand.VolumeUp, MusicCommand.VolumeDown, is MusicCommand.VolumeSet,
+            MusicCommand.VolumeGet,
             MusicCommand.SaveCurrent, MusicCommand.RemoveCurrent -> error("No confirmed playback for $command")
         }
         val deferred = when (command) {
@@ -41,6 +43,8 @@ object MusicReplyFormatter {
             MusicCommand.Pause, MusicCommand.Open, MusicCommand.NowPlaying,
             MusicCommand.RepeatOne, MusicCommand.RepeatOff, MusicCommand.RepeatAll,
             MusicCommand.RepeatState,
+            MusicCommand.VolumeUp, MusicCommand.VolumeDown, is MusicCommand.VolumeSet,
+            MusicCommand.VolumeGet,
             MusicCommand.SaveCurrent, MusicCommand.RemoveCurrent -> error("No deferred playback for $command")
         }
         return MusicActionResult(immediate, deferred, confirmedPlayback = true)

@@ -109,91 +109,24 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 6. 把音量調到 0.50 確認變小聲；調到 0 確認靜音，且畫面仍正常顯示文字。
 7. 確認重開 App 後引擎、音調與音量都保留；清除資料後回到預設（引擎自動選擇、音調自動選擇、音量 1.00）。
 
-## 語音調整手機音量（rc30，**功能待真機驗收**）
+## 語音調整音樂 App 音量（1.0.13，**待真機驗收**）
 
-### 安裝與啟動 smoke（rc30 commit `3e9b742`，已執行）
+「聲音大一點」「小聲一點」「音量調到 80」由本機 `MusicVolumeCommandRouter` 解析後，走音樂 App 的公開語音通道調整 **App 自己的音量**（`volume_up`／`volume_down`／`volume_set`），「現在音量多少」走 `volume_get` 只查詢。沒有獨立開關，與音樂控制一起依「設定 → 音樂 App」生效。需在測試手機用真人語音驗收：
 
-`docs/ANDROID_MUMU_SMOKE.md` 的 smoke 範圍套用在實體測試手機（歷史機型 vivo X60）：安裝成功、從 launcher 開啟、啟動畫面可見且沒有立即崩潰。
+1. 相對調整：播放中說「聲音大一點」，確認 MusicCabin 畫面那條音量滑桿變大，且小助手照回傳的訊息回報新音量；連說「小聲一點」數次，確認每次只動一段（MusicCabin 每次約 10%）。
+2. 指定音量：說「音量調到 80」，確認滑桿到 80% 且回話出現 80；說「音量調到五十」應等同「音量調到 50」。
+3. 查詢：說「現在音量多少」，確認只回報目前音量、不改變。
+4. 邊界：說「音量最大」「音量最小」確認分別到 100% 與 0%，回話與實際一致。
+5. 不誤觸：說「什麼時候音量太大」「亮度調到最大」「不要調小音量」都不應執行音量指令，會走一般問答。
+6. 沒開也能用：MusicCabin 沒開或沒在播時說「音量調到 30」，確認能冷啟動 MusicCabin 並生效，或照回傳訊息說明目前狀態。順便記一次冷啟動的反應時間；若聽到「太舊沒有語音控制，請更新」，但 MusicCabin 已是含音量指令的新版，代表廣播逾時被誤判成舊版，需記錄下來。
+7. 其他播放器：把音樂 App 換成不支援此通道的播放器，說「聲音大一點」應回覆「不支援用語音調整 App 內音量」，且不改動任何音量。
+8. 不影響回話音量：確認調整音樂 App 音量時，小助手自己的 TTS 音量與手機系統媒體音量都不變。
 
-| 項目 | 結果 |
-| --- | --- |
-| 裝置 | vivo V2046A，Android 13（SDK 33），OriginOS 14.0，`arm64-v8a` |
-| 受測 commit | `3e9b7428aebf4af703fe00c4c61fb11e2a2ef9e2` |
-| APK SHA-256 | `C204A4FCFDEA8CBBF6C2E8848AB9828F9EC9AD2317BD3B9952636FBFCB88C7E6` |
-| package／版本 | `com.jajafu.x60assistant`／`1.0.0-rc30` / `34`（由 rc29 / 33 覆蓋安裝） |
-| 權限 | `MODIFY_AUDIO_SETTINGS: granted=true` |
-| 啟動 | `am start -n com.jajafu.x60assistant/.MainActivity` 成功，pid 29608，前景顯示「運作中」／「等待喚醒」 |
-| 崩潰檢查 | logcat 無 `FATAL`／`AndroidRuntime`／ANR |
-| `STREAM_MUSIC` 上限 | `Max: 15`，未靜音（`Muted: false`），當下為 10 格 |
+小助手只調整音樂 App 自己的音量；**手機系統媒體音量自 1.0.13 起不再由小助手控制**。
 
-安裝過程：`adb install -r` 逾時，經裝置端人工確認後完成；後續 `dumpsys package` 確認已升級至 `versionCode 34`。一次重試的 `adb install -r -g` 回報失敗但未改變已安裝版本。測試結束時裝置已從 adb 斷線（`device not found`），如需補測須重新連線。
+### 歷史：手機系統媒體音量語音控制（rc30，已於 1.0.13 移除）
 
-此 smoke 只代表安裝與啟動正常，**不代表語音音量功能驗收通過**；以下 10 個步驟仍需真人語音在該機執行。
-
-### 功能步驟（**本輪尚未執行**）
-
-設定 →「語音調音量」預設開啟。需在測試手機驗收：
-
-1. 先記錄基準值：`adb shell dumpsys audio` 讀 `STREAM_MUSIC` 的目前級別與上限。本輪 smoke 已在該機讀到 `Max: 15`，`docs/decision-log.md` rc27 曾寫的「10/15」指目前 10 格、上限 15 格，語意已釐清；功能測試前仍須重新讀取當下值。
-2. 相對調整：說「聲音小一點」，確認音量降一格並聽到小助手的回報；連續 10 次確認每次只動一格。
-3. **共用音量級別的已知取捨**：TTS 與音樂共用 `STREAM_MUSIC`，因此確認小助手的回話音量與音樂同步變化；在下限 2 格時確認回話仍可聽懂，若小到不可用需如實記錄。
-4. 百分比：說「音量調到50」，確認回報的實際級別約為上限的一半，且**沒有**出現「音量已調到」以外的假稱完成。
-5. 中文數字與邊界：說「音量調到五十」應等同「音量調到50」；說「音量調到0」或「音量最小」確認**不會**降到 0，而是回報已到下限 2 格。
-6. 總開關：關閉「允許語音調整手機音量」並重新啟動服務，確認音量指令不再執行。
-7. 靜音指令不支援：說「靜音」與「取消靜音」都不應改變音量或觸發本機音量操作。
-8. **喚醒率（重點）**：把音量調到下限 2 格，一公尺說「小助手」20 次，記錄喚醒次數。此項目與 `docs/testing.md` 既有的喚醒驗收並列，不得以單元測試或合成語音替代。
-9. 副作用：確認一次設定沒有連續逐格提示音，且不會意外拉出音量面板（目前使用 `setStreamVolume(..., flags = 0)`）。
-10. 確認一般問答不受影響：說「什麼時候音量太大」應走一般問答而非調整音量。
-11. **PR #21 code review 新增解析案例**（rc30 commit `3e9b742` 後補）：說「音量調高一格」應只調一格而非 1%；說「音量有點大」應**不動作**並照送 LLM；說「亮度調到最大」應**不動作**，不得改動媒體音量。
-12. **讀回一致性**（rc30 commit `3e9b742` 後補）：若測試手機 OEM 系統（如 vivo／OriginOS）夾限音量，小助手應回報讀回的實際級別而非宣稱已調到目標。可用實體音量鍵製造不一致後再說指令觀察。
-
-若指令有命中但音量未變，診斷頁的「音量實測」會顯示 `current`、`target`、`readBack`、`max`、`applied` 與 `fixed`。ADB 檢查音量 AppOp 時使用 `AUDIO_MEDIA_VOLUME`；`WRITE_MEDIA_AUDIO` 是音訊檔案寫入操作，與調整媒體音量無關。
-
-### 無障礙 fallback 追測（2026-10-02，歷史機型 vivo X60；端點修正後待複測）
-
-使用者已在 vivo V2046A／OriginOS 14.0 啟用無障礙服務，並回報多輪測試只有一次「音量調到 50」成功。診斷服務已收到呼叫且手勢 callback 完成；一次 100% 失敗為 `current=8 target=15 readBack=8 max=15 applied=false`，SeekBar 回報 `range=0..600 current=320 target=600 bounds=150,796,1035,850`、`setProgress=false`。實際 slider 軌道比 Accessibility bounds 左右各內縮約 36 px，因此舊端點位置落在軌道外；50% 接近中央才曾成功。已以 bounds 高度估算內縮後的軌道座標、改為 thumb 起點拖曳，新 APK 已安裝至裝置，並通過 `test lint assembleDebug`。需真人複測「調到 100」、「調到 50」、「音量大／小一點」，查看每次讀回是否等於目標；尚未完成此複測。
-
-最新一次「聲音小一點」在使用者回報的鎖屏狀態失敗；診斷為 `accessibility=TIMED_OUT trace=[not-started]`，表示設定頁滑桿事件未開始。使用者明確要求螢幕故障時仍能鎖屏操作，因此不能以解鎖螢幕當作功能解法。2026-10-02 的 X60 ADB 探測中，AppOp `AUDIO_MEDIA_VOLUME` 為 allow；`AudioManager.setStreamVolume`／`adjustStreamVolume`（含 `FLAG_SHOW_UI`）、自建本機 MediaSession、MusicCabin 與 Spotify 的本機 MediaSession 設音量後，讀值都仍為 8。Settings volume panel 在該機只顯示「音效與震動」面板，沒有滑桿。已移除曾加入的鎖屏拒絕分支；目前仍沒有找到可在該機鎖屏調整系統媒體音量的 SDK 路徑，功能未通過。
-
-### 修正版追測（2026-10-02，歷史機型 vivo X60；**未通過**）
-
-| 項目 | 結果 |
-| --- | --- |
-| 裝置／版本 | vivo V2046A、Android 13／OriginOS 14.0；`1.0.0-rc30`／`versionCode 34` |
-| APK SHA-256 | `6C1A16182053EE467149CBB4CFB270DAC69704380FF2F337B6F142A843FA30F0` |
-| 權限／AppOp | `MODIFY_AUDIO_SETTINGS: granted=true`；`AUDIO_MEDIA_VOLUME: allow`；`isVolumeFixed=false` |
-| 語音結果 | `UP` 命中；診斷讀值 `current=10 target=11 readBack=10 max=15 applied=false`；音量沒有增加 |
-| 系統日誌 | 本次檢查未找到明確的 AudioService／AppOps 拒絕訊息 |
-
-此結果確認解析與執行器都有走到設定呼叫，但系統讀回仍未改變。`adjustStreamVolume()` 和 `setStreamVolume()` 在此機上都無效。使用者已於本對話核准加入無障礙 fallback；需在系統設定啟用後完成下方真機驗收。
-
-### 鎖屏限制修正後安裝確認（2026-10-02；功能未驗收）
-
-| 項目 | 結果 |
-| --- | --- |
-| 來源 | `issue/20-voice-media-volume`，HEAD `8c42a1a` 加上未提交工作目錄變更（已移除鎖屏拒絕分支） |
-| APK SHA-256 | `9CF31F8CB5D41D81C665D254DC3F5D0DD6F329ED6353C978FFCCC94937963F70` |
-| 安裝／啟動 | vivo V2046A 上 `adb install -r` 成功；`MainActivity` 啟動成功 |
-| 無障礙服務 | `VolumeAccessibilityService` 仍啟用且系統已綁定 |
-| 音量功能 | 本次只確認安裝與服務狀態，沒有做新的鎖屏音量測試；仍未通過 |
-
-### ADB shell helper 建置（2026-10-02；X60 安裝驗證待完成）
-
-| 項目 | 結果 |
-| --- | --- |
-| 來源 | `issue/20-voice-media-volume`，目前工作目錄包含本次未提交修正 |
-| APK | `app/build/outputs/apk/debug/app-debug.apk` |
-| SHA-256 | `636F617206956C8A81DF1144B32C0DD65D01B6AC240E2814963CA7F05F2B5516` |
-| package／版本 | `com.jajafu.x60assistant`／`1.0.0-rc30`／`versionCode 34` |
-| 自動驗證 | `.\gradlew.bat test`、`.\gradlew.bat lint`、`.\gradlew.bat assembleDebug` 均成功；新增 4 個 shell protocol 測試 |
-| X60 安裝 | 未執行：建置完成後 X60 serial `9654983303001DD` 從 ADB 斷線；目前只剩 SM-A528B 模擬器連線，不曾對它安裝或執行此 X60 helper |
-| 真機結果 | 直接以 ADB shell 執行 media_session 命令先前已在 X60 改變並還原音量；APK 內 app_process 載入、helper 心跳、拔線後存活、鎖屏語音控制均待重新連接 X60 後驗證 |
-
-X60 重新連接後，先安裝本節 APK，再執行 `scripts/start-x60-volume-helper.ps1 -Serial 9654983303001DD` 確認 helper 回報心跳，透過 helper 協定讀回一個可恢復的音量變更；最後仍需使用者在鎖屏下真人語音測試。已移除 Accessibility Service 註冊與設定頁啟用按鈕。
-
-### ADB shell helper 移除（2026-10-04；以上 helper 方案作廢）
-
-依使用者要求移除 helper（含 bridge、daemon、protocol、啟動／停止腳本與診斷頁 helper 狀態），回到純 `AudioManager`：相對調整用 `adjustStreamVolume(STREAM_MUSIC, ±1)`，絕對音量用 `setStreamVolume()`。本節之前的 helper 安裝指示不再適用；音量功能驗收回到「語音調整手機音量（rc30）」12 個功能步驟。
+rc30 曾以 `AudioManager` 調整 `STREAM_MUSIC`，要求 `MODIFY_AUDIO_SETTINGS`。在 vivo X60／V2046A 與 V2458A 上實測 App UID 的 `setStreamVolume`／`adjustStreamVolume` 寫入在到達 AudioService 前就被 OEM 丟棄（`applied=false`）；無障礙 fallback、ADB shell helper 與鎖屏方案都在當時移除。此路徑、設定開關、診斷欄位與相關驗收步驟已隨功能一起移除，完整過程見 `docs/decision-log.md`；取代方案為上方「語音調整音樂 App 音量」。
 
 ## 手動步驟
 

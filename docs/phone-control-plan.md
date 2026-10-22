@@ -9,7 +9,7 @@
 
 第一輪交付以音樂為樣板，但架構應能容納「開啟 App」、「媒體控制」、「系統允許的操作」與「特定 App 的操作介面」。**不承諾任意 App 的任意畫面都能由語音自動點擊**；每個 App、動作及鎖屏情境都要單獨驗證。付款、傳送訊息、撥號及變更系統安全設定不在第一輪自動執行範圍。
 
-本文件是現有 [主規格書](../../vivo-x60-voice-assistant-spec.md) 的後續擴充提案。原規格將音樂服務排除在第一版外，也禁止用 Accessibility Service 繞過 Android 限制；本案不改寫已完成的第一版需求。Issue #20 曾加入音量無障礙 fallback 與 ADB shell helper，但前者在測試手機（歷史機型 vivo X60）鎖屏實測失敗，後者已依使用者要求移除；目前回到純 `AudioManager` 方案。
+本文件是現有 [主規格書](../../vivo-x60-voice-assistant-spec.md) 的後續擴充提案。原規格將音樂服務排除在第一版外，也禁止用 Accessibility Service 繞過 Android 限制；本案不改寫已完成的第一版需求。Issue #20 曾加入音量無障礙 fallback 與 ADB shell helper，但前者在測試手機（歷史機型 vivo X60）鎖屏實測失敗，後者已依使用者要求移除；一度回到純 `AudioManager` 方案，該方案也已於 1.0.13 整條移除（改由音樂 App 調整自己的音量，見 §8.5）。
 
 ## 2. 現有基礎與待補缺口
 
@@ -128,6 +128,8 @@ MusicCabin 已選定。需要開啟 App 畫面時採通知請使用者點擊並�
 - 「回家／去公司」等常用目的地簡稱、導航中的語音控制（暫停／繼續／重新規劃）未納入本輪。
 
 ## 8.5 語音音量（2026-10-02 納入，rc30）
+
+> **本節已於 1.0.13 退役。** 調整手機系統媒體音量（`STREAM_MUSIC`）的路徑在 vivo X60／V2046A 與 V2458A 實測無效（App UID 寫入被 OEM 丟棄），使用者要求整條移除。1.0.13 起「聲音大一點／小聲一點／音量調到 80／現在音量多少」改為走音樂 App（MusicCabin）的公開語音通道調整 **App 自己的音量**，不再動手機系統音量；設定開關、診斷欄位與 `MODIFY_AUDIO_SETTINGS` 一併移除。現況見 `docs/ARCHITECTURE.md`、`docs/decision-log.md` 與 `docs/testing.md`。以下內容保留為當時的規劃紀錄。
 
 ### 8.5.1 本期範圍
 

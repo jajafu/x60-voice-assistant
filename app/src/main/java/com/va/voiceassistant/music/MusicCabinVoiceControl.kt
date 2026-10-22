@@ -10,6 +10,7 @@ import android.os.Looper
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
+import kotlin.math.roundToInt
 
 /**
  * MusicCabin 公開語音通道（有序廣播）的發送與回傳解析。
@@ -37,6 +38,10 @@ object MusicCabinVoiceControl {
     const val COMMAND_REPEAT_ALL = "repeat_all"
     const val COMMAND_REPEAT_ONE = "repeat_one"
     const val COMMAND_REPEAT_STATE = "repeat_state"
+    const val COMMAND_VOLUME_UP = "volume_up"
+    const val COMMAND_VOLUME_DOWN = "volume_down"
+    const val COMMAND_VOLUME_SET = "volume_set"
+    const val COMMAND_VOLUME_GET = "volume_get"
 
     const val SEND_TIMEOUT_MS = 10_000L
 
@@ -56,6 +61,10 @@ object MusicCabinVoiceControl {
         MusicCommand.RepeatOff -> COMMAND_REPEAT_OFF to null
         MusicCommand.RepeatAll -> COMMAND_REPEAT_ALL to null
         MusicCommand.RepeatState -> COMMAND_REPEAT_STATE to null
+        MusicCommand.VolumeUp -> COMMAND_VOLUME_UP to null
+        MusicCommand.VolumeDown -> COMMAND_VOLUME_DOWN to null
+        is MusicCommand.VolumeSet -> COMMAND_VOLUME_SET to command.percent.toString()
+        MusicCommand.VolumeGet -> COMMAND_VOLUME_GET to null
         MusicCommand.Open -> error("Open uses the app launcher, not voice control")
     }
 }
@@ -69,6 +78,8 @@ data class VoiceControlResult(
     val message: String,
     val artistMatched: Boolean = true,
     val isPlaying: Boolean = true,
+    /** 套用或查詢後的音樂 App 音量，0～1（`volume_*` 才有）。 */
+    val volume: Float? = null,
 )
 
 interface VoiceControlSender {
@@ -116,6 +127,8 @@ class OrderedBroadcastVoiceControlSender(
                             message = extras.getString("message").orEmpty(),
                             artistMatched = extras.getBoolean("artist_matched", true),
                             isPlaying = extras.getBoolean("is_playing", true),
+                            // 合約是 0～1；超出範圍或非有限值一律視為沒回報，不拿來組句子。
+                            volume = extras.getFloat("volume", -1f).takeIf { it.isFinite() && it in 0f..1f },
                         )
                     }
                 }
@@ -198,6 +211,8 @@ object MusicCabinVoiceReplies {
                 MusicActionResult(repeatSetReply(command, result.mode))
             MusicCommand.RepeatState ->
                 MusicActionResult(repeatStateReply(result.mode))
+            MusicCommand.VolumeUp, MusicCommand.VolumeDown, is MusicCommand.VolumeSet,
+            MusicCommand.VolumeGet -> volumeReply(command, result)
             MusicCommand.Open -> error("Open uses the app launcher, not voice control")
         }
     }
@@ -242,6 +257,25 @@ object MusicCabinVoiceReplies {
         "all" -> "目前是全部循環。"
         "off" -> "目前沒有開循環。"
         else -> "查不到目前的循環模式，請到 MusicCabin 確認。"
+    }
+
+    /**
+     * 音量回話優先念音樂 App 給的那句話（已含套用後的百分比且跟手機語系走）；
+     * 對方沒給說明時才用回傳的 0～1 音量自己組句子，避免假稱已調到。
+     * 兩者都沒有時，查詢句與調整句的兜底措辭分開，避免查詢被說成「已送出指令」。
+     */
+    private fun volumeReply(command: MusicCommand, result: VoiceControlResult): MusicActionResult {
+        if (result.message.isNotBlank()) return MusicActionResult(result.message)
+        // 合約是 0～1；超出範圍或非有限值的回傳不拿來組句子，改說已送出。
+        val volume = result.volume?.takeIf { it.isFinite() && it in 0f..1f }
+        if (volume != null) {
+            return MusicActionResult("音樂音量現在是 ${(volume * 100).roundToInt()}%。")
+        }
+        return if (command == MusicCommand.VolumeGet) {
+            MusicActionResult("查不到目前的音樂音量，請到 MusicCabin 確認。")
+        } else {
+            MusicActionResult("已送出音量指令，請到 MusicCabin 確認結果。")
+        }
     }
 
     private fun trackName(title: String, artist: String?): String {
