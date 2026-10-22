@@ -33,9 +33,9 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - `app/src/test/`、`app/src/androidTest/`、`docs/test-reports/`：單元測試、裝置測試與真機紀錄。
 - `scripts/`、`docs/model-packs.md`：模型資產準備及來源／授權資訊。
 
-## PR 驗收產物識別
+## 驗收產物識別
 
-人工驗收的來源是 Draft PR 目前 HEAD。Android 可安裝驗收產物以完整 commit 和 APK SHA-256 對應，並記錄 package、`versionName`／`versionCode` 及測試裝置；測試手機功能證據依 `docs/testing.md` 記錄模型識別、裝置狀態與執行結果。此 Repository 沒有 Preview 網站、套件發布或部署 revision。`assembleDebug` 是既有必要驗證，可在 PR 前建置；建立 Draft PR 後要確認來源 commit 與建置輸入仍符合 HEAD，受測內容未變則沿用該產物。
+人工驗收的來源是要驗收的完整 commit（不是未提交的工作區）。Android 可安裝驗收產物以完整 commit 和 APK SHA-256 對應，並記錄 package、`versionName`／`versionCode` 及測試裝置；測試手機功能證據依 `docs/testing.md` 記錄模型識別、裝置狀態與執行結果。此 Repository 沒有 Preview 網站、套件發布或部署 revision。`assembleDebug` 是既有必要驗證；影響 APK 的內容或建置輸入改變後，原驗收失效並重新建置驗證，受測內容未變則沿用該產物。
 
 ## 資料與外部整合
 

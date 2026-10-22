@@ -1,13 +1,27 @@
 # AI 開發流程範本版本
 
 - 範本 ID：`ai-development-template`
-- 版本：`1.4`
+- 版本：`1.5.1`
 
 此檔在來源目錄表示範本發行版本，在目標專案表示已完整套用的版本，**不是產品或 App 版本**。Agent 會自行讀取，使用者不需填寫；首次完整套用或升級完成並驗證後才更新目標專案的版本。每次正式修改範本後應提升版本，並保留上一版來源供差異比對。
 
+## 1.5.1 變更
+
+- Codex 已原生支援 `.agents/skills/`：`docs/OPENCODE_OPENCHAMBER.md` 改為兩種工具的共用機制對照與檢查方式；三個命令與提示詞改以 Skill ID 載入，直接讀檔僅作為無法載入時的備援。
+- 流程、Skill 內容與檔案位置不變。已套用 1.5 的專案用 `prompts/UPDATE_TEMPLATE_PROMPT.md` 小幅同步即可，不必重新套用。
+
+## 1.5 變更
+
+- 日常變更不再使用 Issue → PR 流程：直接在主要分支修改、驗證、提交並推送；高風險變更才開 `task/<主題>` 短分支，完成合回。
+- 移除 PR 範本；Skill 改名為 `plan-task`／`implement-task`／`review-changes`，命令改為 `task-plan`／`task-implement`／`review-changes`，子 Agent 改為 `task-analyst`／`change-reviewer`。
+- `docs/ISSUE_PLAN_TEMPLATE.md` 改為 `docs/PLAN_TEMPLATE.md`；較大任務的計畫可存 `work_plans/`。
+- 驗收基準從 PR HEAD 改為綁定完整 commit 雜湊；產物識別方式（雜湊、Preview URL、部署 revision）不變。
+- 保留 GitHub Issue 表單供外部使用者回報；外部 Issue 是需求來源，自己開發不開 Issue。
+- 不建議啟用需要 PR 的分支保護，避免擋住直接推送；修改前 fetch 與安全同步規則維持 1.4 內容。
+
 ## 1.4 變更
 
-- 修改前檢查工作樹與 worktree、fetch 遠端；新 Issue 從最新遠端主要分支建立，避免沿用過期的本機 main。
+- 修改前檢查工作樹與 worktree、fetch 遠端；新工作從最新遠端主要分支建立，避免沿用過期的本機 main。
 - 明確說明 GitHub PR 合併先更新遠端是正常流程，並加入遠端合併後安全同步本機主要分支的步驟。
 - 同步遇到既有修改、未推送 commit、分歧或遠端問題時保留現況並回報，不自動 stash、rebase 或丟棄內容。
 

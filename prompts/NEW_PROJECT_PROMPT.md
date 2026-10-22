@@ -1,18 +1,18 @@
-你現在要把個人 AI 開發流程範本套用到**新專案**。我本人是唯一的需求決定者、範圍核准者與 PR 合併者；AI 可分析、實作與審查。
+你現在要把個人 AI 開發流程範本套用到**新專案**。我本人是唯一的需求決定者與範圍核准者；AI 可分析、實作與審查。
 
 ## 資料
 
-- 範本來源：`F:\DevelopWorkFlow\ai-development-template-v1.4`
+- 範本來源：`F:\DevelopWorkFlow\ai-development-template-v1.5`
 - 目標目錄：[[目標專案完整路徑]]
 
 ## 執行
 
 1. 我只需替換「目標目錄」這一處占位文字，填入新專案的完整路徑；沒有其他必填欄位。若該處仍是占位文字，先請我提供路徑。其餘專案資訊由你查證或標待決，不要要求我預填：從目標目錄名稱和現有檔案查證名稱與用途；沒有資料時，名稱可暫用目錄名稱並標明暫定，用途與使用者標「待決定：尚未提供」。從目標專案的 `git remote` 查證 GitHub Repository，沒有時標「尚未建立」；尚未決定的技術、範圍與限制也標為待決。確認來源、目標與目標現有檔案；新專案目錄尚未存在時，在指定路徑建立目錄。目標若已有程式碼但未套用過本範本，改按既有專案提示詞的首次導入方式處理；若已有本範本版本檔或明確的舊版套用紀錄，改按 `prompts/UPDATE_TEMPLATE_PROMPT.md` 的升級流程處理，保留原有資料。
-2. 閱讀來源的 `TEMPLATE_VERSION.md`、`TEMPLATE_GUIDE.md`、`AGENTS.md`、`docs/OPENCODE_OPENCHAMBER.md`。複製範本的 README、AGENTS、TEMPLATE_GUIDE、docs、prompts、`.github/ISSUE_TEMPLATE/`、PR 範本、`.agents/skills/` 與 `.opencode/`；不要複製 `.git`，也不要建立自動 AI Workflow。新專案採用修改前檢查工作樹及所有 worktree、fetch 遠端、從最新遠端主要分支開始，以及遠端 PR 合併後安全同步本機主要分支的規則；Android 人工驗收記錄 Draft PR HEAD 與產物識別資料。完成整合與驗證後，才將 `TEMPLATE_VERSION.md` 複製到目標專案作為已套用版本紀錄；有待決衝突時不要標為完整套用。
-3. **複製後先做相容性檢查**：確認根目錄 `AGENTS.md`；三個 Skill 的檔名、`name`、`description`；OpenCode 三個命令、兩個子 Agent 的 frontmatter 與命令名稱不衝突。若能在目標專案實際啟動 OpenChamber／OpenCode，檢查執行中的 OpenCode 是否為 2.x、斜線選單、Agent 清單與 Skill 載入；1.x 不可宣稱支援此處的 V2 權限。若能啟動 Codex，請它讀 `AGENTS.md` 與一個 Skill，確認能正確說出「只有我核准與合併」。工具不可用時標「未驗證」，只回報靜態檢查，不得宣稱執行載入成功。缺檔或格式錯誤先修正再往下做。
-4. **由你直接修改目標專案檔案，完成全部參數替換，不要把欄位留給我手動填。** 以 `TEMPLATE_GUIDE.md` 參數表的全部項目（目前 24 個）為清單，逐一查閱我提供的資料和目標現有檔案；可直接確定的流程慣例（例如 Issue 分支格式）採用一致的合理預設。無法證實的產品、技術、測試或 CI 資訊，填「待決定：原因」或「規劃中：原因」；不適用填「不適用：原因」，清單欄位保持有效的 Markdown 清單。相同參數在各檔案使用相同內容。不得將尚未實作的架構、測試或 CI 寫成現況。
-5. 若 GitHub 已建立且可存取，只需檢查 `type:feature`、`type:bug` 兩個標籤及主要分支保護。單人 PR 不設定必須由另一人 Approve；實際狀態如實記錄。沒有 Repository 就列為待辦，不假稱已啟用。
+2. 閱讀來源的 `TEMPLATE_VERSION.md`、`TEMPLATE_GUIDE.md`、`AGENTS.md`、`docs/OPENCODE_OPENCHAMBER.md`。複製範本的 README、AGENTS、TEMPLATE_GUIDE、docs、prompts、`.github/ISSUE_TEMPLATE/`、`.agents/skills/` 與 `.opencode/`；不要複製 `.git`，也不要建立自動 AI Workflow。完成整合與驗證後，才將 `TEMPLATE_VERSION.md` 複製到目標專案作為已套用版本紀錄；有待決衝突時不要標為完整套用。
+3. **複製後先做相容性檢查**：確認根目錄 `AGENTS.md`；三個 Skill 的檔名、`name`、`description`；OpenCode 三個命令、兩個子 Agent 的 frontmatter 與命令名稱不衝突。若能在目標專案實際啟動 OpenChamber／OpenCode，檢查執行中的 OpenCode 是否為 2.x、斜線選單、Agent 清單與 Skill 載入；1.x 不可宣稱支援此處的 V2 權限。若能啟動 Codex，確認 `/skills` 或 `$` 清單能看到三個 Skill，並請它摘要 `AGENTS.md`，能正確說出「由我本人核准」；舊版 Codex 沒有 Skill 清單時，退為請它直接讀取 Skill 檔再摘要。工具不可用時標「未驗證」，只回報靜態檢查，不得宣稱執行載入成功。缺檔或格式錯誤先修正再往下做。
+4. **由你直接修改目標專案檔案，完成全部參數替換，不要把欄位留給我手動填。** 以 `TEMPLATE_GUIDE.md` 參數表的全部項目（目前 23 個）為清單，逐一查閱我提供的資料和目標現有檔案；可直接確定的流程慣例（例如高風險任務的分支命名）採用一致的合理預設。無法證實的產品、技術、測試或 CI 資訊，填「待決定：原因」或「規劃中：原因」；不適用填「不適用：原因」，清單欄位保持有效的 Markdown 清單。相同參數在各檔案使用相同內容。不得將尚未實作的架構、測試或 CI 寫成現況。
+5. 若 GitHub 已建立且可存取，只需檢查 `type:feature`、`type:bug` 兩個標籤。不要啟用需要 Pull Request 的分支保護，避免擋住直接推送主要分支；目標若已啟用，列出現況與影響交由我決定。實際狀態如實記錄；沒有 Repository 就列為待辦，不假稱已啟用。
 6. 依 `TEMPLATE_GUIDE.md` 的命令掃描**目標專案中本次複製的範本檔案**，確認參數表列出的 `{{大寫名稱}}` **零殘留**；不能只列出待填清單。目標專案其他檔案若有自己的模板語法，不要擅自替換。再檢查 Markdown 連結、Issue YAML、OpenCode frontmatter 及可執行的驗證命令。回報實際改過的檔案、根據什麼填值、哪些值仍標「待決定／規劃中」，並將 **參數零殘留、OpenCode 靜態／實際載入、Codex 靜態／實際載入、GitHub 設定** 分別列為通過、失敗或未驗證，附上證據與下一步。
-7. 套用範本不代表產品規格已確認，也不自動開始實作初版。後續新專案開發依 `docs/DEVELOPMENT.md`：先和我確認規格與 M0、M1…初版里程碑，再按已核准範圍分段實作與驗證；不用為每項重複開 Issue／PR。大型變更可在可檢查的整合點交付 PR，初版完成後才把日常變更切到 Issue → PR 流程。
+7. 套用範本不代表產品規格已確認，也不自動開始實作初版。後續新專案開發依 `docs/DEVELOPMENT.md`：先和我確認規格與 M0、M1…初版里程碑，再按已核准範圍分段實作與驗證。初版完成後，日常變更直接在主要分支進行；高風險變更才開 `task/<主題>` 短分支，風險較大的任務先寫計畫並取得我同意。
 
 不要預填特定免費／自訂模型或密鑰。不要把多個 AI 角色寫成多位人類共同實作者。

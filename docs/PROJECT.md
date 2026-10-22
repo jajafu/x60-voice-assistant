@@ -3,7 +3,7 @@
 > 本檔只記錄現有程式與文件可核對的範圍；新增需求仍由使用者決定。
 
 - 摘要：供 Android 13 以上手機個人使用的語音助理 release candidate；以本機喚醒、VAD、ASR 與 TTS 串接使用者設定的 OpenAI 相容問答服務，也提供本機音樂控制與提醒。
-- 階段：開發中（`app/build.gradle.kts` 為 `1.0.9`；部分真機驗收未完成）。
+- 階段：開發中（`app/build.gradle.kts` 為 `1.0.12`／`versionCode 46`；部分真機驗收未完成）。
 - 目標使用者：在自己手機上自行安裝與設定的個人使用者；更廣泛裝置支援待決定：尚無跨裝置驗收證據。
 - 目前問題：在 Android 背景與鎖屏限制下，提供可由使用者控制、兼顧本機語音處理與隱私的助理，並完成仍待驗收的可靠性與 MusicCabin 情境。
 
@@ -33,4 +33,4 @@
 - 模型 binary 不進 Git；授權及來源依 `docs/model-packs.md`、`THIRD_PARTY_NOTICES.md`，未確認授權不得推定可散布。
 - MusicCabin 播放、收藏與循環按語音通道回傳說話（rc19 例外自 1.0.5 退役，見 `docs/known-issues.md`）；未完成情境仍須真機驗收。
 
-現有測試與里程碑證據見 `docs/testing.md`、`docs/test-reports/`、`docs/decision-log.md`；後續日常功能變更記在各自 Issue。架構現況見 `docs/ARCHITECTURE.md`。
+現有測試與里程碑證據見 `docs/testing.md`、`docs/test-reports/`、`docs/decision-log.md`；初版完成後，日常變更直接在主要分支進行，較大任務的計畫放 `work_plans/`，重要決定寫回本檔。架構現況見 `docs/ARCHITECTURE.md`。

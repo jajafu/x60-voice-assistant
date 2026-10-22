@@ -102,8 +102,8 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 ## AI 開發流程
 
-Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.12` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者、範圍核准者與 PR 合併者；AI 可協助分析、實作與審查。
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.12` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者與範圍核准者；AI 可協助分析、實作與審查。
 
-從下一個 Issue 起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，Issue → PR 步驟見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
+從下一個任務起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，日常變更流程見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 
-產品候選版號與流程範本版本分開管理；Issue 的產品版本決定及可選工作日誌見 [開發流程](docs/DEVELOPMENT.md)。開始修改前先檢查工作樹與全部 worktree、`git fetch origin`，新 Issue 從最新 `origin/main` 開始；遠端 PR 合併後再安全同步本機 `main`。Android 行為變更透過 Draft PR 的目前 HEAD 對應 APK commit 與 SHA-256 做人工驗收；MuMu 安裝與啟動檢查依 [smoke test](docs/ANDROID_MUMU_SMOKE.md) 記錄，不能替代測試手機真機驗收。單純升級流程範本不改 App 版號或建立 APK。
+產品候選版號與流程範本版本分開管理；任務的產品版本決定、發行規則與可選工作日誌見 [開發流程](docs/DEVELOPMENT.md)。開始修改前先檢查工作樹與全部 worktree、`git fetch origin`，日常變更從最新 `origin/main` 直接開始，高風險變更才開 `task/<主題>` 短分支。Android 行為變更以完整 commit 與 APK SHA-256 做人工驗收；MuMu 安裝與啟動檢查依 [smoke test](docs/ANDROID_MUMU_SMOKE.md) 記錄，不能替代測試手機真機驗收。單純升級流程範本不改 App 版號或建立 APK。
