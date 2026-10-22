@@ -143,6 +143,7 @@ class MusicCabinVoiceRepliesTest {
     }
 
     @Test fun `old app without channel prompts an update`() {
+        // 只有「完全沒有接收器」（廣播瞬間結束）才定罪成舊版。
         assertEquals(
             "MusicCabin 太舊沒有語音控制，請更新 MusicCabin 後再試。",
             MusicCabinVoiceReplies.forCommand(
@@ -151,14 +152,41 @@ class MusicCabinVoiceRepliesTest {
                 "MusicCabin",
             ).message,
         )
+    }
+
+    @Test fun `timeout asks to retry instead of blaming an outdated app`() {
+        // 有通道但等不到回覆：對方可能剛被廣播喚起、動作仍會完成，不能說成太舊。
         assertEquals(
-            "MusicCabin 太舊沒有語音控制，請更新 MusicCabin 後再試。",
+            "MusicCabin 回應逾時，請再試一次。",
             MusicCabinVoiceReplies.forCommand(
                 MusicCommand.SearchAndPlay("晴天"),
                 failed("timeout"),
                 "MusicCabin",
             ).message,
         )
+        assertEquals(
+            "MusicCabin 回應逾時，請再試一次。",
+            MusicCabinVoiceReplies.forCommand(
+                MusicCommand.VolumeSet(10),
+                failed("timeout"),
+                "MusicCabin",
+            ).message,
+        )
+    }
+
+    @Test fun `only idempotent commands are retried after a timeout`() {
+        // 可重送：讀取、絕對值音量、重複送達也不改變結果的控制。
+        assertTrue(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.VolumeSet(10)))
+        assertTrue(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.VolumeGet))
+        assertTrue(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.NowPlaying))
+        assertTrue(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.RepeatState))
+        assertTrue(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.Pause))
+        // 不可重送：播放／切歌重送會重播或跳兩首；相對音量會累加；收藏重送回覆會變調。
+        assertFalse(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.SearchAndPlay("晴天")))
+        assertFalse(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.Play))
+        assertFalse(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.Next))
+        assertFalse(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.VolumeUp))
+        assertFalse(MusicCabinVoiceControl.isRetryableAfterTimeout(MusicCommand.SaveCurrent))
     }
 
     @Test fun `failures speak the channel message and denials guide to settings`() {

@@ -13,6 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.nio.file.Files
+import java.util.Comparator
 
 class AppUpdateCheckerTest {
     private lateinit var server: MockWebServer
@@ -139,6 +140,41 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `cache hit keeps reporting up to date when the installed version is the latest`() = runTest {
+        val api = server.url("/releases/latest").toString()
+        server.enqueue(
+            MockResponse().setBody(
+                """{"tag_name":"v1.0.7","body":"new","assets":[
+                    {"name":"app.apk","browser_download_url":"https://example.com/a.apk","size":1}]}""",
+            ),
+        )
+
+        // 第一次檢查：已安裝 1.0.7、遠端 latest 是 v1.0.7 → 不是更新，但 release 進了快取。
+        assertNull(AppUpdateChecker.checkForUpdate("1.0.7", OkHttpClient(), api, forceRefresh = true))
+        // 快取有效期內的後續前景檢查不得把同一個版本當成「新版本」再報一次。
+        assertNull(AppUpdateChecker.checkForUpdate("1.0.7", OkHttpClient(), api))
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `cached result is re-filtered when the local version advances`() = runTest {
+        val api = server.url("/releases/latest").toString()
+        val body =
+            """{"tag_name":"v1.0.7","body":"new","assets":[
+                {"name":"app.apk","browser_download_url":"https://example.com/a.apk","size":1}]}"""
+        server.enqueue(MockResponse().setBody(body))
+        server.enqueue(MockResponse().setBody(body))
+
+        // 更新前：1.0.6 對 v1.0.7 是真的有新版。
+        val before = AppUpdateChecker.checkForUpdate("1.0.6", OkHttpClient(), api, forceRefresh = true)
+        assertEquals("v1.0.7", before?.versionTag)
+        // 安裝會重啟程序、快取帶著舊的本地版本號：對新本地版本快取無效，必須重新抓取，
+        // 且重新抓到同一個 tag 時要回「已是最新」而不是把相同版本當成更新。
+        assertNull(AppUpdateChecker.checkForUpdate("1.0.7", OkHttpClient(), api))
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
     fun `apk download resumes an existing partial file`() = runTest {
         val bytes = "complete apk bytes".toByteArray()
         val directory = Files.createTempDirectory("voice-assistant-update").toFile()
@@ -166,5 +202,45 @@ class AppUpdateCheckerTest {
         assertFalse(partial.exists())
         target.delete()
         directory.delete()
+    }
+
+    @Test
+    fun `clearing stale staged files removes installed-version files and keeps newer ones`() {
+        val directory = Files.createTempDirectory("voice-assistant-updates").toFile()
+        val installedApk = directory.resolve("x60-voice-assistant-v1.0.13.apk")
+        val installedPart = directory.resolve("x60-voice-assistant-v1.0.13.apk.part")
+        val newerApk = directory.resolve("x60-voice-assistant-v1.0.14.apk")
+        val newerPart = directory.resolve("x60-voice-assistant-v1.0.14.apk.part")
+        val unrelated = directory.resolve("unrelated.txt")
+        listOf(installedApk, installedPart, newerApk, newerPart, unrelated).forEach { it.writeBytes(byteArrayOf(1)) }
+
+        AppUpdateDownloader.removeStaleStagedFiles(directory, "1.0.13")
+
+        // 已安裝版本的 APK 與續傳檔是殘留，清除；較新版本（含下載中的續傳檔）保留。
+        assertFalse(installedApk.exists())
+        assertFalse(installedPart.exists())
+        assertTrue(newerApk.exists())
+        assertTrue(newerPart.exists())
+        assertTrue(unrelated.exists())
+        Files.walk(directory.toPath()).sorted(Comparator.reverseOrder()).forEach { it.toFile().delete() }
+    }
+
+    @Test
+    fun `removing other staged apks keeps the kept target and its resume file`() {
+        val directory = Files.createTempDirectory("voice-assistant-updates").toFile()
+        val keep = directory.resolve("x60-voice-assistant-v1.0.14.apk")
+        val keepPart = directory.resolve("x60-voice-assistant-v1.0.14.apk.part")
+        val oldApk = directory.resolve("x60-voice-assistant-v1.0.13.apk")
+        val oldPart = directory.resolve("x60-voice-assistant-v1.0.13.apk.part")
+        listOf(keep, keepPart, oldApk, oldPart).forEach { it.writeBytes(byteArrayOf(1)) }
+
+        AppUpdateDownloader.removeOtherStagedApks(keep)
+
+        // 當前版本的續傳檔不得被當成「其他版本」刪掉，否則中斷下載永遠無法續傳。
+        assertTrue(keep.exists())
+        assertTrue(keepPart.exists())
+        assertFalse(oldApk.exists())
+        assertFalse(oldPart.exists())
+        Files.walk(directory.toPath()).sorted(Comparator.reverseOrder()).forEach { it.toFile().delete() }
     }
 }

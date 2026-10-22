@@ -16,6 +16,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import com.va.voiceassistant.diagnostics.M1DiagnosticsRepository
 import java.util.concurrent.ExecutionException
 import android.os.Bundle
 import kotlinx.coroutines.CancellationException
@@ -103,16 +104,21 @@ class MusicCabinController(
      * 被隱私開關擋下或出錯就回 false，讓 TTS 用 duck，不假稱已暫停。
      */
     private suspend fun pauseMusicCabinForVoice(): Boolean {
-        val result = try {
-            voiceControl.send(MusicCabinVoiceControl.COMMAND_PAUSE, null, VOICE_PAUSE_TIMEOUT_MS)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            return false
-        }
-        if (result.ok) return true
+        var result = sendVoiceCommand(MusicCabinVoiceControl.COMMAND_PAUSE, null, VOICE_PAUSE_TIMEOUT_MS)
+            ?: return false
         if (result.status == "no_song") return pauseActiveSession()
-        return false
+        if (result.status != "timeout") return result.ok
+        // 逾時：進入前呼叫端已確認音樂在播，期間唯一動作者就是這則暫停廣播；
+        // 音樂已停即視同暫停生效（回 true 讓對話結束後排程恢復），避免音樂卡在暫停。
+        // 已知反例（known-issues 1.0.14）：這段時間若音樂因自然播畢或使用者手動停止，
+        // 事後恢復的 play 在空佇列下可能改播喜愛清單；取捨是換掉更常見的「已暫停卻不恢復」。
+        if (audioManager?.isMusicActive == false) return true
+        // 仍在播：可能只是回得慢，再送一次（對方多半已被第一次廣播喚起）。
+        result = sendVoiceCommand(MusicCabinVoiceControl.COMMAND_PAUSE, null, VOICE_PAUSE_TIMEOUT_MS)
+            ?: return false
+        if (result.status == "no_song") return pauseActiveSession()
+        if (result.status == "timeout" && audioManager?.isMusicActive == false) return true
+        return result.ok
     }
 
     private suspend fun pauseConfiguredApp(): Boolean {
@@ -202,15 +208,11 @@ class MusicCabinController(
         resumeConfiguredApp()
     }
 
-    /** 只在剛才暫停成功後呼叫；隊列還在所以不會誤觸空隊列播喜愛。 */
+    /** 只在剛才暫停成功後呼叫；隊列還在所以不會誤觸空隊列播喜愛。
+     *  逾時不重送：已送達的 play 遲早生效（音樂自然恢復），而 MusicCabin 對「已在播放時
+     *  收到 play」的語義未經合約驗證，重送有重播風險（isRetryableAfterTimeout 同樣排除播放）。 */
     private suspend fun resumeMusicCabinAfterVoice(): Boolean {
-        return try {
-            voiceControl.send(MusicCabinVoiceControl.COMMAND_PLAY, null, VOICE_RESUME_TIMEOUT_MS).ok
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            false
-        }
+        return sendVoiceCommand(MusicCabinVoiceControl.COMMAND_PLAY, null, VOICE_RESUME_TIMEOUT_MS)?.ok == true
     }
 
     private suspend fun resumeConfiguredApp(): Boolean {
@@ -368,16 +370,12 @@ class MusicCabinController(
         }
     }
 
-    /** 「關閉音樂」走停止命令（清單留著）；本來就沒播也算達到目的。 */
+    /** 「關閉音樂」走停止命令（清單留著）；本來就沒播也算達到目的。
+     *  逾時不重送：已送達的 stop 遲早生效，重送沒有額外好處。 */
     private suspend fun stopMusicCabin(): Boolean {
-        return try {
-            val result = voiceControl.send(MusicCabinVoiceControl.COMMAND_STOP, null, VOICE_STOP_TIMEOUT_MS)
-            result.ok || result.status == "no_song"
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            false
-        }
+        val result = sendVoiceCommand(MusicCabinVoiceControl.COMMAND_STOP, null, VOICE_STOP_TIMEOUT_MS)
+            ?: return false
+        return result.ok || result.status == "no_song"
     }
 
     private fun isInstalled(): Boolean = runCatching {
@@ -440,14 +438,55 @@ class MusicCabinController(
         // 沒安裝走啟動引導：找不到 App 會直接回 NOT_FOUND 訊息，不會真的連上舊路。
         if (!isInstalled()) return launchForPlaybackSetup(command)
         val (voiceCommand, query) = MusicCabinVoiceControl.requestFor(command)
-        val result = try {
-            voiceControl.send(voiceCommand, query)
+        val result = sendVoiceCommand(
+            voiceCommand,
+            query,
+            retryOnTimeout = MusicCabinVoiceControl.isRetryableAfterTimeout(command),
+        ) ?: return MusicActionResult("音樂操作失敗，請再試一次。")
+        return MusicCabinVoiceReplies.forCommand(command, result, musicAppName)
+    }
+
+    /**
+     * 送出語音通道指令並把（指令、狀態、耗時）寫進 ring log，供診斷匯出事後核對；送出失敗回 null。
+     * retryOnTimeout 時，逾時對「重送不會改變結果」的指令（呼叫端以 isRetryableAfterTimeout 判斷）
+     * 再送一次：第一次逾時多半是對方程序剛被廣播喚起、送出的動作仍會完成，重送把
+     * 「動作已生效但回覆丟失」轉成確定回覆。僅逾時重送；送出丟例外（send_error）不重送。
+     */
+    private suspend fun sendVoiceCommand(
+        voiceCommand: String,
+        query: String?,
+        timeoutMs: Long? = null,
+        retryOnTimeout: Boolean = false,
+    ): VoiceControlResult? {
+        val first = sendOnce(voiceCommand, query, timeoutMs) ?: return null
+        if (first.status != "timeout" || !retryOnTimeout) return first
+        return sendOnce(voiceCommand, query, MusicCabinVoiceControl.RETRY_TIMEOUT_MS) ?: first
+    }
+
+    private suspend fun sendOnce(
+        voiceCommand: String,
+        query: String?,
+        timeoutMs: Long?,
+    ): VoiceControlResult? {
+        val started = SystemClock.elapsedRealtime()
+        return try {
+            val result = voiceControl.send(voiceCommand, query, timeoutMs)
+            M1DiagnosticsRepository.recordMusicVoiceControl(
+                voiceCommand,
+                result.status,
+                SystemClock.elapsedRealtime() - started,
+            )
+            result
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            return MusicActionResult("音樂操作失敗，請再試一次。")
+            M1DiagnosticsRepository.recordMusicVoiceControl(
+                voiceCommand,
+                "send_error",
+                SystemClock.elapsedRealtime() - started,
+            )
+            null
         }
-        return MusicCabinVoiceReplies.forCommand(command, result, musicAppName)
     }
 
     private suspend fun executeConnected(command: MusicCommand): MusicActionResult =

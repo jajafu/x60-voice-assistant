@@ -122,6 +122,11 @@ object M1DiagnosticsRepository {
         log("SYSTEM_ASR_UNVERIFIED", detail = detail)
     }
 
+    /** 音樂 App 公開語音通道每次送出的結果（指令、狀態、耗時），供診斷匯出事後核對。 */
+    fun recordMusicVoiceControl(command: String, status: String, elapsedMs: Long) {
+        log("MUSIC_VOICE", detail = "command=$command,status=$status,elapsed=${elapsedMs}ms")
+    }
+
     fun onAudioFrame() {
         audioFrames.incrementAndGet()
     }

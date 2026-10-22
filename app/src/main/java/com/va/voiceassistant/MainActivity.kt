@@ -67,6 +67,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var diagnosticsCollector: DeviceDiagnosticsCollector
@@ -103,7 +104,7 @@ class MainActivity : ComponentActivity() {
     private var updateDownloaded by mutableStateOf(false)
     private var updateHasPartialDownload by mutableStateOf(false)
     private var updateCanInstall by mutableStateOf(false)
-    private var updateIgnored by mutableStateOf(false)
+    private var updateIgnoredVersion by mutableStateOf<String?>(null)
     private var updateCheckJob: Job? = null
     private var updateChecking by mutableStateOf(false)
     private var updateCheckMessage by mutableStateOf("尚未檢查")
@@ -255,7 +256,7 @@ class MainActivity : ComponentActivity() {
                     asrProgress = asrProgress,
                     onDownloadAsr = ::downloadXAsr,
                     onCancelAsrDownload = ::cancelXAsrDownload,
-                    updateVersion = if (updateIgnored) null else appUpdate?.versionTag,
+                    updateVersion = appUpdate?.versionTag?.takeIf { it != updateIgnoredVersion },
                     updateFileSize = appUpdate?.let { formatBytes(it.sizeBytes) },
                     updateNotes = appUpdate?.notes?.take(100),
                     updateDownloading = updateDownloading,
@@ -269,7 +270,7 @@ class MainActivity : ComponentActivity() {
                     onDownloadUpdate = ::downloadAndInstallUpdate,
                     onInstallUpdate = ::installDownloadedUpdate,
                     onOpenUpdateInstallPermission = ::openUpdateInstallPermission,
-                    onIgnoreUpdate = { updateIgnored = true },
+                    onIgnoreUpdate = ::ignoreUpdate,
                 )
             }
         }
@@ -658,6 +659,13 @@ class MainActivity : ComponentActivity() {
         xasrDownload?.cancel()
     }
 
+    /** 按「稍後」：記住被忽略的版本並讓狀態訊息一致（卡片消失後設定頁不再顯示「發現新版本」）。 */
+    private fun ignoreUpdate() {
+        val tag = appUpdate?.versionTag ?: return
+        updateIgnoredVersion = tag
+        updateCheckMessage = "已按「稍後」忽略 $tag，出現更新版本才會再提示"
+    }
+
     private fun checkAppUpdate(forceRefresh: Boolean = false) {
         updateCheckJob?.cancel()
         updateCheckJob = lifecycleScope.launch {
@@ -669,9 +677,24 @@ class MainActivity : ComponentActivity() {
                     forceRefresh = forceRefresh,
                 )
                 appUpdate = info
-                updateIgnored = false
+                when {
+                    info == null -> Unit
+                    // 手動「立即檢查更新」是使用者主動關心，解除同版本忽略讓卡片與下載按鈕回來；
+                    // 自動檢查只在出現不同版本時解除，避免亮屏重檢把「稍後」蓋掉。
+                    forceRefresh || info.versionTag != updateIgnoredVersion -> updateIgnoredVersion = null
+                }
+                // 已安裝版本的暫存 APK 只能是殘檔（安裝會殺程序、沒機會自己清），
+                // 依檔名標籤與本地版本比對清除，避免之後被誤標成「更新已下載完成」。
+                withContext(Dispatchers.IO) {
+                    AppUpdateDownloader.removeStaleStagedApks(applicationContext, BuildConfig.VERSION_NAME)
+                }
                 refreshUpdateDownloadState(info)
-                updateCheckMessage = if (info == null) "目前已是最新版本" else "發現新版本 ${info.versionTag}"
+                updateCheckMessage = when {
+                    info == null -> "目前已是最新版本"
+                    info.versionTag == updateIgnoredVersion ->
+                        "已按「稍後」忽略 ${info.versionTag}，出現更新版本才會再提示"
+                    else -> "發現新版本 ${info.versionTag}"
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {

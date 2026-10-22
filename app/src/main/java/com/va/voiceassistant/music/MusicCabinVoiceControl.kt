@@ -45,6 +45,9 @@ object MusicCabinVoiceControl {
 
     const val SEND_TIMEOUT_MS = 10_000L
 
+    /** 逾時後重送的等待上限；對方多半已被第一次廣播喚起，暖機後通常秒回。 */
+    const val RETRY_TIMEOUT_MS = 5_000L
+
     /** 把本機指令換成通道的命令名字與參數；回傳 null 表示此指令不走通道。 */
     fun requestFor(command: MusicCommand): Pair<String, String?> = when (command) {
         is MusicCommand.SearchAndPlay -> COMMAND_PLAY_QUERY to command.query
@@ -66,6 +69,18 @@ object MusicCabinVoiceControl {
         is MusicCommand.VolumeSet -> COMMAND_VOLUME_SET to command.percent.toString()
         MusicCommand.VolumeGet -> COMMAND_VOLUME_GET to null
         MusicCommand.Open -> error("Open uses the app launcher, not voice control")
+    }
+
+    /**
+     * 逾時後可以原樣重送的指令：只含讀取、絕對值設定與重複送達也不改變結果的控制。
+     * 排除播放／切歌（重送會重播或跳兩首）與收藏（回覆會從「收藏成功」變成「已經收藏過了」）。
+     */
+    fun isRetryableAfterTimeout(command: MusicCommand): Boolean = when (command) {
+        MusicCommand.Pause, MusicCommand.NowPlaying,
+        MusicCommand.RepeatOne, MusicCommand.RepeatOff, MusicCommand.RepeatAll,
+        MusicCommand.RepeatState, is MusicCommand.VolumeSet, MusicCommand.VolumeGet,
+        -> true
+        else -> false
     }
 }
 
@@ -218,9 +233,15 @@ object MusicCabinVoiceReplies {
     }
 
     private fun failure(command: MusicCommand, result: VoiceControlResult, appName: String): MusicActionResult {
-        // 對方沒有接收器或逾時：代表是沒有語音通道的舊版，提示更新（Issue #29 不走回舊連線）。
-        if (result.status == "no_receiver" || result.status == "timeout") {
+        // 對方完全沒有語音通道的接收器：廣播立刻結束、瞬間回來，才真的是舊版，提示更新
+        // （Issue #29 不走回舊連線）。
+        if (result.status == "no_receiver") {
             return MusicActionResult("$appName 太舊沒有語音控制，請更新 $appName 後再試。")
+        }
+        // 有通道但等不到回覆：多半是對方程序剛被廣播喚起（冷啟動）或處理較久，
+        // 送出的動作往往仍會完成，不能定罪成舊版（1.0.14 修正逾時誤判，見 testing.md）。
+        if (result.status == "timeout") {
+            return MusicActionResult("$appName 回應逾時，請再試一次。")
         }
         if (result.status == "denied") {
             return MusicActionResult(

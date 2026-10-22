@@ -36,9 +36,13 @@ object AppUpdateChecker {
 
     // Match MusicCabin's updater: foreground checks use the in-process cache,
     // while an explicit button tap can force a fresh request.
+    // The cache stores the *filtered* result (null = already up to date) together
+    // with the local version it was computed against, so a cache hit can never
+    // resurrect the installed version as a "new release".
     private const val CHECK_INTERVAL_MILLIS = 2 * 60 * 60 * 1000L
     private val cacheLock = Any()
     private var cachedApiUrl: String? = null
+    private var cachedLocalVersion: String? = null
     private var cachedRelease: AppUpdateInfo? = null
     private var hasCachedResult = false
     private var lastCheckTime = 0L
@@ -103,6 +107,7 @@ object AppUpdateChecker {
             if (!forceRefresh &&
                 hasCachedResult &&
                 cachedApiUrl == apiUrl &&
+                cachedLocalVersion == localVersionName &&
                 System.currentTimeMillis() - lastCheckTime < CHECK_INTERVAL_MILLIS
             ) {
                 cachedRelease
@@ -123,20 +128,25 @@ object AppUpdateChecker {
         client.newCall(request).execute().use { response ->
             // No releases yet, repo renamed, or (for private repos) no access: stay silent.
             if (response.code == 404) {
-                cacheResult(apiUrl, null)
+                cacheResult(apiUrl, localVersionName, null)
                 return@withContext null
             }
             if (!response.isSuccessful) throw IOException("檢查更新失敗（HTTP ${response.code}）")
             val payload = response.body?.string().orEmpty()
             val info = parseLatestRelease(payload)
-            cacheResult(apiUrl, info)
-            if (info != null && isNewerVersion(info.versionTag, localVersionName)) info else null
+            // Cache the filtered result, not the raw release: when the latest tag
+            // equals the installed version, cache hits must keep reporting
+            // "already up to date" instead of the same version as an update.
+            val update = if (info != null && isNewerVersion(info.versionTag, localVersionName)) info else null
+            cacheResult(apiUrl, localVersionName, update)
+            update
         }
     }
 
-    private fun cacheResult(apiUrl: String, release: AppUpdateInfo?) {
+    private fun cacheResult(apiUrl: String, localVersionName: String, release: AppUpdateInfo?) {
         synchronized(cacheLock) {
             cachedApiUrl = apiUrl
+            cachedLocalVersion = localVersionName
             cachedRelease = release
             hasCachedResult = true
             lastCheckTime = System.currentTimeMillis()

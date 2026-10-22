@@ -45,11 +45,41 @@ object AppUpdateDownloader {
         return if (partial.isFile) partial.length().coerceAtLeast(0L) else 0L
     }
 
-    /** Remove old staged releases so the cache does not retain one APK per version. */
+    /** Remove old staged releases so the cache does not retain one APK per version.
+     *  The kept target's `.apk.part` resume file must survive (same version). */
     fun removeOtherStagedApks(keep: File) {
         val directory = keep.parentFile ?: return
+        val keepPartial = partialApkFile(keep)
         directory.listFiles()?.forEach { file ->
-            if (file != keep && file.name.startsWith(STAGED_APK_PREFIX)) file.delete()
+            if (file.name.startsWith(STAGED_APK_PREFIX) && file != keep && file != keepPartial) file.delete()
+        }
+    }
+
+    fun removeStaleStagedApks(context: Context, localVersionName: String) {
+        val directory = File(context.externalCacheDir ?: context.cacheDir, "updates")
+        removeStaleStagedFiles(directory, localVersionName)
+    }
+
+    /**
+     * Deletes staged APKs (and their `.apk.part` resume files) whose tag is not
+     * newer than the installed version: such a file can only be a leftover from
+     * an update that already installed (its install kills the process before any
+     * cleanup could run). Version-based instead of check-based so a 404 or an
+     * asset-less release cannot delete a still-installable download; files for
+     * newer tags (including one currently downloading) are kept.
+     */
+    internal fun removeStaleStagedFiles(directory: File, localVersionName: String) {
+        directory.listFiles()?.forEach { file ->
+            if (!file.name.startsWith(STAGED_APK_PREFIX)) return@forEach
+            val stripped = file.name.removePrefix(STAGED_APK_PREFIX)
+            val tag = if (stripped.endsWith(".apk.part")) {
+                stripped.removeSuffix(".apk.part")
+            } else {
+                stripped.removeSuffix(".apk")
+            }
+            // 檔名必須能原樣還原成標籤，避免把不認得的檔案誤判成舊版。
+            if (sanitizeFileName(tag) != tag) return@forEach
+            if (!AppUpdateChecker.isNewerVersion(tag, localVersionName)) file.delete()
         }
     }
 
