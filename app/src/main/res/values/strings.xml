@@ -59,7 +59,4 @@
     <string name="kws_model_sha">Model Archive SHA256</string>
     <string name="partial_transcript">即時辨識</string>
     <string name="final_transcript">最後逐字稿</string>
-    <string name="asr_model_id">ASR Model ID</string>
-    <string name="asr_rtf">ASR RTF</string>
-    <string name="asr_final_latency">ASR Final Latency</string>
 </resources>

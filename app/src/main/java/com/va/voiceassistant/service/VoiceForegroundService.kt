@@ -17,10 +17,6 @@ import androidx.core.app.ServiceCompat
 import com.va.voiceassistant.MainActivity
 import com.va.voiceassistant.R
 import com.va.voiceassistant.BuildConfig
-import com.va.voiceassistant.asr.AsrModelPacks
-import com.va.voiceassistant.asr.AsrRecognizerKind
-import com.va.voiceassistant.asr.OfflineSpeechRecognizerEngine
-import com.va.voiceassistant.asr.SherpaSpeechRecognizerEngine
 import com.va.voiceassistant.asr.SystemSpeechRecognizerEngine
 import com.va.voiceassistant.asr.SystemSpeechRecognizerSupport
 import com.va.voiceassistant.asr.TraditionalChineseConverter
@@ -39,8 +35,6 @@ import com.va.voiceassistant.reminder.AndroidAlarmActionExecutor
 import com.va.voiceassistant.kws.KwsModelPack
 import com.va.voiceassistant.kws.SherpaWakeWordEngine
 import com.va.voiceassistant.model.ModelPackManager
-import com.va.voiceassistant.model.BundledAsrInstaller
-import com.va.voiceassistant.orchestration.AndroidMonotonicClock
 import com.va.voiceassistant.orchestration.VoiceOrchestrator
 import com.va.voiceassistant.security.AndroidKeystoreSecretStore
 import com.va.voiceassistant.tts.AndroidTtsEngine
@@ -167,29 +161,22 @@ class VoiceForegroundService : Service() {
                 failAndStop(VoiceErrorCode.VAD_INIT_FAILED, vadStatus.reason.orEmpty())
                 return
             }
-            val asrPack = AsrModelPacks.xAsr
             val llmSecretStore = AndroidKeystoreSecretStore(applicationContext)
             val hasLlmApiKey = llmSecretStore.maskedApiKey() != "未設定"
-            // 引擎選擇：先探測系統語音辨識（含中文支援），探測通過就直接用系統、
-            // 不必先下載 X-ASR；都不行才要求 X-ASR 後備模型。
+            // 引擎選擇（1.0.16 起）：只使用系統語音辨識。啟動時探測（含中文支援），
+            // 探測明說不可用就停止服務；下載式 X-ASR 後備已移除。
             val systemAsrProbe = SystemSpeechRecognizerSupport.probe(applicationContext)
             val systemAsrConfirmed = systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Confirmed
             val systemAsrLanguage = systemAsrConfirmed?.language
             // 問不到語言資訊仍會選用系統辨識，把未驗證的原因留在診斷，日後才追得出當時的取捨。
             systemAsrConfirmed?.unverifiedReason?.let(M1DiagnosticsRepository::recordSystemAsrUnverified)
-            val useSystemAsr = systemAsrLanguage != null
-            if (!useSystemAsr) {
-                val asrStatus = BundledAsrInstaller(applicationContext).ensureInstalled()
-                if (!asrStatus.valid) {
-                    val probeReason = (systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Unavailable)?.reason.orEmpty()
-                    // 提示要能同時說明兩條退路都不可行；reason 前綴供診斷顯示。
-                    failAndStop(
-                        VoiceErrorCode.ASR_MODEL_INVALID,
-                        "missing-archive:系統語音辨識不可用（$probeReason）" +
-                            "且 X-ASR 未下載；請到「模型」分頁按「下載 X-ASR 模型」",
-                    )
-                    return
-                }
+            if (systemAsrLanguage == null) {
+                val probeReason = (systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Unavailable)?.reason.orEmpty()
+                failAndStop(
+                    VoiceErrorCode.ASR_INIT_FAILED,
+                    "system-asr-unavailable:$probeReason",
+                )
+                return
             }
 
             var orchestratorReference: VoiceOrchestrator? = null
@@ -223,28 +210,12 @@ class VoiceForegroundService : Service() {
                 audio = audio,
                 kws = SherpaWakeWordEngine(assets, settings.wakePhrase),
                 vad = SherpaVadEngine(assets),
-                asr = if (systemAsrLanguage != null) {
-                    SystemSpeechRecognizerEngine(
-                        applicationContext,
-                        waitForSpeechMs = settings.waitForSpeechMs,
-                        maxUtteranceMs = settings.maxUtteranceMs,
-                        language = systemAsrLanguage,
-                    )
-                } else when (asrPack.recognizerKind) {
-                    AsrRecognizerKind.ZIPFORMER_CTC -> SherpaSpeechRecognizerEngine(
-                        modelId = asrPack.id,
-                        modelDirectory = modelManager.asrDirectory(asrPack),
-                        pack = asrPack,
-                        clock = AndroidMonotonicClock,
-                    )
-                    AsrRecognizerKind.MOONSHINE_V2,
-                    AsrRecognizerKind.X_ASR_OFFLINE_TRANSDUCER -> OfflineSpeechRecognizerEngine(
-                        modelId = asrPack.id,
-                        modelDirectory = modelManager.asrDirectory(asrPack),
-                        pack = asrPack,
-                        clock = AndroidMonotonicClock,
-                    )
-                },
+                asr = SystemSpeechRecognizerEngine(
+                    applicationContext,
+                    waitForSpeechMs = settings.waitForSpeechMs,
+                    maxUtteranceMs = settings.maxUtteranceMs,
+                    language = systemAsrLanguage,
+                ),
                 acknowledgementPlayer = WakeAcknowledgementPlayer(applicationContext),
                 convertText = TraditionalChineseConverter()::convert,
                 settings = settings,
@@ -306,9 +277,7 @@ class VoiceForegroundService : Service() {
                 created.close()
                 return
             }
-            M1DiagnosticsRepository.setAsrModel(
-                if (useSystemAsr) SystemSpeechRecognizerSupport.MODEL_ID else asrPack.id,
-            )
+            M1DiagnosticsRepository.setAsrModel(SystemSpeechRecognizerSupport.MODEL_ID)
             startHealthPublishing()
             created.start()
         } catch (error: OutOfMemoryError) {

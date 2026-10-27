@@ -2,7 +2,7 @@
 
 此步驟適用於 Android App 行為變更。先依專案既有方式建置或取得對應 APK。驗證範圍只有「安裝成功、從 launcher 開啟、啟動畫面可見且沒有立即崩潰」。登入、權限授予、網路與業務功能依各專案另訂測試。沒有可用 APK 或 MuMu 環境時，回報未執行原因。
 
-本專案以 `app/build.gradle.kts` 的 `com.va.voiceassistant`、`versionName`／`versionCode` 為版本依據；`minSdk = 26`、`targetSdk = 35`，APK 只含 `arm64-v8a`。依 `README.md` 先執行 `scripts/prepare-m1-kws-assets.ps1` 與 `scripts/prepare-vad-asset.ps1`（X-ASR 已改 App 內雲端下載，不再打包），再使用 `.\gradlew.bat assembleDebug`；Debug APK 路徑與 Release 簽章限制見 README。MuMu 執行個體的 ABI、Android 版本及是否允許覆蓋安裝須在當次檢查，不能因本機已安裝 MuMu CLI 就假定相容或可用。此 smoke 不能替代 `docs/testing.md` 的測試手機驗收。
+本專案以 `app/build.gradle.kts` 的 `com.va.voiceassistant`、`versionName`／`versionCode` 為版本依據；`minSdk = 26`、`targetSdk = 35`，APK 只含 `arm64-v8a`。依 `README.md` 先執行 `scripts/prepare-m1-kws-assets.ps1` 與 `scripts/prepare-vad-asset.ps1`（App 只內建 KWS／VAD，語音辨識用系統服務），再使用 `.\gradlew.bat assembleDebug`；Debug APK 路徑與 Release 簽章限制見 README。MuMu 執行個體的 ABI、Android 版本及是否允許覆蓋安裝須在當次檢查，不能因本機已安裝 MuMu CLI 就假定相容或可用。此 smoke 不能替代 `docs/testing.md` 的測試手機驗收。
 
 ## 前置確認
 

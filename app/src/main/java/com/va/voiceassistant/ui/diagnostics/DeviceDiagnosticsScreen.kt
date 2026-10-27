@@ -131,12 +131,8 @@ fun DeviceDiagnosticsScreen(
     onSaveReminder: (String?, String, Long, ReminderRecurrence?) -> Unit,
     onDeleteReminder: (String) -> Unit,
     onChooseReminderSound: () -> Unit,
-    asrInstalled: Boolean = false,
-    asrStatusText: String = "",
-    asrDownloading: Boolean = false,
-    asrProgress: Int = 0,
-    onDownloadAsr: () -> Unit = {},
-    onCancelAsrDownload: () -> Unit = {},
+    alarmRinging: Boolean = false,
+    onStopAlarm: () -> Unit = {},
     updateVersion: String? = null,
     updateFileSize: String? = null,
     updateNotes: String? = null,
@@ -213,12 +209,6 @@ fun DeviceDiagnosticsScreen(
                 onSave = onSaveSettings,
                 onTestConnection = onTestConnection,
                 onDeleteLlmApiKey = onDeleteLlmApiKey,
-                asrInstalled = asrInstalled,
-                asrStatusText = asrStatusText,
-                asrDownloading = asrDownloading,
-                asrProgress = asrProgress,
-                onDownloadAsr = onDownloadAsr,
-                onCancelAsrDownload = onCancelAsrDownload,
             )
 
             AppSection.SETTINGS -> if (showDiagnostics) DiagnosticsPage(
@@ -274,6 +264,8 @@ fun DeviceDiagnosticsScreen(
                 exactAlarmPermissionGranted = diagnostics.exactAlarmPermissionGranted,
                 soundName = reminderSoundName,
                 message = reminderMessage,
+                alarmRinging = alarmRinging,
+                onStopAlarm = onStopAlarm,
                 onSave = onSaveReminder,
                 onDelete = onDeleteReminder,
                 onChooseSound = onChooseReminderSound,
@@ -627,12 +619,6 @@ private fun ModelsPage(
     onSave: (AssistantSettings, String) -> Unit,
     onTestConnection: (AssistantSettings, String) -> Unit,
     onDeleteLlmApiKey: () -> Unit,
-    asrInstalled: Boolean = false,
-    asrStatusText: String = "",
-    asrDownloading: Boolean = false,
-    asrProgress: Int = 0,
-    onDownloadAsr: () -> Unit = {},
-    onCancelAsrDownload: () -> Unit = {},
 ) {
     // 不以 saved 為 remember key：設定流每次發布都是新物件，否則外部更新會清掉整份草稿。
     var draft by remember { mutableStateOf(saved) }
@@ -656,47 +642,11 @@ private fun ModelsPage(
         item {
             Text("模型", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "設定 LLM 服務；語音辨識啟動時先探測手機系統服務（含中文支援），系統可用即直接使用；X-ASR 為後備模型（約 175 MB），可先不下載，需要時再到下方按鈕下載。",
+                "設定 LLM 服務；語音辨識使用手機系統服務（含中文支援），啟動時探測可用即直接使用，App 內不再下載語音模型。",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
-        }
-        item {
-            SectionCard("本機語音模型（X-ASR）") {
-                StatusPill(if (asrInstalled) "已下載並驗證" else "尚未就緒", asrInstalled)
-                Text(
-                    asrStatusText.ifBlank { "尚未下載" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                if (asrDownloading) {
-                    Text(
-                        if (asrProgress >= 0) "下載中 $asrProgress%" else "解壓安裝中…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    // 解壓階段取消無效，只在下載階段顯示取消。
-                    if (asrProgress >= 0) {
-                        TextButton(
-                            onClick = onCancelAsrDownload,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                        ) { Text("取消下載") }
-                    }
-                } else {
-                    Button(
-                        onClick = onDownloadAsr,
-                        enabled = enabled,
-                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
-                    ) { Text(if (asrInstalled) "重新下載" else "下載 X-ASR 模型") }
-                    Text(
-                        "下載約 136 MB，解壓後約 175 MB；下載中請保持 App 開啟。系統語音辨識不可用時，啟動服務需要本模型作為後備。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
         }
         if (!enabled) item { MessageCard("請先到「對話」停止服務，再修改模型設定。") }
         if (message != null) item { MessageCard(message, error = message.contains("失敗") || message.contains("無效")) }
@@ -1240,6 +1190,8 @@ private fun RemindersPage(
     exactAlarmPermissionGranted: Boolean,
     soundName: String,
     message: String?,
+    alarmRinging: Boolean,
+    onStopAlarm: () -> Unit,
     onSave: (String?, String, Long, ReminderRecurrence?) -> Unit,
     onDelete: (String) -> Unit,
     onChooseSound: () -> Unit,
@@ -1261,6 +1213,26 @@ private fun RemindersPage(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+
+        if (alarmRinging) {
+            // 鬧鐘正在響：畫面上直接提供停止按鈕，不必解鎖去找通知或滑掉 App。
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+                        Text("提醒鈴聲響鈴中", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "按下方按鈕立即停止鈴聲與語音播報；不理會的話最多響 10 分鐘。",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                        Button(
+                            onClick = onStopAlarm,
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+                        ) { Text("停止鈴聲") }
+                    }
+                }
+            }
         }
 
         if (!exactAlarmPermissionGranted) {
@@ -1693,8 +1665,7 @@ private fun DiagnosticsPage(
             SectionCard("語音模型") {
                 InfoRow("喚醒詞", settings.wakePhrase)
                 InfoRow("KWS", runtime.modelId)
-                InfoRow("ASR（設定）", settings.asrModelId)
-                InfoRow("ASR（實際載入）", runtime.asrModelId.ifBlank { "—" })
+                InfoRow("ASR", runtime.asrModelId.ifBlank { "—" })
                 InfoRow("ASR RTF", runtime.asrRtf?.let { String.format(Locale.ROOT, "%.3f", it) } ?: "—")
                 InfoRow("TTS", "${runtime.ttsEngine} / ${runtime.ttsVoice}")
             }

@@ -5,11 +5,6 @@ import org.junit.Test
 
 class AssistantSettingsTest {
     @Test
-    fun `older model selections migrate to bundled X-ASR`() {
-        assertEquals(AssistantSettings.DEFAULT_ASR_MODEL_ID, AssistantSettings(asrModelId = "old-model").normalized().asrModelId)
-    }
-
-    @Test
     fun `llm transcript correction is enabled by default`() {
         assertEquals(true, AssistantSettings().llmCorrectionEnabled)
     }

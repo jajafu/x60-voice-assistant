@@ -20,7 +20,6 @@ app/src/main/assets/models/kws/*/*.onnx
 app/src/main/assets/models/kws/*/tokens.txt
 app/src/main/assets/models/kws/*/MODEL_SOURCE.txt
 app/src/main/assets/models/vad/*.onnx
-app/src/main/assets/models/asr/
 model-cache/
 *.tar.bz2
 *.onnx

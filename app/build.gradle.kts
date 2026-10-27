@@ -15,8 +15,8 @@ android {
         applicationId = "com.va.voiceassistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 49
-        versionName = "1.0.15"
+        versionCode = 50
+        versionName = "1.0.16"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -129,8 +129,6 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.commons.compress)
-    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.media3.session)
 
     debugImplementation(libs.androidx.compose.ui.tooling)

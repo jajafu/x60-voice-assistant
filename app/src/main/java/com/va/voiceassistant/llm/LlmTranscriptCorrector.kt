@@ -22,7 +22,7 @@ interface TranscriptCorrector {
 }
 
 /**
- * X-ASR 同音錯字的 LLM 校正（Typeless 兩段式）。
+ * 同音錯字的 LLM 校正（Typeless 兩段式）。
  *
  * 本機 Router 先命中就直接執行不上網；只有全部 miss 才呼叫一次。
  * 回傳只接受固定 JSON，解析失敗就回 null 让呼叫方維持舊行為。

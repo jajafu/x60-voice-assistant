@@ -4,9 +4,9 @@
 
 ## 架構與技術
 
-Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，啟動時先探測系統語音辨識（存在且支援中文）並優先使用，系統不可用時退回本機 X-ASR。辨識文字優先送本機音樂（含音樂 App 自己的音量）／提醒／導航指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給系統 TTS。設定與提醒留在裝置；從 sherpa-onnx 官方 release 下載的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
+Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，啟動時探測系統語音辨識（存在且支援中文）並直接使用；1.0.16 起移除下載式 X-ASR 後備，系統辨識不可用時服務啟動失敗並說明原因。辨識文字優先送本機音樂（含音樂 App 自己的音量）／提醒／導航指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給系統 TTS。設定與提醒留在裝置。
 
-主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。目前產品版號為 `1.0.15`／`versionCode 49`，依 `app/build.gradle.kts` 查證。
+主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。目前產品版號為 `1.0.16`／`versionCode 50`，依 `app/build.gradle.kts` 查證。
 
 `VoiceForegroundService` 擁有語音服務生命週期與資源；`AudioCaptureEngine` 建立唯一 `AudioRecord`，以 16 kHz／mono／PCM16／20 ms frame 送入有界佇列。`VoiceOrchestrator` 是唯一狀態切換者，將喚醒後語音交給 VAD／ASR；本機 `MusicCommandRouter`、`MusicVolumeCommandRouter`、`NavigationCommandRouter` 與 `ReminderCommandRouter` 優先處理明確指令，一般問答才走 `OpenAiCompatibleLlmProvider` 的 SSE，完整句送 TTS，結束後可進 Follow Up。實際分支、失敗與恢復策略依程式碼及 `docs/decision-log.md`。
 
@@ -24,7 +24,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 
 - `app/src/main/java/com/va/voiceassistant/`：Activity、UI 與 Android 應用入口。
 - `service/`、`audio/`、`orchestration/`：前景服務、單一音訊來源、狀態機與恢復策略。
-- `kws/`、`vad/`、`asr/`、`model/`：本機語音偵測、系統辨識探測與整句引擎（`SystemSpeechRecognizer*`）、下載式 X-ASR 辨識、遠端下載模型安裝與 SHA256 驗證；舊版下載工作保留升級相容處理。
+- `kws/`、`vad/`、`asr/`、`model/`：本機語音偵測、系統辨識探測與引擎（`SystemSpeechRecognizer*`）、VAD 資產 SHA256 驗證。
 - `music/`、`reminder/`：媒體操作與本機提醒路由、執行與排程。`MusicVolumeCommandRouter` 在本機解析「聲音大一點」「音量調到 80」「現在音量多少」，交給音樂 App 的公開語音通道（`volume_up`／`volume_down`／`volume_set`／`volume_get`）調整 App 自己的音量；不改手機系統媒體音量。
 - `navigation/`：語音導航的本機指令解析、地圖 App 目錄與路線預覽啟動。只開啟使用者選定的地圖 App 到路線預覽頁，最後的開始導航由使用者點擊。
 - `llm/`、`tts/`：可設定的 OpenAI 相容 SSE 用戶端與 Android 語音輸出。
@@ -40,7 +40,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 
 - 16 kHz PCM frame 保持在記憶體的 50-frame 有界佇列；逐字稿、回覆與近期對話預設只在 process 記憶體，不寫入診斷匯出。
 - 非敏感設定使用 DataStore；API Key 由 Android Keystore AES-GCM 加密；提醒由裝置內儲存與 Android alarm 排程，重開機或時間變動後補排程。
-- 辨識引擎選擇（1.0.8 起）：系統語音辨識（啟動時探測存在且支援中文；系統引擎自己出麥收音，聆聽期間共用 AudioRecord 先停用）優先；最後才是本機 X-ASR。KWS／VAD／X-ASR 模型本機執行；X-ASR 壓縮檔由 App「模型」頁按鈕從 sherpa-onnx 官方 GitHub release 下載（APK 不再內建），下載後解壓至 App 私有空間並逐檔校驗 SHA256。App 啟動時另檢查主倉庫（已開源）的 GitHub Release 是否有新版本；自動檢查沿用兩小時記憶體快取（1.0.14 起快取存的是「過濾後」的結果：已安裝最新版時快取 `null`，快取命中不會把相同版本再報成更新），設定頁可手動強制檢查。更新 APK 以版本標籤分開暫存，下載中斷後以 HTTP Range 續傳並重試（1.0.14 修正暫存清理誤刪當前版本續傳檔的問題），下載完成後由 App 內按鈕叫起系統安裝（安裝會重啟程序，無法自己清檔；1.0.14 起依檔名標籤與已安裝版本比對，清除已安裝版本的暫存 APK 與續傳檔，較新版本檔一律保留）。舊設定改用 X-ASR，既有模型檔不自動刪除。模型 binary 不進 Git。
+- 辨識引擎選擇（1.0.16 起）：只使用系統語音辨識（啟動時探測存在且支援中文；系統引擎自己出麥收音，聆聽期間共用 AudioRecord 先停用），探測明說不可用即啟動失敗（`ASR_INIT_FAILED`／`system-asr-unavailable:*`），不再有本機模型後備。KWS／VAD 模型本機執行並內建 APK。App 啟動時另檢查主倉庫（已開源）的 GitHub Release 是否有新版本；自動檢查沿用兩小時記憶體快取（1.0.14 起快取存的是「過濾後」的結果：已安裝最新版時快取 `null`，快取命中不會把相同版本再報成更新），設定頁可手動強制檢查。更新 APK 以版本標籤分開暫存，下載中斷後以 HTTP Range 續傳並重試（1.0.14 修正暫存清理誤刪當前版本續傳檔的問題），下載完成後由 App 內按鈕叫起系統安裝（安裝會重啟程序，無法自己清檔；1.0.14 起依檔名標籤與已安裝版本比對，清除已安裝版本的暫存 APK 與續傳檔，較新版本檔一律保留）。模型 binary 不進 Git。
 - 一般問答由使用者在 App 設定的 OpenAI 相容 HTTPS endpoint 處理，沿用 LLM Base URL／Model／Endpoint／Key。未提供對應 API Key 時不能宣稱真實 Provider 已驗收。
 - 選定的播放器以 Android 媒體服務／MediaSession 控制；MusicCabin 走公開語音通道（有序廣播），收藏與循環改由音樂 App 的隱私開關管，不再要求小助手的通知存取。App 內音量也走同一通道（`volume_*`），不是系統媒體音量。通知存取只留給車機 fallback（實際在播的是另一台時暫停）。
 - 語音導航以 Intent 開啟使用者選定的地圖 App 到路線預覽頁，不查詢任何雲端地理編碼服務。
@@ -48,7 +48,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 ## 需保持相容的介面／資料
 
 - `com.va.voiceassistant` application ID、最低／目標 SDK、`arm64-v8a`、錄音格式與 foreground service 啟動／停止規則不可無意改動。
-- DataStore 設定、Keystore 密文、提醒持久化格式與 X-ASR 模型包 ID／SHA256 需在變更時檢查升級相容；舊版 ASR 選擇遷移及既有檔案保留行為見 `README.md`、`docs/model-packs.md`。
+- DataStore 設定、Keystore 密文與提醒持久化格式需在變更時檢查升級相容；舊 DataStore 的 `asr_model_id` 鍵自 1.0.16 起留在裝置但不讀取，舊版 X-ASR 模型檔不自動刪除。
 - OpenAI 相容端點使用可設定 Base URL／Model／Endpoint 及 SSE；Release 僅 HTTPS，Debug HTTP 僅限明列本機位址。
 - 音樂控制依對方公開能力；不能將發出指令一概表述為已播放。MusicCabin 走語音通道，按回傳的狀態說話（rc19 的喜愛清單例外自 1.0.5 退役，詳見 `docs/known-issues.md`）。App 內音量同樣照回傳的 `volume` 與訊息說話，未回報時不假稱已調到。
 - 診斷不得輸出 PCM、完整逐字稿、回答、API Key 或敏感 URL 部分；模型授權與分發限制依 `docs/model-packs.md`。
@@ -56,7 +56,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 ## 測試方式
 
 - `app/src/test/` 的 JUnit、Coroutines Test 與 MockWebServer 覆蓋狀態機、指令路由、模型、SSE、密鑰與提醒等邏輯；`app/src/androidTest/` 含 Keystore 裝置測試。
-- `.\gradlew.bat test`、`.\gradlew.bat lint`、`.\gradlew.bat assembleDebug` 為程式變更的基本自動驗證；KWS 資產須依 `README.md` 先準備（X-ASR 已改 App 內下載，建置不再需要內建壓縮檔）。行為變更且有對應 APK 時，按 `docs/ANDROID_MUMU_SMOKE.md` 記錄可行的安裝／啟動 smoke，仍以測試手機真機資料判定語音功能。
+- `.\gradlew.bat test`、`.\gradlew.bat lint`、`.\gradlew.bat assembleDebug` 為程式變更的基本自動驗證；KWS 與 VAD 資產須依 `README.md` 先準備。行為變更且有對應 APK 時，按 `docs/ANDROID_MUMU_SMOKE.md` 記錄可行的安裝／啟動 smoke，仍以測試手機真機資料判定語音功能。
 - 測試手機實機依 `docs/testing.md` 與 `docs/test-reports/` 記錄錄音、鎖屏、音樂、提醒、真實 Provider 與長時間穩定性；短測及合成音不替代正式門檻。
 
 ## 已知風險

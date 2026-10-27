@@ -2,7 +2,7 @@ param(
     [string]$CacheDirectory = (Join-Path $env:TEMP 'voiceassistant-model-cache')
 )
 
-# Silero VAD is a bundled APK asset (unlike X-ASR, which the app downloads from the sherpa-onnx release).
+# Silero VAD is a bundled APK asset. Speech recognition uses the device's system service (no bundled or downloaded ASR model since 1.0.16).
 # The service refuses to start when this file is missing (VoiceErrorCode.VAD_INIT_FAILED),
 # so every release build must prepare it before packaging.
 $ErrorActionPreference = 'Stop'

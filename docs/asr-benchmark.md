@@ -1,5 +1,7 @@
 # ASR Model Benchmark
 
+> 1.0.16 起本 App 只使用手機系統語音辨識，已移除下載式本機 ASR 模型；本文件保留為當年候選模型的歷史評估紀錄，不再代表現行功能。
+
 ## Candidate packs
 
 | Model ID | Format | Archive bytes | Archive SHA256 | Model bytes | Model SHA256 | License | Runtime |

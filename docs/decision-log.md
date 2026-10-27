@@ -206,3 +206,12 @@
 - **驗證**：`test`（257 項，含新增的「外觀模式預設跟隨系統、未知值退回系統」測試）、`lint`、`assembleDebug` 通過；debug APK SHA-256 `5B59711BF28EDB3191D353708C290EF4A3ABEE473CEDDA98313F36A5040B3953`。MuMu vmindex 0（Android 15，arm64-v8a 相容）覆蓋安裝 48→49 成功、launcher 開啟 MainActivity 在前景、程序存活、logcat 無致命錯誤；並以 adb 截圖實測 UI：設定頁「外觀」三選項正常渲染（預設跟隨系統）、系統淺色下選「夜間」按儲存立即換深色、改回「跟隨系統」按儲存立即回淺色（測試機已還原為預設）。MuMu 的系統即淺色模式，故「日間」未單獨截圖驗證（與跟隨系統同為淺色，屬同一程式路徑）；真機驗收（含日間與系統切換行為）待補做，見 `docs/testing.md`「外觀模式設定（1.0.15，待真機驗收）」。
 - 版號 `1.0.15`／`versionCode 49`（行為變更且交付 APK）。
 
+## 1.0.16（2026-10-27，本對話，使用者核准：移除 X-ASR 模型下載與提醒頁停止鈴聲）
+
+- **背景**：使用者決定只使用手機系統語音辨識，不再需要下載式 ASR 模型；另回報提醒鬧鐘響鈴時除了滑掉 App 無法在畫面上關閉鈴聲。
+- **使用者決定（本對話 scope）**：移除「模型」頁的「本機語音模型（X-ASR）」下載卡片與整條 X-ASR 程式；提醒鈴聲響起時「提醒」頁顯示「停止鈴聲」按鈕，未響鈴時不顯示。
+- **做法**：刪除 `AsrModelPack`／`AsrModelPacks`（含 Standard／Moonshine pack 目錄）、`OfflineSpeechRecognizerEngine`、`SherpaSpeechRecognizerEngine`、`XAsrDownloadManager`、`BundledAsrInstaller`、`AsrModelDownloadWorker` 與 `ModelPackManager` 的 ASR 目錄／驗證／刪除成員；`VoiceForegroundService` 引擎選擇改為只探測系統語音辨識，探測明說不可用即 `ASR_INIT_FAILED`（`system-asr-unavailable:<原因>`）停止，不再有本機後備；設定移除 `asrModelId` 與 DataStore 鍵 `asr_model_id`（舊鍵留在裝置不讀取），診斷頁只顯示「ASR」實際載入值；刪除已停用的 `scripts/prepare-bundled-xasr.ps1` 與 `scripts/prepare-m2-model-packs.ps1`；一併移除只服務下載／解壓流程的 `commons-compress`、WorkManager 依賴（含 version catalog、Manifest 的 WorkManager 前景服務宣告與 `FOREGROUND_SERVICE_DATA_SYNC` 權限）與無人使用的 `VoiceErrorCode.ASR_MODEL_INVALID`；`LlmTranscriptCorrector` 同音校正保留（對系統辨識逐字稿同樣生效，開關不變）。提醒鈴聲：`ReminderAlarmState` 改為 StateFlow 支撐（`isRinging` 寫入語義不變，新增 `ringing` 供 UI 收集），MainActivity 收集後把 `alarmRinging`／`onStopAlarm` 傳入「提醒」頁，響鈴時在列表頂端顯示紅色橫幅與「停止鈴聲」按鈕，按鈕沿用既有 `AndroidAlarmActionExecutor.stop()` 通道（僅 `isRinging` 時送 `ACTION_STOP`）。
+- **相容性**：舊 DataStore `asr_model_id` 鍵不讀不寫、不刪；既有 X-ASR 模型檔不自動刪除（App 內也沒有刪除入口）；KWS／VAD 資產與驗證流程不變。極舊版本若曾把 X-ASR 下載工作排進 WorkManager，本次連同 WorkManager 依賴一併移除後，裝置上的孤兒排程會因找不到 `SystemJobService` 等元件被系統直接丟棄，不會啟動 App 或崩潰（已知、無害的殘留）。
+- **驗證**：`test`（含新增 `ReminderAlarmStateTest`）、`lint`、`assembleDebug` 通過；真機項目見 `docs/testing.md`「X-ASR 後備移除與提醒頁停止鈴聲（1.0.16，待真機驗收）」。
+- 版號 `1.0.16`／`versionCode 50`（行為變更且交付 APK）。
+

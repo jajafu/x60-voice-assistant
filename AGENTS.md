@@ -6,8 +6,8 @@
 
 - 主要分支：`main`；日常變更直接在此分支修改、驗證、提交並推送
 - 高風險變更（資料格式、權限、公開 API、部署或大範圍重構）先開 `task/<主題>` 短分支，完成並驗證後合回主要分支，不使用 PR
-- 主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、WorkManager、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。
-- 架構概要：Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，啟動時探測系統語音辨識（存在且支援中文）並優先使用，系統不可用時退回本機 KWS → VAD → 下載式 X-ASR 後備；辨識文字優先送本機音樂／提醒指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給 Android TTS。設定與提醒留在裝置；從 sherpa-onnx 官方 release 下載的 X-ASR 壓縮檔經校驗後安裝到 App 私有空間。
+- 主要技術：Kotlin、Jetpack Compose／Material 3、Android Gradle Plugin、Coroutines、sherpa-onnx、OkHttp、DataStore、Android Keystore、Media3；單一 Android `app` 模組，compile SDK 36、target SDK 35、最低 SDK 26、APK 限 `arm64-v8a`。
+- 架構概要：Android Activity 管理設定與顯示，使用者啟動的 microphone foreground service 持有音訊與生命週期；`VoiceOrchestrator` 統一狀態切換，啟動時探測系統語音辨識（存在且支援中文）並直接使用（1.0.16 起移除下載式 X-ASR 後備，僅支援系統語音）；辨識文字優先送本機音樂／提醒指令，再將一般問答送使用者設定的 OpenAI 相容服務，按句交給 Android TTS。設定與提醒留在裝置。
 
 模組、資料流與相容性細節見 `docs/ARCHITECTURE.md`。以上依 `README.md`、Gradle、Manifest 與程式碼查證；實際驗收狀態見 `docs/testing.md` 與 `docs/known-issues.md`。
 

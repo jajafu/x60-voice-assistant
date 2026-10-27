@@ -7,7 +7,7 @@ interface SpeechRecognizerEngine : AutoCloseable {
 
     /**
      * 引擎自己出麥克風收整句（系統語音辨識服務）才為真：聆聽期間共用 AudioRecord
-     * 必須先停掉，由 `VoiceOrchestrator` 交棒給系統；本機模型引擎一律走音框路徑。
+     * 必須先停掉，由 `VoiceOrchestrator` 交棒給系統；非交棒引擎走音框路徑。
      */
     val takesOverMicrophone: Boolean get() = false
 
@@ -27,5 +27,3 @@ data class AsrResult(
     val realTimeFactor: Double,
     val finalLatencyMs: Long,
 )
-
-class AsrModelInvalidException(message: String) : IllegalStateException(message)

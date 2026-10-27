@@ -20,7 +20,6 @@ data class AssistantSettings(
     val maxUtteranceMs: Long = 20_000,
     val followUpSeconds: Int = DEFAULT_FOLLOW_UP_SECONDS,
     val audioResumeDelayMs: Long = 300,
-    val asrModelId: String = DEFAULT_ASR_MODEL_ID,
     val musicAppName: String = DEFAULT_MUSIC_APP_NAME,
     val musicPackageName: String = DEFAULT_MUSIC_PACKAGE_NAME,
     val musicServiceName: String = DEFAULT_MUSIC_SERVICE_NAME,
@@ -51,7 +50,6 @@ data class AssistantSettings(
         maxUtteranceMs = maxUtteranceMs.coerceIn(MAX_UTTERANCE_MS_RANGE),
         followUpSeconds = followUpSeconds.coerceIn(FOLLOW_UP_SECONDS_RANGE),
         audioResumeDelayMs = audioResumeDelayMs.coerceIn(AUDIO_RESUME_DELAY_MS_RANGE),
-        asrModelId = DEFAULT_ASR_MODEL_ID,
         musicAppName = musicAppName.trim().take(100),
         musicPackageName = musicPackageName.trim().take(200),
         musicServiceName = musicServiceName.trim().take(300),
@@ -73,8 +71,6 @@ data class AssistantSettings(
         const val MAX_WAKE_PHRASE_LENGTH = 8
         const val DEFAULT_WAKE_ACKNOWLEDGEMENT = "我在"
         const val MAX_WAKE_ACKNOWLEDGEMENT_LENGTH = 20
-        const val DEFAULT_ASR_MODEL_ID =
-            "sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03"
         const val DEFAULT_MUSIC_APP_NAME = "MusicCabin"
         const val DEFAULT_MUSIC_PACKAGE_NAME = "com.jajafu.musiccabin"
         const val DEFAULT_MUSIC_SERVICE_NAME = "com.metrolist.music.playback.MusicService"
@@ -88,7 +84,7 @@ data class AssistantSettings(
         const val DEFAULT_NAV_PACKAGE_NAME = "com.google.android.apps.maps"
 
         /**
-         * X-ASR 同音錯字的 LLM 校正總開關（Issue #24）。
+         * 同音錯字的 LLM 校正總開關（Issue #24；1.0.16 起辨識以系統語音為準，校正對所有逐字稿生效）。
          * 開啟時本機 Router 全 miss 才多打一次 LLM，關閉即回舊行為不上網。
          */
         const val DEFAULT_LLM_CORRECTION_ENABLED = true

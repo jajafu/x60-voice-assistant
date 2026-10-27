@@ -43,7 +43,6 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.MAX_UTTERANCE] = settings.maxUtteranceMs
             prefs[Keys.FOLLOW_UP] = settings.followUpSeconds
             prefs[Keys.AUDIO_RESUME_DELAY] = settings.audioResumeDelayMs
-            prefs[Keys.ASR_MODEL_ID] = settings.asrModelId
             prefs[Keys.MUSIC_APP_NAME] = settings.musicAppName
             prefs[Keys.MUSIC_PACKAGE_NAME] = settings.musicPackageName
             prefs[Keys.MUSIC_SERVICE_NAME] = settings.musicServiceName
@@ -87,7 +86,6 @@ class SettingsRepository(private val context: Context) {
         maxUtteranceMs = prefs[Keys.MAX_UTTERANCE] ?: 20_000,
         followUpSeconds = prefs[Keys.FOLLOW_UP] ?: AssistantSettings.DEFAULT_FOLLOW_UP_SECONDS,
         audioResumeDelayMs = prefs[Keys.AUDIO_RESUME_DELAY] ?: 300,
-        asrModelId = prefs[Keys.ASR_MODEL_ID] ?: AssistantSettings.DEFAULT_ASR_MODEL_ID,
         musicAppName = prefs[Keys.MUSIC_APP_NAME] ?: AssistantSettings.DEFAULT_MUSIC_APP_NAME,
         musicPackageName = prefs[Keys.MUSIC_PACKAGE_NAME] ?: AssistantSettings.DEFAULT_MUSIC_PACKAGE_NAME,
         musicServiceName = prefs[Keys.MUSIC_SERVICE_NAME] ?: AssistantSettings.DEFAULT_MUSIC_SERVICE_NAME,
@@ -124,7 +122,6 @@ class SettingsRepository(private val context: Context) {
         val MAX_UTTERANCE = longPreferencesKey("vad_max_utterance_ms")
         val FOLLOW_UP = intPreferencesKey("follow_up_seconds")
         val AUDIO_RESUME_DELAY = longPreferencesKey("audio_resume_delay_ms")
-        val ASR_MODEL_ID = stringPreferencesKey("asr_model_id")
         val MUSIC_APP_NAME = stringPreferencesKey("music_app_name")
         val MUSIC_PACKAGE_NAME = stringPreferencesKey("music_package_name")
         val MUSIC_SERVICE_NAME = stringPreferencesKey("music_service_name")

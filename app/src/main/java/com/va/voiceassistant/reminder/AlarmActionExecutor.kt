@@ -2,6 +2,9 @@ package com.va.voiceassistant.reminder
 
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 interface AlarmActionExecutor {
     /** Temporarily silences an alarm so the user's command can be recognized. */
@@ -31,8 +34,19 @@ class AndroidAlarmActionExecutor(context: Context) : AlarmActionExecutor {
     }
 }
 
+/**
+ * 鬧鐘響鈴狀態。[isRinging] 保留給服務內與 Executor 的同步檢查；
+ * UI（提醒頁的「停止鈴聲」橫幅）收集 [ringing] 觀察變化。
+ */
 object ReminderAlarmState {
-    @Volatile
-    var isRinging: Boolean = false
-        internal set
+    private val _ringing = MutableStateFlow(false)
+
+    /** UI 收集用；值與 [isRinging] 恆一致。 */
+    val ringing: StateFlow<Boolean> = _ringing.asStateFlow()
+
+    var isRinging: Boolean
+        get() = _ringing.value
+        internal set(value) {
+            _ringing.value = value
+        }
 }

@@ -56,4 +56,4 @@
 
 ## 未隨 APK 散布的模型
 
-X-ASR 與備用 ASR 模型由使用者在 App 內從 sherpa-onnx 官方 GitHub Release 下載，不隨本專案散布，授權依上游公告。
+1.0.15 之前的版本曾提供在 App 內下載 X-ASR 等備用 ASR 模型；1.0.16 起該功能移除，App 只使用手機系統語音辨識。App 現僅內建 KWS 與 Silero VAD 模型（授權狀態見上方與 `docs/model-packs.md`）。

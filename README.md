@@ -18,7 +18,7 @@
 
 ## 準備模型
 
-模型 binary 不進 Git。KWS 與 Silero VAD 模型會內建進 APK，需在建置前準備；X-ASR 改由 App「模型」頁按鈕從 sherpa-onnx 官方 GitHub release 下載（約 136 MB，解壓後約 175 MB），APK 不再內建，下載完成後立即解壓並逐檔校驗至 App 私有儲存空間。從 1.0.8 起，啟動語音服務會先探測手機系統語音辨識服務（是否存在、支援中文），可用就直接使用，不必先下載 X-ASR；系統不可用時才需要 X-ASR 作為本機後備。準備建置資產：
+模型 binary 不進 Git。KWS 與 Silero VAD 模型會內建進 APK，需在建置前準備。語音辨識使用手機系統語音辨識服務（1.0.8 起啟動時探測是否存在、支援中文）；1.0.16 起移除下載式 X-ASR 後備，App 內不再提供模型下載，系統辨識不可用的裝置會在啟動語音服務時收到明確錯誤。準備建置資產：
 
 ```powershell
 .\scripts\prepare-m1-kws-assets.ps1
@@ -27,9 +27,7 @@
 
 兩個腳本都會下載後比對 SHA256。Release 建置在打包前會檢查這些資產是否存在（`preReleaseBuild` → `verifyReleaseModelAssets`），缺檔就讓建置失敗，不會再產出啟動不了的 APK。
 
-舊版 scripts/prepare-bundled-xasr.ps1 已停用，APK 內建壓縮檔不再需要。
-
-舊版的 ASR 模型選擇會自動改為 X-ASR；模型在一句話結束後交付辨識結果。診斷頁會分別顯示設定值與實際載入的模型。完整來源、大小、SHA256 與授權見 [docs/model-packs.md](docs/model-packs.md)，候選比較見 [docs/asr-benchmark.md](docs/asr-benchmark.md)。
+診斷頁會顯示實際載入的模型識別（系統辨識為 `system/android-zh`）。舊版 X-ASR 模型來源、大小與 SHA256 的歷史紀錄見 [docs/model-packs.md](docs/model-packs.md)，候選比較存檔見 [docs/asr-benchmark.md](docs/asr-benchmark.md)。
 
 明確的音樂播放指令優先交給選用的音樂 App。若語句進入 LLM，而回答表示無法播放音樂，App 會嘗試從回答及原語句還原歌手或歌曲，再交給音樂 App 搜尋播放；不朗讀或保留該段 LLM 拒絕回答。找不到目標時會請使用者重說，音樂 App 未確認播放時會回報實際狀態。
 
@@ -50,7 +48,7 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Release variant 未配
 
 1. App 分成「對話／提醒／設定／模型」四個分頁；日常使用只需停留在「對話」。
 2. 在「設定」輸入 2–8 個中文字作為喚醒詞；自訂詞會在 Android 10 以上裝置本機轉為 KWS 發音。
-3. （選用）到「模型」頁預先下載 X-ASR 後備模型（約 136 MB）；啟動服務時若系統語音辨識可用則不需要此模型，系統不可用才需要先下載完成。
+3. 語音辨識直接使用手機系統服務，不需要下載模型；裝置沒有可用的系統語音辨識（或明確不支援中文）時，啟動語音服務會停在錯誤並說明原因。
 4. 在 LLM Provider 區輸入 Base URL、API Key、Model 與 Endpoint（預設 `/chat/completions`）。
 5. API Key 只能直接輸入手機 App；不要貼到聊天、終端或 source。
 6. 按「測試 LLM 連線」。成功後設定才標示可用。
@@ -82,7 +80,7 @@ MusicCabin 可說「聲音大一點」、「小聲一點」或「音量調到 80
 
 尚未送達的逾期提醒在重新開啟 App 或補排程時保留並補響一次；重複提醒補響後才推進下一次，不會逐次補播所有錯過的日期。喚醒助理時，鬧鐘鈴聲與提醒語音會一起暫停，語音互動結束後恢復。
 
-啟動語音服務後，可說「9:00 提醒我倒垃圾」、「明天下午三點半提醒我開會」或「50 分鐘後提醒我吃藥」。也支援「每天早上七點提醒我吃藥」、「每週一晚上八點提醒我倒垃圾」及「每週一、三、五下午六點提醒我運動」等每天或每週重複排程。指令在本機解析與保存，不依賴 LLM；語音服務或 App 關閉後，已排程提醒仍會到點觸發。提醒會播放系統鬧鐘鈴聲，間隔朗讀提醒內容，並在通知提供「停止鬧鐘」按鈕；無人操作時最多響 10 分鐘。重複提醒響完會自動排定下一次；重新開機、系統時間或時區變更後也會依當地時間重新補排程。
+啟動語音服務後，可說「9:00 提醒我倒垃圾」、「明天下午三點半提醒我開會」或「50 分鐘後提醒我吃藥」。也支援「每天早上七點提醒我吃藥」、「每週一晚上八點提醒我倒垃圾」及「每週一、三、五下午六點提醒我運動」等每天或每週重複排程。指令在本機解析與保存，不依賴 LLM；語音服務或 App 關閉後，已排程提醒仍會到點觸發。提醒會播放系統鬧鐘鈴聲，間隔朗讀提醒內容，並在通知提供「停止鬧鐘」按鈕；鈴聲響起時「提醒」頁也會顯示「停止鈴聲」橫幅，可直接在 App 內關閉；無人操作時最多響 10 分鐘。重複提醒響完會自動排定下一次；重新開機、系統時間或時區變更後也會依當地時間重新補排程。
 
 「提醒」頁會集中顯示語音與手動建立的單次、每天及每週提醒，可新增、修改、刪除排程，並選擇所有提醒共用的系統鬧鐘鈴聲。
 
@@ -104,7 +102,7 @@ Android 12 以上需在「診斷 → 必要權限」允許「精準鬧鐘」。�
 
 ## AI 開發流程
 
-Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.15` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者與範圍核准者；AI 可協助分析、實作與審查。
+Repository：[jajafu/x60-voice-assistant](https://github.com/jajafu/x60-voice-assistant)；目前為開發中的 `1.0.16` 版，部分真機驗收尚未完成。專案只有一位人類需求決定者與範圍核准者；AI 可協助分析、實作與審查。
 
 從下一個任務起採用 [AGENTS.md](AGENTS.md) 的協作規則；需求現況見 [專案需求](docs/PROJECT.md)，模組與資料流見 [架構現況](docs/ARCHITECTURE.md)，日常變更流程見 [開發流程](docs/DEVELOPMENT.md)。[範本指南](TEMPLATE_GUIDE.md)、[提示詞](prompts/README.md) 與 [OpenChamber／OpenCode／Codex 檢查方式](docs/OPENCODE_OPENCHAMBER.md) 提供工具入口；完整套用版本見 [TEMPLATE_VERSION.md](TEMPLATE_VERSION.md)。既有 Issue／PR 不追溯改寫。
 

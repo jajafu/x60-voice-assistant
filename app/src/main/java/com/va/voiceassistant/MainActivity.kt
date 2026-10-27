@@ -24,10 +24,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.va.voiceassistant.data.AssistantSettings
 import com.va.voiceassistant.data.SettingsRepository
-import com.va.voiceassistant.asr.AsrModelPacks
-import com.va.voiceassistant.model.ModelPackManager
-import com.va.voiceassistant.model.ModelPackStatus
-import com.va.voiceassistant.model.XAsrDownloadManager
 import com.va.voiceassistant.update.AppUpdateChecker
 import com.va.voiceassistant.update.AppUpdateDownloader
 import com.va.voiceassistant.update.AppUpdateInfo
@@ -39,7 +35,9 @@ import com.va.voiceassistant.service.ServiceStartPolicy
 import com.va.voiceassistant.service.ServiceStateRepository
 import com.va.voiceassistant.service.VoiceForegroundService
 import com.va.voiceassistant.reminder.ReminderScheduler
+import com.va.voiceassistant.reminder.AndroidAlarmActionExecutor
 import com.va.voiceassistant.reminder.ExactAlarmOnboardingPolicy
+import com.va.voiceassistant.reminder.ReminderAlarmState
 import com.va.voiceassistant.reminder.ReminderManager
 import com.va.voiceassistant.reminder.ReminderPreferences
 import com.va.voiceassistant.reminder.ReminderRecurrence
@@ -93,11 +91,7 @@ class MainActivity : ComponentActivity() {
     private var ttsVoicesLoading by mutableStateOf(false)
     private var ttsCatalog: TtsEngineCatalog? = null
     private var ttsVoicesJob: Job? = null
-    private var asrInstalled by mutableStateOf(false)
-    private var asrStatusText by mutableStateOf("尚未檢查")
-    private var asrDownloading by mutableStateOf(false)
-    private var asrProgress by mutableStateOf(0)
-    private var xasrDownload: XAsrDownloadManager? = null
+    private var alarmRinging by mutableStateOf(false)
     private var appUpdate by mutableStateOf<AppUpdateInfo?>(null)
     private var updateDownloading by mutableStateOf(false)
     private var updateProgress by mutableStateOf(0)
@@ -182,7 +176,6 @@ class MainActivity : ComponentActivity() {
         secretStore = AndroidKeystoreSecretStore(applicationContext)
         reminderManager = ReminderManager(applicationContext)
         refreshDiagnostics()
-        refreshAsrStatus(force = true)
         refreshMusicApps()
         refreshTtsEngines()
         refreshReminders()
@@ -190,6 +183,11 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 ReminderStore.changes.collect { refreshReminders() }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                ReminderAlarmState.ringing.collect { alarmRinging = it }
             }
         }
         showExactAlarmOnboarding = shouldShowExactAlarmOnboarding()
@@ -250,12 +248,8 @@ class MainActivity : ComponentActivity() {
                     onSaveReminder = ::saveReminder,
                     onDeleteReminder = ::deleteReminder,
                     onChooseReminderSound = ::openRingtonePicker,
-                    asrInstalled = asrInstalled,
-                    asrStatusText = asrStatusText,
-                    asrDownloading = asrDownloading,
-                    asrProgress = asrProgress,
-                    onDownloadAsr = ::downloadXAsr,
-                    onCancelAsrDownload = ::cancelXAsrDownload,
+                    alarmRinging = alarmRinging,
+                    onStopAlarm = ::stopAlarmRinging,
                     updateVersion = appUpdate?.versionTag?.takeIf { it != updateIgnoredVersion },
                     updateFileSize = appUpdate?.let { formatBytes(it.sizeBytes) },
                     updateNotes = appUpdate?.notes?.take(100),
@@ -281,7 +275,6 @@ class MainActivity : ComponentActivity() {
         if (::diagnosticsCollector.isInitialized) {
             ReminderScheduler(applicationContext).rescheduleAll()
             refreshDiagnostics()
-            refreshAsrStatus()
             refreshMusicApps()
             refreshMusicCabinFavoriteAccess()
             refreshReminders()
@@ -322,10 +315,6 @@ class MainActivity : ComponentActivity() {
 
     private fun requestPermissionsAndStart() {
         errorMessage = null
-        if (asrDownloading) {
-            errorMessage = "模型下載中，請等下載完成再啟動服務。"
-            return
-        }
         startAfterPermissionGrant = true
         when {
             !hasPermission(Manifest.permission.RECORD_AUDIO) ->
@@ -609,54 +598,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private var asrStatusJob: Job? = null
-    private var asrVerifiedValid = false
-
-    private fun refreshAsrStatus(force: Boolean = false) {
-        // 完整驗證要讀 175 MB；驗過且正常就沿用，只在強制或上次異常時重驗。
-        if (!force && asrVerifiedValid) return
-        asrStatusJob?.cancel()
-        // 模型檔約 175 MB，SHA 驗證放背景做，避免卡住畫面。
-        asrStatusJob = lifecycleScope.launch(Dispatchers.Default) {
-            val status: ModelPackStatus =
-                ModelPackManager(applicationContext).verifyAsrPack(AsrModelPacks.xAsr)
-            asrInstalled = status.valid
-            asrVerifiedValid = status.valid
-            asrStatusText = when {
-                status.valid -> "已下載並驗證"
-                status.reason?.startsWith("missing") == true -> "尚未下載（約 175 MB）"
-                else -> "異常：${status.reason}"
-            }
-        }
-    }
-
-    private fun downloadXAsr() {
-        if (asrDownloading) return
-        asrDownloading = true
-        asrProgress = 0
-        settingsMessage = "正在下載 X-ASR 模型，請保持 App 開啟…"
-        val manager = XAsrDownloadManager(applicationContext).also { xasrDownload = it }
-        lifecycleScope.launch {
-            runCatching {
-                manager.downloadAndInstall { progress ->
-                    if (progress >= 0) asrProgress = progress
-                    else {
-                        asrProgress = -1
-                        settingsMessage = "下載完成，正在解壓安裝…"
-                    }
-                }
-            }.onSuccess {
-                refreshAsrStatus(force = true)
-                settingsMessage = "X-ASR 模型已就緒，可以啟動服務。"
-            }.onFailure {
-                settingsMessage = "模型下載失敗：${it.message ?: it.javaClass.simpleName}"
-            }
-            asrDownloading = false
-        }
-    }
-
-    private fun cancelXAsrDownload() {
-        xasrDownload?.cancel()
+    /** 提醒頁的「停止鈴聲」：沿用鬧鐘指令通道，只在鈴聲響起時送出停止。 */
+    private fun stopAlarmRinging() {
+        AndroidAlarmActionExecutor(applicationContext).stop()
     }
 
     /** 按「稍後」：記住被忽略的版本並讓狀態訊息一致（卡片消失後設定頁不再顯示「發現新版本」）。 */
