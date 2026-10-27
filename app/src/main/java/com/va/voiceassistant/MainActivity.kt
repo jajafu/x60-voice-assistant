@@ -198,7 +198,7 @@ class MainActivity : ComponentActivity() {
             val serviceRunning by ServiceStateRepository.running.collectAsStateWithLifecycle()
             val m1Diagnostics by M1DiagnosticsRepository.snapshot.collectAsStateWithLifecycle()
             val assistantSettings by settingsRepository.settings.collectAsStateWithLifecycle(AssistantSettings())
-            VoiceAssistantTheme {
+            VoiceAssistantTheme(themeMode = assistantSettings.themeMode) {
                 DeviceDiagnosticsScreen(
                     diagnostics = diagnostics,
                     m1Diagnostics = m1Diagnostics,

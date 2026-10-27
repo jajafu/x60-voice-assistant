@@ -10,6 +10,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.va.voiceassistant.data.AssistantSettings
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF006A67),
@@ -34,8 +35,16 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun VoiceAssistantTheme(content: @Composable () -> Unit) {
-    val darkTheme = isSystemInDarkTheme()
+fun VoiceAssistantTheme(
+    themeMode: String = AssistantSettings.THEME_MODE_SYSTEM,
+    content: @Composable () -> Unit,
+) {
+    // 跟隨系統維持原本行為；使用者指定日間／夜間時強制覆蓋，不再看系統設定。
+    val darkTheme = when (themeMode) {
+        AssistantSettings.THEME_MODE_LIGHT -> false
+        AssistantSettings.THEME_MODE_DARK -> true
+        else -> isSystemInDarkTheme()
+    }
     val context = LocalContext.current
     val colorScheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && darkTheme -> dynamicDarkColorScheme(context)

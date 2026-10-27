@@ -15,6 +15,23 @@ class AssistantSettingsTest {
     }
 
     @Test
+    fun `theme mode defaults to system and falls back to system on unknown values`() {
+        assertEquals(AssistantSettings.THEME_MODE_SYSTEM, AssistantSettings().themeMode)
+        assertEquals(
+            AssistantSettings.THEME_MODE_SYSTEM,
+            AssistantSettings(themeMode = "unknown").normalized().themeMode,
+        )
+        assertEquals(
+            AssistantSettings.THEME_MODE_LIGHT,
+            AssistantSettings(themeMode = AssistantSettings.THEME_MODE_LIGHT).normalized().themeMode,
+        )
+        assertEquals(
+            AssistantSettings.THEME_MODE_DARK,
+            AssistantSettings(themeMode = AssistantSettings.THEME_MODE_DARK).normalized().themeMode,
+        )
+    }
+
+    @Test
     fun `follow up accepts zero and clamps outside range`() {
         assertEquals(0, AssistantSettings(followUpSeconds = 0).normalized().followUpSeconds)
         assertEquals(0, AssistantSettings(followUpSeconds = -1).normalized().followUpSeconds)

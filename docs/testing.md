@@ -128,6 +128,17 @@ App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再
 
 rc30 曾以 `AudioManager` 調整 `STREAM_MUSIC`，要求 `MODIFY_AUDIO_SETTINGS`。在 vivo X60／V2046A 與 V2458A 上實測 App UID 的 `setStreamVolume`／`adjustStreamVolume` 寫入在到達 AudioService 前就被 OEM 丟棄（`applied=false`）；無障礙 fallback、ADB shell helper 與鎖屏方案都在當時移除。此路徑、設定開關、診斷欄位與相關驗收步驟已隨功能一起移除，完整過程見 `docs/decision-log.md`；取代方案為上方「語音調整音樂 App 音量」。
 
+## 外觀模式設定（1.0.15，**待真機驗收**）
+
+設定 →「外觀」可指定畫面顏色：跟隨系統（預設）、日間（永遠淺色）、夜間（永遠深色）。需在測試手機驗收：
+
+1. 預設狀態顯示「跟隨系統」；把手機系統切深色／淺色，App 畫面跟著切換（與 1.0.14 前行為一致）。
+2. 選「夜間」按「儲存設定」，畫面立即變深色，不需重啟語音服務；此時把手機系統切淺色，App 畫面維持深色。
+3. 選「日間」按「儲存設定」，畫面立即變淺色；系統切深色時 App 維持淺色。
+4. 重開 App（甚至重開機）後選擇保留。
+5. 「清除私人資料」後回到「跟隨系統」。
+6. 留意狀態列（時間、電池那排）圖示在夜間模式下是否清楚可讀；這排的顏色行為與 1.0.14 相同，若在夜間模式下不易閱讀，記錄機型與畫面，另開任務處理。
+
 ## 手動步驟
 
 1. 強制停止 App，確認 Service、AudioRecord 與 WakeLock 不存在。

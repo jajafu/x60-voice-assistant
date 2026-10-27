@@ -32,6 +32,7 @@ data class AssistantSettings(
     val ttsVolume: Float = DEFAULT_TTS_VOLUME,
     val speechRate: Float = 1.0f,
     val pitch: Float = 1.0f,
+    val themeMode: String = THEME_MODE_SYSTEM,
     val connectionVerified: Boolean = false,
 ) {
     fun normalized(): AssistantSettings = copy(
@@ -61,6 +62,10 @@ data class AssistantSettings(
         ttsVolume = ttsVolume.coerceIn(TTS_VOLUME_RANGE),
         speechRate = speechRate.coerceIn(SPEECH_RATE_RANGE),
         pitch = pitch.coerceIn(PITCH_RANGE),
+        themeMode = when (themeMode) {
+            THEME_MODE_LIGHT, THEME_MODE_DARK -> themeMode
+            else -> THEME_MODE_SYSTEM
+        },
     )
 
     companion object {
@@ -94,6 +99,15 @@ data class AssistantSettings(
          */
         const val DEFAULT_TTS_VOLUME = 1.0f
         const val MAX_TTS_IDENTIFIER_LENGTH = 200
+
+        /**
+         * 外觀模式：畫面顏色跟著手機系統、或強制日間／夜間。
+         * 只有 system/light/dark 三個合法值，其他值在 normalized() 會退回 system，
+         * 預設 system 維持既有行為（畫面跟著系統日夜模式切換）。
+         */
+        const val THEME_MODE_SYSTEM = "system"
+        const val THEME_MODE_LIGHT = "light"
+        const val THEME_MODE_DARK = "dark"
 
         /**
          * 喚醒詞開啟新一輪時會清除對話歷史，只有這個視窗內的追問才帶著上一輪。

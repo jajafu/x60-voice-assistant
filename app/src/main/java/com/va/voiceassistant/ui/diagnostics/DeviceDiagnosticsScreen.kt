@@ -896,6 +896,34 @@ private fun SettingsPage(
         }
 
         item {
+            SectionCard("外觀") {
+                Text(
+                    "選擇畫面顏色：跟隨手機系統、永遠日間或永遠夜間。按下方「儲存設定」後立即換色，不需要重啟語音服務。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(
+                        AssistantSettings.THEME_MODE_SYSTEM to "跟隨系統",
+                        AssistantSettings.THEME_MODE_LIGHT to "日間",
+                        AssistantSettings.THEME_MODE_DARK to "夜間",
+                    ).forEach { (mode, label) ->
+                        FilterChip(
+                            selected = draft.themeMode == mode,
+                            onClick = { draft = draft.copy(themeMode = mode) },
+                            enabled = enabled,
+                            label = { Text(label) },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
             SectionCard("喚醒方式") {
                 ToggleRow("開啟 App 後自動開始聆聽", draft.autoStartListening, enabled) {
                     draft = draft.copy(autoStartListening = it)

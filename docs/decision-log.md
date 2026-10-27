@@ -197,3 +197,12 @@
 - **獨立審查**：依 `review-loop` 以三個模型只讀審查並逐項處置。B（`cgu/gpt-5.6-luna`）：快取命中仍解除「稍後」、「回 null 就清檔」會誤刪可安裝暫存檔、`removeOtherStagedApks` 誤刪當前續傳檔（既有缺陷：續傳從未生效）、暫停路徑未納入逾時處理、PROJECT.md 版本未同步——全數修正。C（`nvidia/z-ai/glm-5.3-flash`）：恢復路徑重送 `play` 語義未驗證（撤回重送）、暫停雙重逾時仍卡暫停且最壞延遲變 9 秒（改 `isMusicActive` 複查＋4 秒重送，最壞 8 秒）、按稍後後設定頁「有新版無按鈕」且無反悔路徑（手動檢查解除忽略＋訊息如實顯示）、清理搬 IO 執行緒、補 `send_error` 不重送紀錄、補跑 MuMu smoke——全數修正。D（原定 `opencode/deepseek-v4.1-flash-free` 因免費額度用盡，原參數重試一次仍失敗，依 skill 備援規則改用同名模型 `nvidia/deepseek-ai/deepseek-v4.1-flash`，裸帶無 variant）：無高／中阻擋問題；補暫停逾時誤判反例（自然播畢／手動停止，空佇列恢復可能改播喜愛清單）的 known-issues 與程式註解、按「稍後」後狀態訊息一致性；其餘（`refreshUpdateDownloadState` 既有主執行緒 I/O、無法還原檔名的暫存檔不清、`no_receiver` 同時涵蓋「有接收器但未回 extras」的既有語義）標記不阻擋、維持現狀。
 - 版號 `1.0.14`／`versionCode 48`（行為變更且交付 APK）。
 
+## 1.0.15（2026-10-27，本對話，使用者核准：外觀模式設定）
+
+- **背景**：使用者回報畫面顏色一直跟著手機系統的日夜模式切換，希望可以自己指定日間或夜間。
+- **使用者決定（本對話提問確認）**：設定頁新增「外觀」三選一（跟隨系統／日間／夜間），預設「跟隨系統」維持既有行為；與其他設定相同走草稿＋「儲存設定」按鈕，存好後畫面立即換色、不需重啟語音服務。
+- **做法**：`AssistantSettings` 新增 `themeMode`（只有 `system`／`light`／`dark` 三個合法值，其他值在 `normalized()` 退回 `system`）與 DataStore 鍵 `theme_mode`（讀舊資料預設 `system`）；`VoiceAssistantTheme` 改收 `themeMode` 參數，日間／夜間強制覆蓋、跟隨系統維持 `isSystemInDarkTheme()`；MainActivity 把設定的 `themeMode` 傳入主題（設定流更新即重組換色）；設定頁「App 更新」下方新增「外觀」區塊（三個 `FilterChip`），隨既有「儲存設定」存檔。
+- **邊界**：Android 12 以上仍分別套用系統動態色的深／淺色版，低於 12 用內建深／淺色組；服務執行中設定頁仍不可編輯（與其他設定一致）；狀態列圖示顏色由 Activity 主題固定（既有行為，非本次變更）。
+- **驗證**：`test`（257 項，含新增的「外觀模式預設跟隨系統、未知值退回系統」測試）、`lint`、`assembleDebug` 通過；debug APK SHA-256 `5B59711BF28EDB3191D353708C290EF4A3ABEE473CEDDA98313F36A5040B3953`。MuMu vmindex 0（Android 15，arm64-v8a 相容）覆蓋安裝 48→49 成功、launcher 開啟 MainActivity 在前景、程序存活、logcat 無致命錯誤；並以 adb 截圖實測 UI：設定頁「外觀」三選項正常渲染（預設跟隨系統）、系統淺色下選「夜間」按儲存立即換深色、改回「跟隨系統」按儲存立即回淺色（測試機已還原為預設）。MuMu 的系統即淺色模式，故「日間」未單獨截圖驗證（與跟隨系統同為淺色，屬同一程式路徑）；真機驗收（含日間與系統切換行為）待補做，見 `docs/testing.md`「外觀模式設定（1.0.15，待真機驗收）」。
+- 版號 `1.0.15`／`versionCode 49`（行為變更且交付 APK）。
+
