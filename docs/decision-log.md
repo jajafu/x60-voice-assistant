@@ -215,3 +215,13 @@
 - **驗證**：`test`（含新增 `ReminderAlarmStateTest`）、`lint`、`assembleDebug` 通過；真機項目見 `docs/testing.md`「X-ASR 後備移除與提醒頁停止鈴聲（1.0.16，待真機驗收）」。
 - 版號 `1.0.16`／`versionCode 50`（行為變更且交付 APK）。
 
+## 1.0.17（2026-10-30，本對話，使用者核准：語音導航背景直接開地圖）
+
+- **背景**：使用者在車機回報，說「導航到長庚醫院」回話是「請點服務通知上的『開啟地圖』」，但地圖沒開到前景，車機通知被鎖定也看不到，等於沒路可走。
+- **根因**：`NavigationAppLauncher` 原設計只在小助手 Activity 可見時直接 `startActivity`，否則不嘗試、把 Intent 交給常駐通知按鈕；車機通知看不到，備案失效。
+- **使用者決定（本對話提問確認）**：導航改為背景一律直接嘗試開地圖，並新增「顯示在其他應用程式上層」（SYSTEM_ALERT_WINDOW）權限當保證路徑（Android 官方豁免：取得此權限即可從背景啟動 Activity）；通知按鈕降為最後備案。音樂 App 啟動行為本輪不改（使用者選擇）。
+- **做法**：`NavigationAppLauncher.launch()` 移除「僅前景才啟動」閘門，一律嘗試 `startActivity`；小助手在前景或已取得 overlay 權限回 `DIRECT`，兩者皆無仍先嘗試（部分車機 ROM 不執行背景啟動限制），結果無法驗證時回新增的 `DIRECT_UNVERIFIED` 並在回話附授權指引，啟動拋出例外才降級 `geo:` → 通知按鈕。Manifest 新增 `SYSTEM_ALERT_WINDOW`（特殊權限，只能由使用者在系統設定授予，App 不發對話框）；設定頁「導航 App」卡片在未授權時顯示說明與「允許顯示在其他應用程式上層」按鈕（`ACTION_MANAGE_OVERLAY_PERMISSION` 帶套件 URI，不支援時退回 App 詳細設定頁），MainActivity 於 `onResume` 重讀 `Settings.canDrawOverlays()` 更新提示。
+- **邊界**：豁免判定用 `Settings.canDrawOverlays()`，不假設車機 ROM 行為；未授權且系統攔截時如實說「畫面沒跳出來就先去授權」，不假稱已開啟；`MusicAppLauncher` 維持原邏輯。
+- **驗證**：`test`（254 項，0 失敗 0 跳過）、`lint`、`assembleDebug` 通過；debug APK SHA-256 `481A5BAE42E174431E3CAA5A2F449F40A9E82E17B87784EF25E3E84F54F9D614`。MuMu vmindex 0（Android 15，arm64-v8a 相容）覆蓋安裝 50→51 成功、launcher 開啟 MainActivity 在前景（topResumedActivity）、程序存活、該次啟動 logcat 無致命錯誤（截圖核對主畫面正常）。真機（車機）項目見 `docs/testing.md`「語音導航背景直接開地圖（1.0.17，待真機驗收）」。
+- 版號 `1.0.17`／`versionCode 51`（行為變更、新增權限且交付 APK）。
+

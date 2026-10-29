@@ -119,6 +119,8 @@ fun DeviceDiagnosticsScreen(
     onOpenMusicApp: (String, String) -> Unit,
     compatibleNavApps: List<NavigationAppOption>,
     onOpenNavApp: (String, String) -> Unit,
+    overlayPermissionGranted: Boolean,
+    onOpenOverlaySettings: () -> Unit,
     musicCabinFavoriteAccessGranted: Boolean,
     onOpenMusicCabinFavoriteAccess: () -> Unit,
     ttsEngines: List<TtsEngineOption>,
@@ -239,6 +241,8 @@ fun DeviceDiagnosticsScreen(
                 onOpenMusicApp = onOpenMusicApp,
                 compatibleNavApps = compatibleNavApps,
                 onOpenNavApp = onOpenNavApp,
+                overlayPermissionGranted = overlayPermissionGranted,
+                onOpenOverlaySettings = onOpenOverlaySettings,
                  musicCabinFavoriteAccessGranted = musicCabinFavoriteAccessGranted,
                  onOpenMusicCabinFavoriteAccess = onOpenMusicCabinFavoriteAccess,
                  onOpenDiagnostics = { showDiagnostics = true },
@@ -713,6 +717,8 @@ private fun SettingsPage(
     onOpenMusicApp: (String, String) -> Unit,
     compatibleNavApps: List<NavigationAppOption>,
     onOpenNavApp: (String, String) -> Unit,
+    overlayPermissionGranted: Boolean,
+    onOpenOverlaySettings: () -> Unit,
     musicCabinFavoriteAccessGranted: Boolean,
     onOpenMusicCabinFavoriteAccess: () -> Unit,
     onOpenDiagnostics: () -> Unit,
@@ -1039,6 +1045,18 @@ private fun SettingsPage(
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
                     ) {
                         Text("開啟${draft.navAppName.ifBlank { "導航 App" }}完成首次設定")
+                    }
+                    if (!overlayPermissionGranted) {
+                        AppDetailText(
+                            "車機的通知常常看不到；允許「顯示在其他應用程式上層」後，" +
+                                "說導航時地圖會直接跳到前景，不用點通知。只需允許一次。",
+                        )
+                        OutlinedButton(
+                            onClick = onOpenOverlaySettings,
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
+                        ) {
+                            Text("允許顯示在其他應用程式上層")
+                        }
                     }
                 }
             }

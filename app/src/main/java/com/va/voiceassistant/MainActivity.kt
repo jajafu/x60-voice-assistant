@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
     private var compatibleMusicApps by mutableStateOf<List<MusicAppOption>>(emptyList())
     private var compatibleNavApps by mutableStateOf<List<NavigationAppOption>>(emptyList())
     private var musicCabinFavoriteAccessGranted by mutableStateOf(false)
+    private var overlayPermissionGranted by mutableStateOf(false)
     private var scheduledReminders by mutableStateOf<List<ScheduledReminder>>(emptyList())
     private var reminderSoundName by mutableStateOf("系統預設鬧鐘")
     private var reminderMessage by mutableStateOf<String?>(null)
@@ -236,6 +237,8 @@ class MainActivity : ComponentActivity() {
                     onOpenMusicApp = ::openMusicAppForSetup,
                     compatibleNavApps = compatibleNavApps,
                     onOpenNavApp = ::openNavAppForSetup,
+                    overlayPermissionGranted = overlayPermissionGranted,
+                    onOpenOverlaySettings = ::openOverlayPermissionSettings,
                     musicCabinFavoriteAccessGranted = musicCabinFavoriteAccessGranted,
                     onOpenMusicCabinFavoriteAccess = ::openMusicCabinFavoriteAccessSettings,
                     ttsEngines = ttsEngines,
@@ -277,6 +280,7 @@ class MainActivity : ComponentActivity() {
             refreshDiagnostics()
             refreshMusicApps()
             refreshMusicCabinFavoriteAccess()
+            refreshOverlayPermission()
             refreshReminders()
             refreshReminderSound()
             refreshUpdateDownloadState()
@@ -758,6 +762,20 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshMusicCabinFavoriteAccess() {
         musicCabinFavoriteAccessGranted = MusicCabinFavoriteAccess.isGranted(this)
+    }
+
+    /** 「顯示在其他應用程式上層」授權後不會主動通知，回前景時重讀一次以更新設定頁提示。 */
+    private fun refreshOverlayPermission() {
+        overlayPermissionGranted = Settings.canDrawOverlays(this)
+    }
+
+    private fun openOverlayPermissionSettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            "package:$packageName".toUri(),
+        )
+        runCatching { startActivity(intent) }
+            .onFailure { openAppSettings() }
     }
 
     private fun openMusicCabinFavoriteAccessSettings() {
