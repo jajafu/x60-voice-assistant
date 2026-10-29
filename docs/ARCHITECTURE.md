@@ -26,7 +26,7 @@ Android Activity 管理設定與顯示，使用者啟動的 microphone foregroun
 - `service/`、`audio/`、`orchestration/`：前景服務、單一音訊來源、狀態機與恢復策略。
 - `kws/`、`vad/`、`asr/`、`model/`：本機語音偵測、系統辨識探測與引擎（`SystemSpeechRecognizer*`）、VAD 資產 SHA256 驗證。
 - `music/`、`reminder/`：媒體操作與本機提醒路由、執行與排程。`MusicVolumeCommandRouter` 在本機解析「聲音大一點」「音量調到 80」「現在音量多少」，交給音樂 App 的公開語音通道（`volume_up`／`volume_down`／`volume_set`／`volume_get`）調整 App 自己的音量；不改手機系統媒體音量。
-- `navigation/`：語音導航的本機指令解析、地圖 App 目錄與路線預覽啟動。只開啟使用者選定的地圖 App 到路線預覽頁，最後的開始導航由使用者點擊。
+- `navigation/`：語音導航的本機指令解析、地圖 App 目錄與路線預覽啟動。只開啟使用者選定的地圖 App 到路線預覽頁，最後的開始導航由使用者點擊。1.0.17 起說導航時一律直接嘗試開啟（不論小助手是否在前景）；背景且未取得「顯示在其他應用程式上層」權限、系統又執行背景啟動限制時，回話附授權指引，常駐通知的「開啟地圖」按鈕只當最後備案。
 - `llm/`、`tts/`：可設定的 OpenAI 相容 SSE 用戶端與 Android 語音輸出。
 - `data/`、`security/`、`diagnostics/`：DataStore 設定、Keystore 密鑰、有限且遮罩的診斷。
 - `app/src/test/`、`app/src/androidTest/`、`docs/test-reports/`：單元測試、裝置測試與真機紀錄。
