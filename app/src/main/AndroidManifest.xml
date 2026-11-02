@@ -14,9 +14,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- required=false：麥克風存在與否不擋安裝（部分電視未向系統回報麥克風特徵；
+         一般手機都有麥克風，不受影響）。實際能不能錄音仍由 RECORD_AUDIO 執行期權限把關。 -->
     <uses-feature
         android:name="android.hardware.microphone"
-        android:required="true" />
+        android:required="false" />
+    <!-- 電視以遙控器操作，未回報觸控螢幕特徵；required=false 允許安裝在無觸控裝置。 -->
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
 
     <queries>
         <package android:name="com.jajafu.musiccabin" />
@@ -45,8 +51,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:screenOrientation="portrait">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

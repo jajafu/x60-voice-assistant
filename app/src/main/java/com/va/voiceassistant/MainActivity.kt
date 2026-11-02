@@ -3,6 +3,7 @@ package com.va.voiceassistant
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.media.RingtoneManager
 import android.net.Uri
@@ -56,6 +57,7 @@ import com.va.voiceassistant.tts.AndroidTtsEngine
 import com.va.voiceassistant.tts.TtsEngineCatalog
 import com.va.voiceassistant.tts.TtsEngineOption
 import com.va.voiceassistant.tts.TtsVoiceOption
+import com.va.voiceassistant.ui.DeviceUiMode
 import com.va.voiceassistant.ui.diagnostics.DeviceDiagnosticsScreen
 import com.va.voiceassistant.ui.theme.VoiceAssistantTheme
 import java.io.File
@@ -170,6 +172,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 手機維持直式（原 Manifest 鎖定改為程式控制）；電視不受限，由系統橫向顯示。
+        if (!DeviceUiMode.isTv(this)) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
         super.onCreate(savedInstanceState)
         skipAutoStartOnNextStart = savedInstanceState != null
         diagnosticsCollector = DeviceDiagnosticsCollector(applicationContext)

@@ -20,6 +20,8 @@ android {
 
         ndk {
             abiFilters += "arm64-v8a"
+            // 電視機上盒等 32 位元裝置（如海爾 Android TV）需要 v7a 才裝得上。
+            abiFilters += "armeabi-v7a"
         }
 
         testInstrumentationRunner = "com.va.voiceassistant.KeystoreInstrumentation"

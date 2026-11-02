@@ -93,7 +93,7 @@ rc23 新增回答期間 KWS 插話測試：再次收到喚醒詞會取消舊串�
 
 每輪都記錄 App version、Git commit、APK SHA256、model ID／archive SHA256、Android、OriginOS Build、充電狀態、電量、電池溫度、thermal status、Wi-Fi、開始／結束時間、Audio Error、Dropped Frame 與 Service Uptime。
 
-App 自 rc24 起以 `android:screenOrientation="portrait"` 固定直式，不再隨裝置旋轉；`docs/test-reports/m0-2026-09-22-vivo-x60.md` 的橫向結果屬變更前的歷史紀錄，不重測、不改寫。新一輪手動驗收不需再執行橫向項目，僅確認旋轉裝置時畫面維持直式。
+App 自 rc24 起固定直式，不再隨裝置旋轉；tv-support 變更（1.0.17 之後）起改為程式控制：非電視裝置在 `MainActivity.onCreate` 開頭鎖直式（`DeviceUiMode.isTv` 判定，`work_plans/tv-support.md`），電視由系統橫向顯示。`docs/test-reports/m0-2026-09-22-vivo-x60.md` 的橫向結果屬變更前的歷史紀錄，不重測、不改寫。新一輪手動驗收不需再執行橫向項目，僅確認旋轉裝置時畫面維持直式。
 
 ## 設定頁數字欄位（rc24）
 
