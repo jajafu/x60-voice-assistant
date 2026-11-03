@@ -54,6 +54,9 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.TTS_VOLUME] = settings.ttsVolume
             prefs[Keys.SPEECH_RATE] = settings.speechRate
             prefs[Keys.PITCH] = settings.pitch
+            prefs[Keys.SCHEDULE_ENABLED] = settings.scheduleEnabled
+            prefs[Keys.SCHEDULE_START_MINUTES] = settings.scheduleStartMinutes
+            prefs[Keys.SCHEDULE_STOP_MINUTES] = settings.scheduleStopMinutes
             prefs[Keys.THEME_MODE] = settings.themeMode
             prefs[Keys.CONNECTION_VERIFIED] = settings.connectionVerified
         }
@@ -98,6 +101,11 @@ class SettingsRepository(private val context: Context) {
         ttsVolume = prefs[Keys.TTS_VOLUME] ?: AssistantSettings.DEFAULT_TTS_VOLUME,
         speechRate = prefs[Keys.SPEECH_RATE] ?: 1.0f,
         pitch = prefs[Keys.PITCH] ?: 1.0f,
+        scheduleEnabled = prefs[Keys.SCHEDULE_ENABLED] ?: false,
+        scheduleStartMinutes = prefs[Keys.SCHEDULE_START_MINUTES]
+            ?: AssistantSettings.DEFAULT_SCHEDULE_START_MINUTES,
+        scheduleStopMinutes = prefs[Keys.SCHEDULE_STOP_MINUTES]
+            ?: AssistantSettings.DEFAULT_SCHEDULE_STOP_MINUTES,
         themeMode = prefs[Keys.THEME_MODE] ?: AssistantSettings.THEME_MODE_SYSTEM,
         connectionVerified = prefs[Keys.CONNECTION_VERIFIED] ?: false,
     ).normalized()
@@ -133,6 +141,9 @@ class SettingsRepository(private val context: Context) {
         val TTS_VOLUME = floatPreferencesKey("tts_volume")
         val SPEECH_RATE = floatPreferencesKey("tts_speech_rate")
         val PITCH = floatPreferencesKey("tts_pitch")
+        val SCHEDULE_ENABLED = booleanPreferencesKey("schedule_enabled")
+        val SCHEDULE_START_MINUTES = intPreferencesKey("schedule_start_minutes")
+        val SCHEDULE_STOP_MINUTES = intPreferencesKey("schedule_stop_minutes")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val CONNECTION_VERIFIED = booleanPreferencesKey("llm_connection_verified")
     }

@@ -33,6 +33,9 @@ data class AssistantSettings(
     val pitch: Float = 1.0f,
     val themeMode: String = THEME_MODE_SYSTEM,
     val connectionVerified: Boolean = false,
+    val scheduleEnabled: Boolean = false,
+    val scheduleStartMinutes: Int = DEFAULT_SCHEDULE_START_MINUTES,
+    val scheduleStopMinutes: Int = DEFAULT_SCHEDULE_STOP_MINUTES,
 ) {
     fun normalized(): AssistantSettings = copy(
         wakePhrase = wakePhrase.trim().ifBlank { DEFAULT_WAKE_PHRASE }.take(MAX_WAKE_PHRASE_LENGTH),
@@ -60,6 +63,8 @@ data class AssistantSettings(
         ttsVolume = ttsVolume.coerceIn(TTS_VOLUME_RANGE),
         speechRate = speechRate.coerceIn(SPEECH_RATE_RANGE),
         pitch = pitch.coerceIn(PITCH_RANGE),
+        scheduleStartMinutes = scheduleStartMinutes.coerceIn(SCHEDULE_MINUTES_RANGE),
+        scheduleStopMinutes = scheduleStopMinutes.coerceIn(SCHEDULE_MINUTES_RANGE),
         themeMode = when (themeMode) {
             THEME_MODE_LIGHT, THEME_MODE_DARK -> themeMode
             else -> THEME_MODE_SYSTEM
@@ -104,6 +109,15 @@ data class AssistantSettings(
         const val THEME_MODE_SYSTEM = "system"
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
+
+        /**
+         * 每日定時啟停（使用者 2026-11-03 核准）：只做每天固定 HH:MM 啟動／停止，
+         * 不做每週／每月。分鐘數 0–1439；啟動與停止設同一時間視為無效不排程
+         * （`VoiceSchedulePlanner.isValid`）。預設 08:00 啟動、22:00 停止。
+         */
+        const val DEFAULT_SCHEDULE_START_MINUTES = 8 * 60
+        const val DEFAULT_SCHEDULE_STOP_MINUTES = 22 * 60
+        val SCHEDULE_MINUTES_RANGE = 0..(24 * 60 - 1)
 
         /**
          * 喚醒詞開啟新一輪時會清除對話歷史，只有這個視窗內的追問才帶著上一輪。

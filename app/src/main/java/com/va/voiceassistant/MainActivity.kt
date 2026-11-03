@@ -45,6 +45,8 @@ import com.va.voiceassistant.reminder.ReminderRecurrence
 import com.va.voiceassistant.reminder.ScheduledReminder
 import com.va.voiceassistant.reminder.ReminderStore
 import com.va.voiceassistant.music.MusicAppCatalog
+import com.va.voiceassistant.schedule.VoiceScheduleScheduler
+import com.va.voiceassistant.schedule.VoiceScheduleTimes
 import com.va.voiceassistant.navigation.NavigationAppCatalog
 import com.va.voiceassistant.navigation.NavigationAppOption
 import com.va.voiceassistant.music.MusicAppOption
@@ -223,6 +225,7 @@ class MainActivity : ComponentActivity() {
                             } else VoiceForegroundService.ACTION_PAUSE,
                         )
                     },
+                    onSaveSchedule = ::saveSchedule,
                     onOpenAppSettings = ::openAppSettings,
                     onOpenExactAlarmSettings = ::openExactAlarmSettings,
                     onOpenBatterySettings = ::openBatteryOptimizationSettings,
@@ -367,6 +370,21 @@ class MainActivity : ComponentActivity() {
     private fun stopM1Service() {
         val stopIntent = Intent(this, VoiceForegroundService::class.java)
         stopService(stopIntent)
+    }
+
+    /** 儲存每日定時啟停並整組重排鬧鐘；關閉時排程器會取消既有鬧鐘。 */
+    private fun saveSchedule(settings: AssistantSettings) {
+        lifecycleScope.launch {
+            settingsRepository.save(settings)
+            val saved = settingsRepository.current()
+            VoiceScheduleScheduler(applicationContext).reschedule(saved)
+            settingsMessage = if (saved.scheduleEnabled) {
+                "定時啟停已儲存：每天 ${VoiceScheduleTimes.format(saved.scheduleStartMinutes)} 啟動、" +
+                    "${VoiceScheduleTimes.format(saved.scheduleStopMinutes)} 停止。"
+            } else {
+                "定時啟停已關閉。"
+            }
+        }
     }
 
     private fun sendServiceAction(action: String) {

@@ -80,6 +80,7 @@ import com.va.voiceassistant.reminder.ScheduledReminder
 import com.va.voiceassistant.reminder.ReminderFrequency
 import com.va.voiceassistant.reminder.ReminderRecurrence
 import com.va.voiceassistant.reminder.label
+import com.va.voiceassistant.schedule.VoiceScheduleTimes
 import com.va.voiceassistant.tts.TtsEngineOption
 import com.va.voiceassistant.tts.TtsVoiceOption
 import com.va.voiceassistant.tts.displayLabel
@@ -102,6 +103,7 @@ fun DeviceDiagnosticsScreen(
     testingConnection: Boolean,
     onPrimaryAction: () -> Unit,
     onPauseOrResume: () -> Unit,
+    onSaveSchedule: (AssistantSettings) -> Unit,
     onOpenAppSettings: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
     onOpenBatterySettings: () -> Unit,
@@ -187,6 +189,9 @@ fun DeviceDiagnosticsScreen(
                 errorMessage = errorMessage,
                 onPrimaryAction = onPrimaryAction,
                 onPauseOrResume = onPauseOrResume,
+                assistantSettings = assistantSettings,
+                scheduleMessage = settingsMessage,
+                onSaveSchedule = onSaveSchedule,
                 updateVersion = updateVersion,
                 updateFileSize = updateFileSize,
                 updateNotes = updateNotes,
@@ -378,6 +383,9 @@ private fun VoicePage(
     errorMessage: String?,
     onPrimaryAction: () -> Unit,
     onPauseOrResume: () -> Unit,
+    assistantSettings: AssistantSettings,
+    scheduleMessage: String?,
+    onSaveSchedule: (AssistantSettings) -> Unit,
     updateVersion: String? = null,
     updateFileSize: String? = null,
     updateNotes: String? = null,
@@ -566,6 +574,13 @@ private fun VoicePage(
             }
         }
 
+        item {
+            ScheduleCard(
+                settings = assistantSettings,
+                message = scheduleMessage,
+                onSave = onSaveSchedule,
+            )
+        }
     }
 }
 
@@ -608,6 +623,124 @@ private fun ConversationBubble(label: String, text: String, user: Boolean) {
         Column(modifier = Modifier.fillMaxWidth().heightIn(min = 168.dp).padding(24.dp)) {
             Text(label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             Text(text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp))
+        }
+    }
+}
+
+/**
+ * 對話頁最下方的「定時啟停」卡：總開關＋每日啟動／停止時間（HH:MM）。
+ * 只做每天固定時間（使用者 2026-11-03 核准），不做每週／每月。
+ * 解析刻意寬鬆支援 `0800` 連打（電視遙控器輸入冒號費力）；啟動與停止
+ * 設同一時間視為無效，儲存鈕停用並提示。
+ */
+@Composable
+private fun ScheduleCard(
+    settings: AssistantSettings,
+    message: String?,
+    onSave: (AssistantSettings) -> Unit,
+) {
+    var enabled by remember { mutableStateOf(settings.scheduleEnabled) }
+    var startText by remember { mutableStateOf(VoiceScheduleTimes.format(settings.scheduleStartMinutes)) }
+    var stopText by remember { mutableStateOf(VoiceScheduleTimes.format(settings.scheduleStopMinutes)) }
+    var lastLoaded by remember { mutableStateOf(settings) }
+    // 設定流重發（儲存後）才同步顯示；使用者輸入到一半不被外部更新蓋掉（同 ModelsPage 模式）。
+    LaunchedEffect(settings) {
+        if (settings != lastLoaded) {
+            enabled = settings.scheduleEnabled
+            startText = VoiceScheduleTimes.format(settings.scheduleStartMinutes)
+            stopText = VoiceScheduleTimes.format(settings.scheduleStopMinutes)
+            lastLoaded = settings
+        }
+    }
+    val startMinutes = VoiceScheduleTimes.parse(startText)
+    val stopMinutes = VoiceScheduleTimes.parse(stopText)
+    val validTimes = startMinutes != null && stopMinutes != null
+    val sameTime = validTimes && startMinutes == stopMinutes
+    val canSave = !enabled || (validTimes && !sameTime)
+
+    Card {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "定時啟停",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "每天固定時間自動啟動與停止語音助理。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = enabled, onCheckedChange = { enabled = it })
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedTextField(
+                    value = startText,
+                    onValueChange = { startText = it },
+                    label = { Text("每天啟動") },
+                    placeholder = { Text("08:00") },
+                    isError = enabled && (startMinutes == null || sameTime),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = stopText,
+                    onValueChange = { stopText = it },
+                    label = { Text("每天停止") },
+                    placeholder = { Text("22:00") },
+                    isError = enabled && (stopMinutes == null || sameTime),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            val supporting = when {
+                enabled && (startMinutes == null || stopMinutes == null) ->
+                    "格式無效：輸入 HH:MM 或連打數字（如 0800）；0–23 點、0–59 分。"
+                enabled && sameTime -> "啟動與停止時間不能相同，請調整後再儲存。"
+                enabled && validTimes ->
+                    "每天 ${VoiceScheduleTimes.format(startMinutes)} 啟動、${VoiceScheduleTimes.format(stopMinutes)} 停止。"
+                else -> "已關閉；開啟後每天會在設定時間自動啟動與停止。"
+            }
+            Text(
+                supporting,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (canSave) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Button(
+                onClick = {
+                    onSave(
+                        settings.copy(
+                            scheduleEnabled = enabled,
+                            scheduleStartMinutes = startMinutes ?: settings.scheduleStartMinutes,
+                            scheduleStopMinutes = stopMinutes ?: settings.scheduleStopMinutes,
+                        ),
+                    )
+                },
+                enabled = canSave,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) { Text(if (enabled) "儲存定時" else "關閉定時") }
+            Text(
+                "手機上若系統限制背景啟動，到點會發通知，點一下即可啟動；電視可全自動。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            if (message != null) {
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
     }
 }

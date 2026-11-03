@@ -108,6 +108,20 @@
         </receiver>
 
         <receiver
+            android:name=".schedule.VoiceScheduleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.va.voiceassistant.action.RUN_SCHEDULED_START" />
+                <action android:name="com.va.voiceassistant.action.RUN_SCHEDULED_STOP" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".boot.BootReminderReceiver"
             android:directBootAware="true"
             android:exported="false">
