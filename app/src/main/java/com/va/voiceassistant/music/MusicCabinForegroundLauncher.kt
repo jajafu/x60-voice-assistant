@@ -3,7 +3,6 @@ package com.va.voiceassistant.music
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
 import kotlinx.coroutines.delay
 
 /**
@@ -58,11 +57,12 @@ class MusicCabinForegroundLauncher(
     private fun start(intent: Intent): Boolean =
         runCatching { appContext.startActivity(intent) }.isSuccess
 
-    /** 背景啟動是否明確可信；僅供診斷與回話用，不阻擋嘗試。 */
-    fun canLaunchFromBackground(): Boolean =
-        AssistantUiVisibility.isVisible || Settings.canDrawOverlays(appContext)
-
     companion object {
+        /**
+         * MusicCabin 的電視 Activity 類名，與預設套件 `com.jajafu.musiccabin` 綁定。
+         * 使用者改選其他音樂 App 時，這條明確指向的路徑會對不上並自然失效，
+         * 落到 [launchByLeanback] → [launchByPackage] 兩層退路，不會讓播放失敗。
+         */
         const val TV_ACTIVITY = "com.metrolist.music.tv.TvActivity"
         private const val FOREGROUND_SETTLE_MS = 1_200L
     }
