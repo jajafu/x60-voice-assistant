@@ -58,9 +58,13 @@ class MusicCabinController(
     private val musicServiceName: String = DEFAULT_SERVICE_NAME,
     private val musicAppName: String = "MusicCabin",
     voiceSender: VoiceControlSender? = null,
+    private val isTv: Boolean = false,
+    foregroundLauncher: MusicCabinForegroundLauncher? = null,
 ) : MusicActionExecutor {
     private val appContext = context.applicationContext
     private val appLauncher = MusicAppLauncher(appContext, musicPackageName, musicAppName)
+    private val tvForegroundLauncher: MusicCabinForegroundLauncher =
+        foregroundLauncher ?: MusicCabinForegroundLauncher(appContext, musicPackageName)
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
     private val voiceControl: VoiceControlSender by lazy {
         voiceSender ?: OrderedBroadcastVoiceControlSender(appContext, musicPackageName)
@@ -437,6 +441,12 @@ class MusicCabinController(
     private suspend fun executeViaVoiceControl(command: MusicCommand): MusicActionResult {
         // 沒安裝走啟動引導：找不到 App 會直接回 NOT_FOUND 訊息，不會真的連上舊路。
         if (!isInstalled()) return launchForPlaybackSetup(command)
+        // 電視情境：播放起始指令先把 MusicCabin 電視畫面叫到前景，否則它可能已被系統
+        // 清掉而收不到語音廣播（使用者回報「沒先開 MusicCabin 就無法播放」）。開不起來
+        // 也不阻擋——照常送指令，讓仍在背景存活的 MusicCabin 有機會接到。
+        if (TvMusicLaunchPolicy.shouldBringToForeground(isTv, command)) {
+            tvForegroundLauncher.bringToForeground()
+        }
         val (voiceCommand, query) = MusicCabinVoiceControl.requestFor(command)
         val result = sendVoiceCommand(
             voiceCommand,

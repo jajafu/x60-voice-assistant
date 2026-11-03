@@ -107,6 +107,17 @@
 3. `versionName 1.1.0`／`versionCode 52` 是否採用。
 4. 是否同意以 `task/tv-support` 分支（從最新 `origin/main`）進行本高風險變更。
 
+## 追加範圍（2026-11-03，電視實測回饋）
+
+使用者 2026-11-02 側載後回報：喚醒與回應可用；但電視桌面沒有圖示，且 MusicCabin 未開啟時無法用語音播放。2026-11-03 對話中以選項卡確認：
+
+- A. 電視桌面圖示：**同意做**。Manifest 為 `MainActivity` 加 `LEANBACK_LAUNCHER` intent-filter、`uses-feature android.software.leanback required=false`、`android:banner` 橫幅圖（新增 vector drawable）。手機不受影響。
+- B. 開啟時機：**每次叫播放音樂都打開**。電視模式（`DeviceUiMode.isTv`）下，播放類指令（Play、SearchAndPlay、PlayArtist、PlayFavorites）送語音通道前，先把 MusicCabin 電視畫面 `com.metrolist.music.tv.TvActivity` 開到前景，稍候再送指令；手機行為不變。
+- C. 修改 MusicCabin：**不改，只打開到首頁**。不碰 `F:\Metrolist_AndroidCar`（該 repo 有使用者未提交修改）；直接進相框 KTV 頁不在本範圍，使用者需自行用遙控器切到相框。
+- 背景開啟前提：Android 10+ 限制背景啟動畫面，需「顯示在其他應用程式上層」權限（Manifest 已宣告）；電視設定若無此開關，以 `adb shell appops set com.va.voiceassistant SYSTEM_ALERT_WINDOW allow` 授權，寫入文件。開不起來時照常送播放指令，不阻擋播放。
+- 「MusicCabin 未開就無法播放」的根因（推測為電視清背景）尚未以電視紀錄確認，驗收時記錄。
+
 ## 核准狀態
 
-- 尚未核准。依 `AGENTS.md` 待使用者明確同意本計畫範圍後才實作，並記錄同意來源。
+- 2026-11-02 使用者於對話中回覆「同意」本計畫範圍。
+- 2026-11-03 使用者於對話選項卡同意上方追加範圍（A 做、B 每次播放都開、C 不改 MusicCabin）。

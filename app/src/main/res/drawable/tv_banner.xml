@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android TV 桌面橫幅（320x180 比例）。電視桌面只顯示有 banner 的 leanback 入口，
+     手機圖示沿用 ic_launcher 不受影響。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#FF006A67"
+        android:pathData="M0,0h320v180H0z" />
+    <!-- 麥克風圖示：與 ic_launcher 同一造型，置於左側 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M60,48a12,12 0,0 0,-12 12v18a12,12 0,0 0,24 0V60a12,12 0,0 0,-12 -12zM40,75a4,4 0,0 0,-8 0,28 28,0 0,0 24,27.7V112H44a4,4 0,1 0,0 8h32a4,4 0,1 0,0 -8H64v-9.3A28,28 0,0 0,88 75a4,4 0,1 0,-8 0,20 20,0 0,1 -40,0z" />
+    <!-- 應用名稱文字區塊以色塊示意（vector 不便嵌字，桌面下方會另顯示 label） -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M120,70h150v8h-150z" />
+    <path
+        android:fillColor="#B3FFFFFF"
+        android:pathData="M120,92h110v6h-110z" />
+</vector>

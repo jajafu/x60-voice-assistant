@@ -39,6 +39,7 @@ import com.va.voiceassistant.orchestration.VoiceOrchestrator
 import com.va.voiceassistant.security.AndroidKeystoreSecretStore
 import com.va.voiceassistant.tts.AndroidTtsEngine
 import com.va.voiceassistant.tts.SpeechOutputEngine
+import com.va.voiceassistant.ui.DeviceUiMode
 import com.va.voiceassistant.data.AssistantSettings
 import com.va.voiceassistant.orchestration.VoiceState
 import com.va.voiceassistant.vad.SherpaVadEngine
@@ -228,6 +229,7 @@ class VoiceForegroundService : Service() {
                         musicPackageName = settings.musicPackageName,
                         musicServiceName = settings.musicServiceName,
                         musicAppName = settings.musicAppName.ifBlank { "音樂 App" },
+                        isTv = DeviceUiMode.isTv(applicationContext),
                     )
                 } else {
                     null
