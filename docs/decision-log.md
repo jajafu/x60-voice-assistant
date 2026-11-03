@@ -225,7 +225,16 @@
 - **驗證**：`test`（254 項，0 失敗 0 跳過）、`lint`、`assembleDebug` 通過；debug APK SHA-256 `481A5BAE42E174431E3CAA5A2F449F40A9E82E17B87784EF25E3E84F54F9D614`。MuMu vmindex 0（Android 15，arm64-v8a 相容）覆蓋安裝 50→51 成功、launcher 開啟 MainActivity 在前景（topResumedActivity）、程序存活、該次啟動 logcat 無致命錯誤（截圖核對主畫面正常）。真機（車機）項目見 `docs/testing.md`「語音導航背景直接開地圖（1.0.17，待真機驗收）」。
 - 版號 `1.0.17`／`versionCode 51`（行為變更、新增權限且交付 APK）。
 
-## 開發中（2026-11-03，task/tv-support，使用者核准：每日定時啟動／停止語音助理）
+## 1.1.0（2026-11-03，task/tv-support 合併至 main，使用者核准：電視支援與每日定時啟停）
+
+本版為 tv-support 批次（五個 commit 快進合併），除下方定時啟停細節外還包含：
+- **armeabi-v7a 安裝支援**：`abiFilters` 加入 v7a（sherpa-onnx 1.13.8 AAR 已內含，實測確認）；麥克風／觸控螢幕 uses-feature 改非必須，電視不被擋安裝。
+- **電視桌面圖示與方向**：`MainActivity` 加 `LEANBACK_LAUNCHER` 入口與 `tv_banner` 橫幅；方向改由 `DeviceUiMode` 程式控制，手機維持直式、電視橫向。
+- **電視播放音樂先喚起 MusicCabin**：`TvMusicLaunchPolicy`＋`MusicCabinForegroundLauncher`，播放起始指令先把 MusicCabin 電視畫面帶到前景再送語音通道（審查後移除未使用的可行性判斷、補綁定說明）；手機行為不變。
+- **啟動流程並行化**：模型驗證、系統辨識探測、TTS 初始化同時執行，await 維持原失敗順序（KWS→VAD→ASR）；使用者回報電視啟動約 15 秒，此改動讓等待趨近最慢一項。
+- **每日定時啟動／停止**（細節如下）。
+
+### 每日定時啟動／停止
 
 - **背景**：使用者要求在對話頁最下方新增「每天 HH:MM 啟動語音助理、每天 HH:MM 停止」的定時開關，手機與 TV 都要有；只做每日，不做每週／每月（`work_plans/scheduled-voice-toggle.md`）。
 - **決策變更（使用者於對話明確核准）**：原則「麥克風前景服務只由可見 Activity 的使用者操作啟動」放寬——排程到點由 AlarmManager 觸發 `VoiceScheduleReceiver` 直接啟動語音服務，與「開啟 App 自動開始聆聽」同一啟動路徑；差異在到點時 App 在背景，Android 12+/14+ 系統可能限制啟動或靜音麥克風。開機後仍只重新排程、不啟動麥克風，維持「開機不錄音」。
@@ -233,5 +242,5 @@
 - **做法**：`AssistantSettings` 新增 `scheduleEnabled`／`scheduleStartMinutes`／`scheduleStopMinutes`（DataStore 持久化）；新增 `schedule` 套件：`VoiceScheduleTimes`（HH:MM 寬鬆解析，支援 `0800` 連打方便遙控器）、`VoiceSchedulePlanner`（有效性與下次觸發時間，純邏輯）、`VoiceScheduleScheduler`（沿用 `ReminderScheduler` 精確鬧鐘模式，權限未授權退回 inexact）、`VoiceScheduleReceiver`（到點啟動／停止、開機／時間／時區／精確鬧鐘權限變更後重排；啟動失敗降級通知）。對話頁（`VoicePage`）最下方新增「定時啟停」卡，手機與 TV 共用；`MainActivity.saveSchedule()` 儲存並整組重排。
 - **邊界**：到點啟動前檢查 `ServiceStateRepository.running`，已運作不重複啟動；到點停止只在運作中 `stopService`；兩個鬧鐘獨立（停止早於啟動也合法）；任何設定變更即整組重排，鬧鐘以 `FLAG_UPDATE_CURRENT` 覆蓋。
 - **驗證**：`test`（275 項，含新增 `VoiceScheduleTimesTest`、`VoiceSchedulePlannerTest`）、`lint`、`assembleDebug` 通過。Android 14+ 手機背景啟動／麥克風 while-in-use 限制與 TV 全自動行為**待真機驗收**（`docs/testing.md`「每日定時啟動／停止」）。
-- 版號：維持 `1.0.17`／`51`，tv-support 收尾一併決定（計畫建議 `1.1.0`／`52`）。
+- 版號 `1.1.0`／`versionCode 52`（批次行為變更且交付 APK；版號由 1.0.N 進到 1.1.0 對應電視支援大批功能，使用者要求升版以讓已安裝 App 偵測更新）。以標籤 `v1.1.0` 觸發 release 建置並發布 GitHub Release。
 
