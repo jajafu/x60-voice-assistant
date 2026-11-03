@@ -46,6 +46,7 @@ import com.va.voiceassistant.vad.SherpaVadEngine
 import com.va.voiceassistant.vad.SpeechEndpointConfig
 import com.va.voiceassistant.vad.SpeechEndpointDetector
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -149,16 +150,37 @@ class VoiceForegroundService : Service() {
     private suspend fun initializeResources() {
         try {
             if (!acquireWakeLock() || !active.get()) return
-            val kwsVerification = KwsModelPack.verify(assets)
-            if (!kwsVerification.valid) {
-                failAndStop(VoiceErrorCode.KWS_MODEL_INVALID, kwsVerification.reason.orEmpty())
-                return
-            }
             val modelManager = ModelPackManager(applicationContext)
             val settings = SettingsRepository(applicationContext).current()
             activeWakePhrase = settings.wakePhrase
-            val vadStatus = modelManager.verifyVadAsset()
+
+            // 並行化（優化 A）：模型驗證、系統辨識探測、TTS 初始化三者互不相依，改為同時
+            // 進行，以縮短慢速裝置（如電視）的啟動等待。await 仍依原順序，維持原本的失敗
+            // 優先序（KWS→VAD→ASR）與既有診斷行為不變。
+            val kwsVerificationDeferred = serviceScope.async(Dispatchers.Default) { KwsModelPack.verify(assets) }
+            val vadStatusDeferred = serviceScope.async(Dispatchers.Default) { modelManager.verifyVadAsset() }
+            val asrProbeDeferred = serviceScope.async { SystemSpeechRecognizerSupport.probe(applicationContext) }
+            val ttsEngine: SpeechOutputEngine = AndroidTtsEngine(applicationContext, settings)
+            val ttsStatusDeferred = serviceScope.async { ttsEngine.initialize() }
+
+            // 任一前置失敗時取消其餘並行工作並釋放 TTS，避免資源洩漏。
+            suspend fun releaseParallelInit() {
+                asrProbeDeferred.cancel()
+                vadStatusDeferred.cancel()
+                kwsVerificationDeferred.cancel()
+                runCatching { ttsStatusDeferred.await() }
+                runCatching { ttsEngine.close() }
+            }
+
+            val kwsVerification = kwsVerificationDeferred.await()
+            if (!kwsVerification.valid) {
+                releaseParallelInit()
+                failAndStop(VoiceErrorCode.KWS_MODEL_INVALID, kwsVerification.reason.orEmpty())
+                return
+            }
+            val vadStatus = vadStatusDeferred.await()
             if (!vadStatus.valid) {
+                releaseParallelInit()
                 failAndStop(VoiceErrorCode.VAD_INIT_FAILED, vadStatus.reason.orEmpty())
                 return
             }
@@ -166,13 +188,14 @@ class VoiceForegroundService : Service() {
             val hasLlmApiKey = llmSecretStore.maskedApiKey() != "未設定"
             // 引擎選擇（1.0.16 起）：只使用系統語音辨識。啟動時探測（含中文支援），
             // 探測明說不可用就停止服務；下載式 X-ASR 後備已移除。
-            val systemAsrProbe = SystemSpeechRecognizerSupport.probe(applicationContext)
+            val systemAsrProbe = asrProbeDeferred.await()
             val systemAsrConfirmed = systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Confirmed
             val systemAsrLanguage = systemAsrConfirmed?.language
             // 問不到語言資訊仍會選用系統辨識，把未驗證的原因留在診斷，日後才追得出當時的取捨。
             systemAsrConfirmed?.unverifiedReason?.let(M1DiagnosticsRepository::recordSystemAsrUnverified)
             if (systemAsrLanguage == null) {
                 val probeReason = (systemAsrProbe as? SystemSpeechRecognizerSupport.SystemRecognitionProbe.Unavailable)?.reason.orEmpty()
+                releaseParallelInit()
                 failAndStop(
                     VoiceErrorCode.ASR_INIT_FAILED,
                     "system-asr-unavailable:$probeReason",
@@ -193,8 +216,7 @@ class VoiceForegroundService : Service() {
             } else {
                 null
             }
-            val ttsEngine: SpeechOutputEngine = AndroidTtsEngine(applicationContext, settings)
-            val ttsStatus = ttsEngine.initialize()
+            val ttsStatus = ttsStatusDeferred.await()
             M1DiagnosticsRepository.setTtsStatus(ttsStatus.engine, ttsStatus.voice)
             if (!ttsStatus.available) {
                 M1DiagnosticsRepository.recordSessionError(VoiceErrorCode.TTS_ENGINE_MISSING, ttsStatus.message)
